@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/GenerateBills.module.css";
+import ExcelPreviewGrid from "@/components/ExcelPreviewGrid";
 
 export default function GenerateBillsPage() {
   const queryClient = useQueryClient();
@@ -45,6 +46,10 @@ export default function GenerateBillsPage() {
   // ── Bill Generation Mode ───────────────────────────────────────────────────
   const [billGenerationMode, setBillGenerationMode] = useState("MANUAL");
   const [showAutoWarning, setShowAutoWarning] = useState(false);
+
+  // ── Excel Preview Grids ────────────────────────────────────────────────────
+  const [billGrid, setBillGrid] = useState(null);
+  const [payGrid, setPayGrid] = useState(null);
 
   // ── Flow 2: Payment Collection ─────────────────────────────────────────────
   const [payFile, setPayFile] = useState(null);
@@ -990,6 +995,9 @@ ${
       if (!data.success) throw new Error(data.error || "Preview failed");
       setPayPreview(data);
       setPayBatchKey(data.batchKey);
+      if (data.gridRows && data.gridColumns) {
+        setPayGrid({ gridRows: data.gridRows, columns: data.gridColumns });
+      }
     } catch (e) {
       alert("Preview failed: " + e.message);
     } finally {
@@ -1309,6 +1317,9 @@ ${
                     const data = await res.json();
                     setExcelValidation(data);
                     setApprovedDiffs(new Set());
+                    if (data.gridRows && data.gridColumns) {
+                      setBillGrid({ gridRows: data.gridRows, columns: data.gridColumns });
+                    }
                   } catch (e) {
                     alert("Validation error: " + e.message);
                   } finally {
@@ -1319,6 +1330,17 @@ ${
                 {excelValidating ? "⏳ Validating..." : "✓ Validate"}
               </button>
             </div>
+
+            {billGrid && (
+              <ExcelPreviewGrid
+                title={`Bill Template Preview — ${periodLabel}`}
+                columns={billGrid.columns}
+                rows={billGrid.gridRows}
+                onReupload={() => { setExcelFile(null); setExcelValidation(null); setBillGrid(null); setApprovedDiffs(new Set()); }}
+                onContinue={(validRows) => { console.log("Proceeding with", validRows.length, "valid rows"); }}
+                onCancel={() => { setExcelFile(null); setExcelValidation(null); setBillGrid(null); setApprovedDiffs(new Set()); }}
+              />
+            )}
 
             {excelValidation && !excelValidation.canProceed && (
               <div style={{ background: "#fef2f2", border: "2px solid #fca5a5", borderRadius: "10px", padding: "1.25rem", marginBottom: "1rem" }}>
@@ -1497,6 +1519,17 @@ ${
                   {payPreviewing ? "⏳ Validating..." : "🔍 Validate & Preview"}
                 </button>
               </div>
+            )}
+
+            {payGrid && (
+              <ExcelPreviewGrid
+                title={`Payment Template Preview — ${periodLabel}`}
+                columns={payGrid.columns}
+                rows={payGrid.gridRows}
+                onReupload={() => { setPayFile(null); setPayPreview(null); setPayBatchKey(null); setPayGrid(null); setPayResults(null); }}
+                onContinue={(_validRows) => { /* actual confirm uses handlePayConfirm button below */ }}
+                onCancel={() => { setPayFile(null); setPayPreview(null); setPayBatchKey(null); setPayGrid(null); setPayResults(null); }}
+              />
             )}
 
             {payPreview && (
