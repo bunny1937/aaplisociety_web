@@ -16,6 +16,26 @@ function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
 }
 
+function parseExcelDate(val) {
+  if (!val && val !== 0) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  // XLSX serial number: days since 1899-12-30
+  if (typeof val === "number") {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const s = String(val).trim();
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s);
+  // DD-MM-YYYY
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    const [dd, mm, yyyy] = s.split("-");
+    return new Date(`${yyyy}-${mm}-${dd}`);
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 // In-memory staging for preview→confirm flow
 const staged = {};
 
@@ -41,17 +61,30 @@ export async function POST(request) {
       if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
       const bytes = await file.arrayBuffer();
-      const wb = XLSX.read(Buffer.from(bytes));
+      const wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
       if (!rows.length) return NextResponse.json({ error: "Empty file" }, { status: 400 });
 
-      const required = ["MemberId", "AmountPaid", "PaymentDate", "Month", "Year"];
+      // Validate required columns
       const headers = Object.keys(rows[0]);
+      const required = ["Wing", "FlatNo", "AmountPaid", "PaymentDate"];
       const missing = required.filter(c => !headers.includes(c));
       if (missing.length) {
         return NextResponse.json({ error: `Missing columns: ${missing.join(", ")}` }, { status: 400 });
+      }
+
+      // Normalize Period → Month/Year if needed
+      const hasPeriodCol = headers.includes("Period");
+      if (hasPeriodCol) {
+        rows.forEach(r => {
+          if (r.Period && !r.Month) {
+            const [y, m] = String(r.Period).split("-");
+            r.Year = parseInt(y);
+            r.Month = parseInt(m);
+          }
+        });
       }
 
       const [members, society] = await Promise.all([
@@ -61,6 +94,10 @@ export async function POST(request) {
         Society.findById(decoded.societyId).select("config").lean(),
       ]);
       const memberMap = new Map(members.map(m => [m._id.toString(), m]));
+      const wingFlatMap = new Map(members.map(m => [
+        `${(m.wing || "").trim().toLowerCase()}-${(m.flatNo || "").trim().toLowerCase()}`,
+        m,
+      ]));
 
       const preview = [];
       const errors = [];
@@ -69,28 +106,38 @@ export async function POST(request) {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const rowNum = i + 2;
-        const memberId = String(row.MemberId || "").trim();
+        const wing = String(row.Wing || "").trim();
+        const flatNo = String(row.FlatNo || "").trim();
+
+        // Skip instruction row
+        if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
+        // Skip rows with no payment
+        const _amtRaw = String(row.AmountPaid ?? "").trim();
+        if (!_amtRaw) continue;
+
+        const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
+        const member = wingFlatMap.get(flatKey);
+        const memberId = member?._id.toString();
+
         const amountPaid = twoDp(parseFloat(row.AmountPaid) || 0);
         const month = parseInt(row.Month);
         const year = parseInt(row.Year);
-        const paymentDate = row.PaymentDate ? new Date(row.PaymentDate) : new Date();
+        const paymentDate = parseExcelDate(row.PaymentDate) || new Date();
         const paymentMethod = String(row.PaymentMethod || "Cash").trim();
         const remarks = String(row.Remarks || "").trim();
 
         const rowErrors = [];
-        if (!memberId) rowErrors.push("MemberId missing");
-        const member = memberMap.get(memberId);
-        if (memberId && !member) rowErrors.push("MemberId not found");
+        if (!member) rowErrors.push(`Flat "${wing}-${flatNo}" not found`);
         if (amountPaid <= 0) rowErrors.push("AmountPaid must be > 0");
         if (isNaN(month) || month < 1 || month > 12) rowErrors.push("Month must be 1–12");
         if (isNaN(year) || year < 2000) rowErrors.push("Invalid Year");
-        if (isNaN(paymentDate.getTime())) rowErrors.push("Invalid PaymentDate");
+        if (isNaN(paymentDate?.getTime())) rowErrors.push("Invalid PaymentDate");
 
-        // Duplicate check: same member already has payment in same period in this upload
+        // Duplicate check
         const dupInBatch = preview.find(p =>
           p.memberId === memberId && p.month === month && p.year === year && p.status !== "Failed"
         );
-        if (dupInBatch) rowErrors.push("Duplicate row for same member+period");
+        if (dupInBatch) rowErrors.push("Duplicate row for same flat+period");
 
         if (rowErrors.length) {
           errors.push({ rowNum, errors: rowErrors });
@@ -140,16 +187,15 @@ export async function POST(request) {
       staged[batchKey] = { rows: preview, decoded, fileName: file.name };
 
       // Build per-cell grid for ExcelPreviewGrid
-      const validMemberIdSet = new Set(members.map((m) => m._id.toString()));
-      // Build bill map for overpayment detection
+      // Build bill map keyed by wing-flatno for overpayment detection
       const billMap = new Map();
       for (const p of preview) {
         if (p.status === "Valid") {
-          billMap.set(p.memberId, { balanceAmount: p.remaining });
+          billMap.set(p.flat.toLowerCase(), { balanceAmount: p.remaining });
         }
       }
       const { gridRows, summary: gridSummary } = validatePaymentRows(rows, {
-        validMemberIds: validMemberIdSet,
+        wingFlatMap,
         existingBillMap: billMap,
         today: new Date(),
       });
@@ -223,10 +269,12 @@ export async function POST(request) {
 
           // Persist bill updates
           let primaryBillId = null;
+          const preMutationBalance = new Map(); // billId → balanceAmount before payment
           for (const upd of billUpdates) {
             const bill = unpaidBills.find(b => String(b._id) === String(upd.billId));
             if (!bill) continue;
             if (!primaryBillId) primaryBillId = bill._id;
+            preMutationBalance.set(String(bill._id), twoDp(bill.balanceAmount));
 
             const eps = 0.005;
             const newClosingPrincipal = twoDp(upd.newPrincipalBalance) < eps ? 0 : twoDp(upd.newPrincipalBalance);
@@ -306,8 +354,8 @@ export async function POST(request) {
               billPeriodId: bill.billPeriodId,
               memberId: row.memberId,
               societyId: dec.societyId,
-              amount: twoDp(upd.newAmountPaid),
-              previousBalanceSnapshot: 0,
+              amount: twoDp(row.amountPaid),
+              previousBalanceSnapshot: preMutationBalance.get(String(bill._id)) ?? 0,
               paymentMode: row.paymentMethod || "Cash",
               paidAt: new Date(row.paymentDate),
               transactionId: txnId,

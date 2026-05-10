@@ -3,8 +3,8 @@ import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
 import AuditLog from "@/models/AuditLog";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-
 import { memberSchema } from "@/lib/validators";
+import cache from "@/lib/cache";
 
 export async function PUT(request) {
   try {
@@ -26,7 +26,7 @@ export async function PUT(request) {
     if (!memberId) {
       return NextResponse.json(
         { error: "Member ID required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -34,7 +34,7 @@ export async function PUT(request) {
     if (!validationResult.success) {
       return NextResponse.json(
         { error: "Validation failed", details: validationResult.error.errors },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -50,7 +50,7 @@ export async function PUT(request) {
     const updatedMember = await Member.findByIdAndUpdate(
       memberId,
       { $set: validationResult.data },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     await AuditLog.create({
@@ -61,7 +61,7 @@ export async function PUT(request) {
       newData: updatedMember,
       timestamp: new Date(),
     });
-
+    await cache.delPattern(`members:list:${decoded.societyId}:*`);
     return NextResponse.json({
       message: "Member updated successfully",
       member: updatedMember,
@@ -70,7 +70,7 @@ export async function PUT(request) {
     console.error("Update member error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -92,7 +92,7 @@ export async function DELETE(request) {
     if (decoded.role !== "Admin") {
       return NextResponse.json(
         { error: "Admin access required" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -102,7 +102,7 @@ export async function DELETE(request) {
     if (!memberId) {
       return NextResponse.json(
         { error: "Member ID required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -128,7 +128,7 @@ export async function DELETE(request) {
     console.error("Delete member error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

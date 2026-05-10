@@ -1,0 +1,1799 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: app/api/society/**, app/admin/society-config/**, models/Society.js, utils/**, middleware.js, middleware.ts
+- Files matching these patterns are excluded: node_modules, .next, dist, build, .git, *.module.css, *.log, .env*, coverage
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/admin/society-config/page.js
+app/api/society/config/route.js
+app/api/society/create/route.js
+app/api/society/update/route.js
+app/api/society/upload-template/route.js
+middleware.js
+models/Society.js
+utils/dateUtils.js
+utils/interestUtils.js
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/admin/society-config/page.js">
+"use client";
+
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import styles from "@/styles/Dashboard.module.css";
+import gridStyles from "@/styles/BillingGrid.module.css";
+import { produce } from "immer";
+
+export default function SocietyConfigPage() {
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState({
+    name: "",
+    registrationNo: "",
+    address: "",
+    config: {
+      interestRate: 0,
+      serviceTaxRate: 0,
+      gracePeriodDays: 10,
+      billDueDay: 10,
+      billPayFinalDay: 25,
+      billGenerationDay: 1,
+      billPushDay: 1,
+      interestCalculationMethod: "SIMPLE",
+      interestCompoundingFrequency: "MONTHLY",
+    },
+  });
+  const [errors, setErrors] = useState({});
+  const [successMessage, setSuccessMessage] = useState("");
+  const [templateFile, setTemplateFile] = useState(null);
+  const [uploadingTemplate, setUploadingTemplate] = useState(false);
+
+  const { data: societyData, isLoading } = useQuery({
+    queryKey: ["society-config"],
+    queryFn: () => apiClient.get("/api/society/config"),
+  });
+
+  useEffect(() => {
+    if (societyData?.society) {
+      const c = societyData.society.config || {};
+      setFormData({
+        name: societyData.society.name || "",
+        registrationNo: societyData.society.registrationNo || "",
+        address: societyData.society.address || "",
+        config: {
+          interestRate: c.interestRate ?? 0,
+          serviceTaxRate: c.serviceTaxRate ?? 0,
+          gracePeriodDays: c.gracePeriodDays ?? 10,
+          billDueDay: c.billDueDay ?? 10,
+          billPayFinalDay: c.billPayFinalDay ?? 25,
+          billGenerationDay: c.billGenerationDay ?? 1,
+          billPushDay: c.billPushDay ?? 1,
+          interestCalculationMethod: c.interestCalculationMethod ?? "SIMPLE",
+          interestCompoundingFrequency:
+            c.interestCompoundingFrequency ?? "MONTHLY",
+        },
+      });
+    }
+  }, [societyData]);
+
+  const updateMutation = useMutation({
+    mutationFn: (data) => apiClient.put("/api/society/update", data),
+    onSuccess: (data) => {
+      setSuccessMessage("✅ Society configuration updated successfully!");
+
+      // ✅ UPDATE FORM STATE WITH SERVER RESPONSE
+      if (data.society) {
+        const c = data.society.config || {};
+        setFormData({
+          name: data.society.name || "",
+          registrationNo: data.society.registrationNo || "",
+          address: data.society.address || "",
+          config: {
+            interestRate: c.interestRate ?? 0,
+            serviceTaxRate: c.serviceTaxRate ?? 0,
+            gracePeriodDays: c.gracePeriodDays ?? 10,
+            billDueDay: c.billDueDay ?? 10,
+            billPayFinalDay: c.billPayFinalDay ?? 25, // ← NEW
+            billGenerationDay: c.billGenerationDay ?? 1,
+            billPushDay: c.billPushDay ?? 1,
+            interestCalculationMethod: c.interestCalculationMethod ?? "SIMPLE",
+            interestCompoundingFrequency:
+              c.interestCompoundingFrequency ?? "MONTHLY",
+          },
+        });
+      }
+
+      queryClient.invalidateQueries(["society-config"]);
+      setTimeout(() => setSuccessMessage(""), 5000);
+    },
+    onError: (error) => {
+      setErrors({ submit: error.message });
+    },
+  });
+  const handleTemplateUpload = async () => {
+    if (!templateFile) {
+      alert("Please select a PDF file");
+      return;
+    }
+
+    setUploadingTemplate(true);
+    try {
+      const formData = new FormData();
+      formData.append("template", templateFile);
+
+      const response = await fetch("/api/society/upload-template", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert("Template uploaded successfully!");
+        setTemplateFile(null);
+        queryClient.invalidateQueries(["society-config"]);
+      } else {
+        alert(result.error || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Failed to upload template");
+    } finally {
+      setUploadingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (!confirm("Delete uploaded template and use default?")) return;
+
+    try {
+      const response = await fetch("/api/society/upload-template", {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        alert("Template deleted");
+        queryClient.invalidateQueries(["society-config"]);
+      }
+    } catch (error) {
+      alert("Failed to delete template");
+    }
+  };
+  const handleChange = (path, value) => {
+    setFormData((prev) =>
+      produce(prev, (draft) => {
+        const keys = path.split(".");
+        let current = draft;
+
+        // Navigate to the parent of the target key
+        for (let i = 0; i < keys.length - 1; i++) {
+          if (!current[keys[i]]) {
+            current[keys[i]] = {}; // Create if doesn't exist
+          }
+          current = current[keys[i]];
+        }
+
+        // Set the final value
+        current[keys[keys.length - 1]] = value;
+        console.log(`✅ Updated ${path} to:`, value);
+      }),
+    );
+
+    if (errors[path]) {
+      setErrors((prev) => ({ ...prev, [path]: "" }));
+    }
+  };
+
+  const validate = () => {
+    const newErrors = {};
+    if (!formData.name || formData.name.trim().length < 2)
+      newErrors.name = "Society name must be at least 2 characters";
+    if (formData.config.interestRate < 0 || formData.config.interestRate > 100)
+      newErrors.interestRate = "Interest rate must be between 0 and 100";
+    if (
+      formData.config.serviceTaxRate < 0 ||
+      formData.config.serviceTaxRate > 100
+    )
+      newErrors.serviceTaxRate = "Service tax rate must be between 0 and 100";
+    if (
+      formData.config.gracePeriodDays < 0 ||
+      formData.config.gracePeriodDays > 90
+    )
+      newErrors.gracePeriodDays = "Grace period must be between 0 and 90 days";
+    const due = formData.config.billDueDay;
+    if (!due || due < 1 || due > 31)
+      newErrors.billDueDay =
+        "Bill due day must be between 1 and 31 (values above 28 clamp to month end)";
+    const finalDay = formData.config.billPayFinalDay;
+    if (!finalDay || finalDay < 1 || finalDay > 31)
+      newErrors.billPayFinalDay =
+        "Bill payment final day must be between 1 and 31";
+    if (finalDay <= due)
+      newErrors.billPayFinalDay =
+        "Payment final day must be after bill due day";
+    const genDay = formData.config.billGenerationDay;
+    if (!genDay || genDay < 1 || genDay > 31)
+      newErrors.billGenerationDay =
+        "Bill generation day must be between 1 and 31";
+    const pushDay = formData.config.billPushDay;
+    if (!pushDay || pushDay < 1 || pushDay > 31)
+      newErrors.billPushDay = "Bill push day must be between 1 and 31";
+    if (pushDay < genDay)
+      newErrors.billPushDay =
+        "Bill push day must be on or after generation day";
+    return newErrors;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        ...formData,
+      });
+      // ✅ CRITICAL: Update state with response data
+      // This ensures the form shows the saved values
+      console.log("✅ Save successful, state updated");
+    } catch (error) {
+      console.error("❌ Save failed:", error);
+      setErrors({ submit: error.message });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div
+        style={{ display: "flex", justifyContent: "center", padding: "40px" }}
+      >
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <form onSubmit={handleSubmit}>
+        <div className={styles.pageHeader}>
+          <div>
+            <h1 className={styles.pageTitle}>Society Configuration</h1>
+            <p className={styles.pageSubtitle}>
+              Manage society details and financial parameters
+            </p>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="btn btn-secondary"
+            >
+              🔄 Reset Changes
+            </button>
+            <button
+              type="submit"
+              className="btn btn-success"
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? (
+                <>
+                  <span className="loading-spinner"></span>
+                  Saving...
+                </>
+              ) : (
+                <>💾 Save Configuration</>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {successMessage && (
+          <div
+            className="toast toast-success"
+            style={{ position: "relative", marginBottom: "var(--spacing-lg)" }}
+          >
+            {successMessage}
+          </div>
+        )}
+
+        {errors.submit && (
+          <div className={gridStyles.errorList}>
+            <div className={gridStyles.errorListTitle}>❌ Update Failed</div>
+            <div>{errors.submit}</div>
+          </div>
+        )}
+
+        <div className={styles.contentCard}>
+          <div className={styles.cardHeader}>
+            <h2 className={styles.cardTitle}>Basic Information</h2>
+          </div>
+
+          <div className={gridStyles.configForm}>
+            <div className={gridStyles.formGroup}>
+              <label className="label">Society Name *</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                className={`input ${errors.name ? "input-error" : ""}`}
+                placeholder="Green Valley Apartments"
+              />
+              {errors.name && <p className="error-text">{errors.name}</p>}
+            </div>
+
+            <div className={gridStyles.formRow}>
+              <div className={gridStyles.formGroup}>
+                <label className="label">Registration Number</label>
+                <input
+                  type="text"
+                  value={formData.registrationNo}
+                  onChange={(e) =>
+                    handleChange("registrationNo", e.target.value)
+                  }
+                  className="input"
+                  placeholder="REG/2024/1234"
+                />
+              </div>
+            </div>
+
+            <div className={gridStyles.formGroup}>
+              <label className="label">Address</label>
+              <textarea
+                value={formData.address}
+                onChange={(e) => handleChange("address", e.target.value)}
+                className="input"
+                rows="3"
+                placeholder="Complete society address"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.contentCard}>
+          <div className={styles.cardHeader}>
+            <h2 className={styles.cardTitle}>Financial Parameters</h2>
+          </div>
+
+          <div className={gridStyles.formRow}>
+            {/* Interest Rate on Arrears */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">
+                Interest Rate on Arrears (% per annum) *
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={formData.config.interestRate}
+                onChange={(e) =>
+                  handleChange(
+                    "config.interestRate",
+                    parseFloat(e.target.value) || 0,
+                  )
+                }
+                className={`input ${errors.interestRate ? "input-error" : ""}`}
+                placeholder="21.00"
+              />
+              {errors.interestRate && (
+                <p className="error-text">{errors.interestRate}</p>
+              )}
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Annual interest rate on overdue payments (e.g., 21% p.a.)
+              </span>
+            </div>
+
+            <div className="config-field">
+              <label>Interest Rounding</label>
+              <select
+                value={formData.config.interestRounding || "TWO_DECIMAL"}
+                onChange={(e) =>
+                  handleChange("config.interestRounding", e.target.value)
+                }
+                className="input"
+              >
+                <option value="TWO_DECIMAL">
+                  2 Decimal (e.g. 10.256 → 10.26)
+                </option>
+                <option value="ROUND_UP">
+                  Round Up to whole rupee (e.g. 10.001 → 11)
+                </option>
+              </select>
+              <p className="hint">
+                Society never spares even ₹0.01 — use Round Up
+              </p>
+            </div>
+
+            <div className="config-field">
+              <label>Interest Use Mode</label>
+              <select
+                value={formData.config.interestUseMode || "OLDEST_FIRST"}
+                onChange={(e) =>
+                  handleChange("config.interestUseMode", e.target.value)
+                }
+                className="input"
+              >
+                <option value="OLDEST_FIRST">
+                  Oldest First — clear oldest period's interest first
+                </option>
+                <option value="TOTAL">
+                  Total Pool — treat all interest as one bucket
+                </option>
+              </select>
+            </div>
+
+            <div className="config-field">
+              <label>Member Payment Breakdown Visible</label>
+              <input
+                type="checkbox"
+                checked={
+                  formData.config.memberPaymentBreakdownVisible !== false
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "config.memberPaymentBreakdownVisible",
+                    e.target.checked,
+                  )
+                }
+              />
+              <span>Show members how much goes to interest vs principal</span>
+            </div>
+
+            <div className="config-field">
+              <label>Adjustment Application Mode</label>
+              <select
+                value={
+                  formData.config.adjustmentApplicationMode || "INTEREST_FIRST"
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "config.adjustmentApplicationMode",
+                    e.target.value,
+                  )
+                }
+                className="input"
+              >
+                <option value="INTEREST_FIRST">Interest First (default)</option>
+                <option value="PRINCIPAL_FIRST">Principal First</option>
+              </select>
+            </div>
+
+            <div className="config-field">
+              <label>Interest Trigger Timing</label>
+              <select
+                value={
+                  formData.config.interestTriggerTiming || "NEXT_DAY"
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "config.interestTriggerTiming",
+                    e.target.value,
+                  )
+                }
+                className="input"
+              >
+                <option value="NEXT_DAY">Next Day (interest starts day after grace ends)</option>
+                <option value="SAME_DAY">Same Day (interest starts on grace end day)</option>
+              </select>
+            </div>
+            {/* Service Tax Rate */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">Service Tax Rate (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={formData.config.serviceTaxRate}
+                onChange={(e) =>
+                  handleChange(
+                    "config.serviceTaxRate",
+                    parseFloat(e.target.value) || 0,
+                  )
+                }
+                className={`input ${
+                  errors.serviceTaxRate ? "input-error" : ""
+                }`}
+                placeholder="2.00"
+              />
+              {errors.serviceTaxRate && (
+                <p className="error-text">{errors.serviceTaxRate}</p>
+              )}
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Tax applied on total charges (e.g., GST 2%)
+              </span>
+            </div>
+
+            {/* Grace Period Days */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">Interest Grace Period (days) *</label>
+              <input
+                type="number"
+                min="0"
+                max="90"
+                value={formData.config.gracePeriodDays}
+                onChange={(e) =>
+                  handleChange(
+                    "config.gracePeriodDays",
+                    parseInt(e.target.value) || 0,
+                  )
+                }
+                className={`input ${
+                  errors.gracePeriodDays ? "input-error" : ""
+                }`}
+                placeholder="15"
+              />
+              {errors.gracePeriodDays && (
+                <p className="error-text">{errors.gracePeriodDays}</p>
+              )}
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Days after due date before interest starts accruing
+              </span>
+            </div>
+
+            {/* Bill Due Day */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">Bill Due Day of Month *</label>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                value={formData.config?.billDueDay ?? 10}
+                onChange={(e) => {
+                  const value =
+                    e.target.value === "" ? 10 : parseInt(e.target.value);
+                  handleChange("config.billDueDay", value);
+                }}
+                className="input"
+                placeholder="10"
+              />
+              {errors["config.billDueDay"] && (
+                <p className="error-text">{errors["config.billDueDay"]}</p>
+              )}
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Day of month when bills are due (e.g., 10 = 10th). Max 28
+                recommended — values above 28 are auto-clamped to the last day
+                of shorter months (Feb etc.).
+              </span>
+            </div>
+
+            {/* Bill Pay Final Day — NEW */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">Bill Payment Final Day *</label>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                value={formData.config?.billPayFinalDay ?? 25}
+                onChange={(e) => {
+                  const value =
+                    e.target.value === "" ? 25 : parseInt(e.target.value);
+                  handleChange("config.billPayFinalDay", value);
+                }}
+                className="input"
+                placeholder="25"
+              />
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Last day of month to accept payments. Interest frozen after this
+                date. Admin can generate bills safely from the next day onwards.
+              </span>
+            </div>
+
+            {/* Bill Generation Day — NEW */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">Bill Generation Day of Month</label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={formData.config?.billGenerationDay ?? 1}
+                onChange={(e) => {
+                  const value = !e.target.value ? 1 : parseInt(e.target.value);
+                  handleChange("config.billGenerationDay", value);
+                }}
+                className={`input${errors["config.billGenerationDay"] ? " input-error" : ""}`}
+                placeholder="1"
+              />
+              {errors["config.billGenerationDay"] && (
+                <p className="error-text">
+                  {errors["config.billGenerationDay"]}
+                </p>
+              )}
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Day of month when admin should generate bills (e.g., 1 = 1st of
+                every month)
+              </span>
+            </div>
+
+            {/* Bill Push Day — NEW */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">
+                Bill Visible to Members From (Day)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={formData.config?.billPushDay ?? 1}
+                onChange={(e) => {
+                  const value = !e.target.value ? 1 : parseInt(e.target.value);
+                  handleChange("config.billPushDay", value);
+                }}
+                className={`input${errors["config.billPushDay"] ? " input-error" : ""}`}
+                placeholder="1"
+              />
+              {errors["config.billPushDay"] && (
+                <p className="error-text">{errors["config.billPushDay"]}</p>
+              )}
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Day of month when bills become visible on member dashboards.
+                Must be ≥ generation day. Bills generated before this date are
+                stored as <strong>Scheduled</strong>.
+              </span>
+            </div>
+
+            {/* Interest Calculation Method */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">Interest Calculation Method</label>
+              <select
+                value={formData.config.interestCalculationMethod}
+                onChange={(e) =>
+                  handleChange(
+                    "config.interestCalculationMethod",
+                    e.target.value,
+                  )
+                }
+                className="input"
+              >
+                <option value="SIMPLE">Simple Interest</option>
+                <option value="COMPOUND">Compound Interest</option>
+              </select>
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                How interest is calculated on overdue amounts
+              </span>
+            </div>
+
+            {/* Compounding Frequency */}
+            <div className={gridStyles.formGroup}>
+              <label className="label">Interest Compounding Frequency</label>
+              <select
+                value={formData.config.interestCompoundingFrequency}
+                onChange={(e) =>
+                  handleChange(
+                    "config.interestCompoundingFrequency",
+                    e.target.value,
+                  )
+                }
+                className="input"
+                disabled={
+                  formData.config.interestCalculationMethod === "SIMPLE"
+                }
+              >
+                <option value="MONTHLY">Monthly</option>
+              </select>
+
+              <span
+                style={{
+                  fontSize: "var(--font-xs)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Only applies when Compound Interest is selected
+              </span>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+</file>
+
+<file path="utils/dateUtils.js">
+// utils/dateUtils.js
+/**
+ * Build a Date from year/month/day config values.
+ * Clamps day to the actual last day of that month so e.g.
+ * day=31 in February becomes Feb 28/29, never March 2.
+ * @param {number} year
+ * @param {number} month  1-based (Jan=1, Dec=12)
+ * @param {number} day    society config value (billDueDay etc.)
+ * @param {number} hh hours (default 0)
+ * @param {number} mm minutes (default 0)
+ * @param {number} ss seconds (default 0)
+ * @returns {Date}
+ */
+export function safeConfigDate(year, month, day, hh = 0, mm = 0, ss = 0) {
+  const lastDay = new Date(year, month, 0).getDate(); // day-0 of next month = last day of this month
+  const clamped = Math.min(Math.max(1, day || 1), lastDay);
+  return new Date(year, month - 1, clamped, hh, mm, ss, 0);
+}
+
+export function getFinancialYear(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1; // 1-based
+  return m >= 4 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+}
+</file>
+
+<file path="utils/interestUtils.js">
+/**
+ * CENTRAL INTEREST UTILITY — v2 (Interest-Satisfy-First)
+ * Monthly-only. No DAILY. No SIMPLE/COMPOUND config.
+ * interestRate=0 → bypass all logic.
+ */
+
+/**
+ * roundInterest — society rounding config.
+ * TWO_DECIMAL: 10.256 → 10.26  (standard 2dp rounding)
+ * ROUND_UP:    10.251 → 10.26  (ceiling to 2 decimal places, never loses a paisa)
+ * ROUND_UP_INT: 10.001 → 11   (ceiling to nearest whole rupee)
+ */
+export function roundInterest(value, mode = "TWO_DECIMAL") {
+  if (!value || value <= 0) return 0;
+  if (mode === "ROUND_UP_INT") return Math.ceil(value);
+  if (mode === "ROUND_UP")
+    return Math.ceil(Math.round(value * 100000) / 1000) / 100;
+  return parseFloat(value.toFixed(2));
+}
+
+/**
+ * calculateMonthlyInterest — single source of truth.
+ *
+ * @param {number} remainingPrincipal — unpaid principal this bill
+ * @param {number} remInt             — carried unpaid interest from prev periods
+ * @param {number} annualRate         — society annual rate (e.g. 21)
+ * @param {number} gracePeriodDays
+ * @param {Date}   billDueDate        — due date of THIS bill month
+ * @param {Date}   referenceDate      — generation date (1st of billing month)
+ * @param {string} interestRounding   — 'TWO_DECIMAL' | 'ROUND_UP'
+ * @returns {{ currInt, monthInterest, remInt }}
+ *   currInt       = interest on principal this month (0 if paid before grace)
+ *   monthInterest = currInt + remInt (total interest on this bill)
+ *   remInt        = monthInterest (carried forward if not cleared)
+ */
+export function calculateMonthlyInterest({
+  remainingPrincipal,
+  remInt = 0,
+  annualRate,
+  gracePeriodDays = 0,
+  billDueDate,
+  referenceDate,
+  interestRounding = "TWO_DECIMAL",
+  interestTriggerTiming = "NEXT_DAY", // SAME_DAY | NEXT_DAY
+}) {
+  // interestRate = 0 → bypass
+  if (!annualRate || annualRate <= 0) {
+    return { currInt: 0, monthInterest: 0, remInt: 0 };
+  }
+
+  // No principal → carry remInt only
+  if (!remainingPrincipal || remainingPrincipal <= 0) {
+    const carried = roundInterest(remInt || 0, interestRounding);
+    return { currInt: 0, monthInterest: carried, remInt: carried };
+  }
+
+  const due = new Date(billDueDate);
+  const graceEnd = new Date(due);
+  graceEnd.setDate(graceEnd.getDate() + (gracePeriodDays || 0));
+  // Normalize to midnight so date comparisons are day-level only
+  graceEnd.setHours(0, 0, 0, 0);
+
+  const ref =
+    referenceDate instanceof Date ? new Date(referenceDate) : new Date(referenceDate);
+  ref.setHours(0, 0, 0, 0);
+
+  // SAME_DAY: interest starts ON graceEnd day (ref >= graceEnd)
+  // NEXT_DAY: interest starts the day AFTER graceEnd (ref > graceEnd)
+  const isPastGrace =
+    interestTriggerTiming === "SAME_DAY" ? ref >= graceEnd : ref > graceEnd;
+
+  // currInt on principal only (your confirmed formula)
+  const currInt = isPastGrace
+    ? roundInterest((remainingPrincipal * annualRate) / 1200, interestRounding)
+    : 0;
+
+  const totalMonthInterest = roundInterest(
+    (remInt || 0) + currInt,
+    interestRounding,
+  );
+
+  return {
+    currInt,
+    monthInterest: totalMonthInterest,
+    remInt: totalMonthInterest,
+  };
+}
+
+/**
+ * getBillPayFinalDate — interest cap date for a bill month.
+ */
+export function getBillPayFinalDate(billYear, billMonth, billPayFinalDay) {
+  if (!billPayFinalDay || billPayFinalDay <= 0) return null;
+  // billMonth is 1-based from callers. JS Date month is 0-based.
+  const lastDay = new Date(billYear, billMonth, 0).getDate(); // day-0 of next month = last day of billMonth
+  const clampedDay = Math.min(billPayFinalDay, lastDay);
+  return new Date(billYear, billMonth - 1, clampedDay, 23, 59, 59, 999);
+}
+
+/**
+ * getOldestDueDate — anchor date for interest.
+ */
+export function getOldestDueDate(unpaidBills, billDueDay, refYear, refMonth) {
+  if (unpaidBills && unpaidBills.length > 0) {
+    const oldest = unpaidBills[0];
+    if (oldest.dueDate) return new Date(oldest.dueDate);
+    return new Date(oldest.billYear, oldest.billMonth, billDueDay || 10);
+  }
+  let prevYear = refYear;
+  let prevMonth = refMonth - 1;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  return new Date(prevYear, prevMonth - 1, billDueDay || 10);
+}
+
+/**
+ * calculateInterestAmount — backwards-compat wrapper.
+ * Callers that haven't migrated still work.
+ */
+export function calculateInterestAmount(
+  principal,
+  oldestDueDate,
+  referenceDate,
+  gracePeriodDays,
+  interestRate,
+  _ignoredMethod, // was interestCalculationMethod — ignored now
+  _ignoredCapDate, // was billPayFinalDate — ignored (handled at call site)
+  interestRounding = "TWO_DECIMAL",
+) {
+  if (!principal || principal <= 0) {
+    return {
+      interestAmount: 0,
+      interestDays: 0,
+      effectiveDays: 0,
+      chargeableMonths: 0,
+    };
+  }
+
+  const { monthInterest } = calculateMonthlyInterest({
+    remainingPrincipal: principal,
+    remInt: 0,
+    annualRate: interestRate || 0,
+    gracePeriodDays: gracePeriodDays || 0,
+    billDueDate: oldestDueDate,
+    referenceDate,
+    interestRounding,
+  });
+
+  return {
+    interestAmount: monthInterest,
+    interestDays: 0,
+    effectiveDays: 0,
+    chargeableMonths: monthInterest > 0 ? 1 : 0,
+  };
+}
+
+/**
+ * allocatePaymentInterestFirst — CORE ENGINE.
+ *
+ * Takes a payment amount and list of unpaid bills (oldest-first).
+ * Returns updated bill payment state + advance credit.
+ *
+ * Rules:
+ *  1. Clear all interest across all bills first (oldest-first).
+ *  2. Then clear principal oldest-first.
+ *  3. Overpayment → advanceCredit.
+ *
+ * @param {number} paymentAmount
+ * @param {Array}  bills  — sorted oldest-first, each: { _id, interestBalance, principalBalance, balanceAmount, totalAmount, amountPaid }
+ * @returns {{
+ *   billUpdates: Array<{ billId, interestCleared, principalCleared, newInterestBalance, newPrincipalBalance, newBalanceAmount, newAmountPaid, newStatus }>,
+ *   totalInterestCleared: number,
+ *   totalPrincipalCleared: number,
+ *   advanceCredit: number,
+ *   breakdown: { interestCleared, principalCleared, advanceCredit }
+ * }}
+ */
+export function allocatePaymentInterestFirst(
+  paymentAmount,
+  bills,
+  allocationMode = "INTEREST_FIRST", // INTEREST_FIRST | PRINCIPAL_FIRST
+) {
+  let remaining = parseFloat(paymentAmount);
+  let totalInterestCleared = 0;
+  let totalPrincipalCleared = 0;
+
+  // Deep clone to avoid mutating originals.
+  const workBills = bills.map((b) => ({
+    billId: b._id,
+    interestBalance: b.interestBalance || 0,
+    principalBalance: b.principalBalance || 0,
+    balanceAmount: b.balanceAmount || 0,
+    totalAmount: b.totalAmount || 0,
+    amountPaid: b.amountPaid || 0,
+  }));
+
+  function clearInterest() {
+    for (const wb of workBills) {
+      if (remaining <= 0) break;
+      if (wb.interestBalance <= 0) continue;
+      const clear = Math.min(remaining, wb.interestBalance);
+      wb.interestBalance = parseFloat((wb.interestBalance - clear).toFixed(2));
+      wb.balanceAmount = parseFloat((wb.balanceAmount - clear).toFixed(2));
+      wb.amountPaid = parseFloat((wb.amountPaid + clear).toFixed(2));
+      totalInterestCleared += clear;
+      remaining = parseFloat((remaining - clear).toFixed(2));
+    }
+  }
+
+  function clearPrincipal() {
+    for (const wb of workBills) {
+      if (remaining <= 0) break;
+      if (wb.principalBalance <= 0) continue;
+      const clear = Math.min(remaining, wb.principalBalance);
+      wb.principalBalance = parseFloat((wb.principalBalance - clear).toFixed(2));
+      wb.balanceAmount = parseFloat((wb.balanceAmount - clear).toFixed(2));
+      wb.amountPaid = parseFloat((wb.amountPaid + clear).toFixed(2));
+      totalPrincipalCleared += clear;
+      remaining = parseFloat((remaining - clear).toFixed(2));
+    }
+  }
+
+  if (allocationMode === "PRINCIPAL_FIRST") {
+    clearPrincipal();
+    clearInterest();
+  } else {
+    // INTEREST_FIRST (default)
+    clearInterest();
+    clearPrincipal();
+  }
+
+  // previousBalance is DISPLAY-ONLY — not cleared here.
+
+  const advanceCredit = parseFloat(remaining.toFixed(2));
+
+  const billUpdates = workBills.map((wb) => {
+    let newStatus;
+    const balance = parseFloat(wb.balanceAmount.toFixed(2));
+    if (balance <= 0.005)
+      newStatus = "Paid"; // ₹0.005 epsilon for float precision
+    else if (wb.amountPaid > 0) newStatus = "Partial";
+    else newStatus = "Unpaid";
+
+    return {
+      billId: wb.billId,
+      interestCleared: parseFloat(
+        (bills.find((b) => String(b._id) === String(wb.billId))
+          ?.interestBalance || 0) - wb.interestBalance,
+      ).toFixed(2),
+      principalCleared: parseFloat(
+        (bills.find((b) => String(b._id) === String(wb.billId))
+          ?.principalBalance || 0) - wb.principalBalance,
+      ).toFixed(2),
+      newInterestBalance: wb.interestBalance,
+      newPrincipalBalance: wb.principalBalance,
+      newPreviousBalance: wb.previousBalance,
+      newBalanceAmount: wb.balanceAmount,
+      newAmountPaid: wb.amountPaid,
+      newStatus,
+    };
+  });
+
+  return {
+    billUpdates,
+    totalInterestCleared: parseFloat(totalInterestCleared.toFixed(2)),
+    totalPrincipalCleared: parseFloat(totalPrincipalCleared.toFixed(2)),
+    advanceCredit,
+    breakdown: {
+      interestCleared: parseFloat(totalInterestCleared.toFixed(2)),
+      principalCleared: parseFloat(totalPrincipalCleared.toFixed(2)),
+      advanceCredit,
+    },
+  };
+}
+</file>
+
+<file path="app/api/society/config/route.js">
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import Society from "@/models/Society";
+import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import cache from "@/lib/cache";
+
+export async function GET(request) {
+  try {
+    await connectDB();
+
+    const token = getTokenFromRequest(request);
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    const cacheKey = `society:config:${decoded.societyId}`;
+    const society = await cache.getOrSet(
+      cacheKey,
+      () => Society.findById(decoded.societyId).lean(),
+      900, // 15 min
+    );
+    if (!society)
+      return NextResponse.json({ error: "Society not found" }, { status: 404 });
+    return NextResponse.json({ society });
+  } catch (error) {
+    console.error("Fetch society config error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}
+</file>
+
+<file path="app/api/society/create/route.js">
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import Society from "@/models/Society";
+import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+
+import { matrixConfigSchema } from "@/lib/validators";
+
+export async function POST(request) {
+  try {
+    await connectDB();
+
+    const token = getTokenFromRequest(request);
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    if (decoded.role !== "Admin") {
+      return NextResponse.json(
+        { error: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const validationResult = matrixConfigSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: validationResult.error.errors },
+        { status: 400 }
+      );
+    }
+
+    const updatedSociety = await Society.findByIdAndUpdate(
+      decoded.societyId,
+      {
+        $set: {
+          matrixConfig: {
+            L: validationResult.data.L,
+            R: validationResult.data.R,
+          },
+          billingHeads: validationResult.data.billingHeads,
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    return NextResponse.json({
+      message: "Matrix configuration saved successfully",
+      society: updatedSociety,
+    });
+  } catch (error) {
+    console.error("Matrix config error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+</file>
+
+<file path="app/api/society/upload-template/route.js">
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
+import Society from "@/models/Society";
+import fs from "fs";
+import path from "path";
+import { writeFile } from "fs/promises";
+
+export async function POST(request) {
+  try {
+    await connectDB();
+
+    const token = getTokenFromRequest(request);
+    if (!token)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const decoded = verifyToken(token);
+    if (!decoded)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+
+    if (decoded.role === "Accountant") {
+      return NextResponse.json(
+        { error: "Insufficient permissions" },
+        { status: 403 }
+      );
+    }
+
+    const formData = await request.formData();
+    const file = formData.get("template");
+
+    if (!file) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
+
+    // Validate file type
+    if (file.type !== "application/pdf") {
+      return NextResponse.json(
+        { error: "Only PDF files are allowed" },
+        { status: 400 }
+      );
+    }
+
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(process.cwd(), "public", "templates");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Generate unique filename
+    const fileName = `bill-template-${decoded.societyId}-${Date.now()}.pdf`;
+    const filePath = path.join(uploadsDir, fileName);
+    const publicPath = `/templates/${fileName}`;
+
+    // Convert file to buffer and save
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    await writeFile(filePath, buffer);
+
+    // Update society with template info
+    const society = await Society.findByIdAndUpdate(
+      decoded.societyId,
+      {
+        $set: {
+          "billTemplate.type": "uploaded",
+          "billTemplate.fileName": fileName,
+          "billTemplate.filePath": publicPath,
+          "billTemplate.uploadedAt": new Date(),
+          "billTemplate.uploadedBy": decoded.userId,
+        },
+      },
+      { new: true }
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: "Template uploaded successfully",
+      template: {
+        fileName,
+        filePath: publicPath,
+        uploadedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("Template upload error:", error);
+    return NextResponse.json(
+      { error: "Upload failed", details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE template
+export async function DELETE(request) {
+  try {
+    await connectDB();
+
+    const token = getTokenFromRequest(request);
+    if (!token)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const decoded = verifyToken(token);
+    if (!decoded)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+
+    const society = await Society.findById(decoded.societyId);
+    if (!society) {
+      return NextResponse.json({ error: "Society not found" }, { status: 404 });
+    }
+
+    // Delete file from filesystem
+    if (society.billTemplate?.fileName) {
+      const filePath = path.join(
+        process.cwd(),
+        "public",
+        "templates",
+        society.billTemplate.fileName
+      );
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    // Reset to default template
+    society.billTemplate = {
+      type: "default",
+      fileName: null,
+      filePath: null,
+      uploadedAt: null,
+      uploadedBy: null,
+    };
+    await society.save();
+
+    return NextResponse.json({
+      success: true,
+      message: "Template deleted, using default",
+    });
+  } catch (error) {
+    console.error("Template delete error:", error);
+    return NextResponse.json(
+      { error: "Delete failed", details: error.message },
+      { status: 500 }
+    );
+  }
+}
+</file>
+
+<file path="app/api/society/update/route.js">
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import Society from "@/models/Society";
+import AuditLog from "@/models/AuditLog";
+import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import cache from "@/lib/cache";
+
+function normalizeSocietyUpdatePayload(payload) {
+  const normalized = { ...payload };
+
+  // Prevent Mongo path conflicts when both `config` and `config.*` are provided.
+  if (Object.prototype.hasOwnProperty.call(normalized, "config.charges")) {
+    normalized.config = normalized.config || {};
+    normalized.config.charges = normalized["config.charges"];
+    delete normalized["config.charges"];
+  }
+
+  return normalized;
+}
+
+export async function PUT(request) {
+  try {
+    await connectDB();
+    const token = getTokenFromRequest(request);
+    if (!token)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const decoded = verifyToken(token);
+    if (!decoded)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    const body = await request.json().catch(() => ({})); // ← prevents crash if body is malformed
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    if (decoded.role !== "Admin" && decoded.role !== "Secretary") {
+      return NextResponse.json(
+        { error: "Insufficient permissions" },
+        { status: 403 },
+      );
+    }
+
+    const normalizedBody = normalizeSocietyUpdatePayload(body);
+    console.log(
+      "📥 Update request body:",
+      JSON.stringify(normalizedBody, null, 2),
+    );
+
+    // Find existing society
+    const oldSociety = await Society.findById(decoded.societyId);
+    if (!oldSociety) {
+      return NextResponse.json({ error: "Society not found" }, { status: 404 });
+    }
+
+    // Update society - NO VALIDATION, just update
+    const updatedSociety = await Society.findByIdAndUpdate(
+      decoded.societyId,
+      { $set: normalizedBody },
+      { new: true, runValidators: false }, // DISABLED validators
+    );
+
+    console.log("✅ Society updated:", updatedSociety.name);
+
+    // Audit log
+    await AuditLog.create({
+      userId: decoded.userId,
+      societyId: decoded.societyId,
+      action: "UPDATE_SOCIETY_CONFIG",
+      oldData: oldSociety,
+      newData: updatedSociety,
+      timestamp: new Date(),
+    });
+    await cache.del(`society:config:${decoded.societyId}`);
+
+    return NextResponse.json({
+      success: true,
+      message: "Society configuration updated successfully",
+      society: updatedSociety,
+    });
+  } catch (error) {
+    console.error("❌ Update society config error:", error);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error.message,
+      },
+      { status: 500 },
+    );
+  }
+}
+</file>
+
+<file path="middleware.js">
+import { NextResponse } from "next/server";
+
+export function middleware(request) {
+  const { pathname } = request.nextUrl;
+
+  const token = request.cookies.get("token")?.value;
+  const adminToken = request.cookies.get("admin_token")?.value;
+
+  function parseJwt(t) {
+    try {
+      const base64Url = t.split(".")[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join(""),
+      );
+      return JSON.parse(jsonPayload);
+    } catch {
+      return null;
+    }
+  }
+
+  // ✅ PUBLIC ROUTES
+  const publicRoutes = [
+    "/auth/login",
+    "/auth/signup",
+    "/admin/login",
+    "/member/login",
+    "/superadmin/login",
+  ];
+  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // ─── ROOT REDIRECT ───────────────────────────────────────────────
+  if (pathname === "/") {
+    // SuperAdmin: has adminToken, no token
+    if (adminToken) {
+      const adminPayload = parseJwt(adminToken);
+      if (adminPayload?.role === "SuperAdmin") {
+        return NextResponse.redirect(
+          new URL("/superadmin/dashboard", request.url),
+        );
+      }
+    }
+    // Admin / Member: has token
+    if (token) {
+      const payload = parseJwt(token);
+      if (payload?.role === "Admin" || payload?.role === "Secretary") {
+        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      }
+      if (payload?.role === "Member") {
+        return NextResponse.redirect(new URL("/member/dashboard", request.url));
+      }
+    }
+    return NextResponse.next();
+  }
+
+  // ─── SUPERADMIN ROUTES ───────────────────────────────────────────
+  // Handled entirely via adminToken — never needs token
+  if (pathname.startsWith("/superadmin")) {
+    if (!adminToken) {
+      return NextResponse.redirect(new URL("/superadmin/login", request.url));
+    }
+    const adminPayload = parseJwt(adminToken);
+    if (!adminPayload || adminPayload.role !== "SuperAdmin") {
+      return NextResponse.redirect(new URL("/superadmin/login", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  // ─── ADMIN + MEMBER PROTECTED ROUTES ─────────────────────────────
+  if (!token) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  const payload = parseJwt(token);
+  if (!payload) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  const role = payload.role;
+
+  // /admin exact → redirect to dashboard
+  if (pathname === "/admin") {
+    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+  }
+
+  if (
+    pathname.startsWith("/admin") &&
+    role !== "Admin" &&
+    role !== "Secretary"
+  ) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  if (pathname.startsWith("/member") && role !== "Member") {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/", "/admin/:path*", "/member/:path*", "/superadmin/:path*"],
+};
+</file>
+
+<file path="models/Society.js">
+import mongoose from "mongoose";
+
+const SocietySchema = new mongoose.Schema(
+  {
+    // Basic Information
+    name: { type: String, required: true, trim: true },
+    registrationNo: { type: String, unique: true, trim: true, minlength: 4 },
+    dateOfRegistration: { type: Date },
+    address: { type: String, trim: true },
+    panNo: { type: String, trim: true },
+    tanNo: { type: String, trim: true },
+
+    // Contact Details
+    personOfContact: { type: String, trim: true },
+    contactEmail: { type: String, trim: true },
+    contactPhone: { type: String, trim: true },
+
+    // Carpet Area
+    carpetAreaSqft: { type: Number, default: 0 },
+
+    // Bill Template - UPDATED STRUCTURE
+    billTemplate: {
+      type: {
+        type: String,
+        enum: ["default", "custom", "uploaded-pdf", "uploaded-image"],
+        default: "default",
+      },
+      // For uploaded PDF
+      pdfUrl: { type: String },
+      hasFormFields: { type: Boolean, default: false },
+      detectedFields: [{ type: String }],
+
+      // For uploaded image
+      imageUrl: { type: String },
+
+      // For custom design
+      design: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+        headerBg: String,
+        headerColor: String,
+        societyNameSize: Number,
+        addressSize: Number,
+        billTitleSize: Number,
+        billTitleAlign: String,
+        tableHeaderBg: String,
+        tableHeaderColor: String,
+        tableRowBg1: String,
+        tableRowBg2: String,
+        tableBorderColor: String,
+        totalBg: String,
+        totalColor: String,
+        totalSize: Number,
+        footerSize: Number,
+        footerText: [String],
+        showSignature: Boolean,
+        signatureLabel: String,
+      },
+
+      // Common assets
+      logoUrl: { type: String },
+      signatureUrl: { type: String },
+
+      uploadedAt: { type: Date },
+      uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      // OLD FIELDS - keep for backward compatibility
+      fileName: { type: String },
+      filePath: { type: String },
+    },
+
+    // Configuration
+    config: {
+      // billing settings (non-charge)
+      interestRate: { type: Number, default: 0 },
+      serviceTaxRate: { type: Number, default: 0 },
+      gracePeriodDays: { type: Number, default: 10 },
+      billDueDay: { type: Number, min: 1, max: 31, default: 10 },
+      billPayFinalDay: { type: Number, min: 1, max: 31, default: 25 }, // ← NEW: last day to accept payment/interest for the month
+      // NEW CONFIG FLAGS
+      interestRounding: {
+        type: String,
+        enum: ["TWO_DECIMAL", "ROUND_UP"],
+        default: "TWO_DECIMAL",
+      },
+      interestUseMode: {
+        // OLDEST_FIRST: clear oldest bill's interest first
+        // TOTAL: treat all interest as one bucket (still oldest-first physically)
+        type: String,
+        enum: ["OLDEST_FIRST", "TOTAL"],
+        default: "OLDEST_FIRST",
+      },
+      advanceAutoApply: {
+        type: Boolean,
+        default: false, // admin decided: NO automation per your answer
+      },
+      adjustmentApplicationMode: {
+        type: String,
+        enum: ["INTEREST_FIRST", "PRINCIPAL_FIRST"],
+        default: "INTEREST_FIRST",
+      },
+      interestTriggerTiming: {
+        type: String,
+        enum: ["SAME_DAY", "NEXT_DAY"],
+        default: "NEXT_DAY",
+      },
+      memberPaymentBreakdownVisible: {
+        type: Boolean,
+        default: true, // transparent by default
+      },
+      interestBasis: {
+        type: String,
+        enum: ["MONTHLY"],
+        default: "MONTHLY",
+      },
+
+      // Scheduled bill generation/push
+      // billGenerationDay: day of month admin generates bills (e.g., 1 = 1st of month)
+      // billPushDay: day of month bills become visible to members / go Unpaid (e.g., 5 = 5th)
+      // If billPushDay > today at generation time → bills stored as 'Scheduled', auto-pushed by cron
+      billGenerationDay: { type: Number, min: 1, max: 28, default: 1 },
+      billPushDay: { type: Number, min: 1, max: 28, default: 1 },
+      // dynamic charges — single source of truth
+      charges: [
+        {
+          label: { type: String },
+          type: {
+            type: String,
+            enum: ["Fixed", "Per Sq Ft", "Per Vehicle"],
+            default: "Fixed",
+          },
+          value: { type: Number, default: 0 },
+          isActive: { type: Boolean, default: true },
+          vehicleType: {
+            type: String,
+            enum: ["Two-Wheeler", "Four-Wheeler", null],
+            default: null,
+          },
+        },
+      ],
+    },
+    // Inside society.config schema:
+    parkingRates: {
+      Open: {
+        "Two-Wheeler": { type: Number, default: 0 },
+        "Four-Wheeler": { type: Number, default: 0 },
+      },
+      Covered: {
+        "Two-Wheeler": { type: Number, default: 0 },
+        "Four-Wheeler": { type: Number, default: 0 },
+      },
+      // Stilt has no entry — never billed
+    },
+    // Subscription
+    subscription: {
+      planType: {
+        type: String,
+        enum: ["Free", "Basic", "Premium", "Enterprise"],
+        default: "Free",
+      },
+      startDate: { type: Date, default: Date.now },
+      lastPaymentDate: { type: Date },
+      nextPaymentDate: { type: Date },
+      amountPaid: { type: Number, default: 0 },
+      status: {
+        type: String,
+        enum: ["Active", "Suspended", "Trial", "Expired"],
+        default: "Trial",
+      },
+      paymentHistory: [
+        {
+          date: { type: Date, required: true },
+          amount: { type: Number, required: true },
+          transactionId: { type: String },
+          method: { type: String },
+        },
+      ],
+    },
+    societyId: { type: String, unique: true, sparse: true }, // e.g. green_valley_andheri_2018_47
+    area: { type: String },
+    buildDate: { type: Date },
+    credentials: {
+      adminEmail: { type: String },
+      plainPassword: { type: String, select: true }, // explicitly included
+    },
+    // Soft delete support
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    deletionReason: { type: String },
+
+    // Config versioning
+    configVersion: { type: Number, default: 1 },
+
+    // Matrix Config
+    matrixConfig: {
+      L: { type: Number, default: 0 },
+      R: { type: Number, default: 0 },
+    },
+
+    // ❌ FIX #2: REMOVED billingHeads[] array
+    // Use BillingHead model as SINGLE SOURCE OF TRUTH:
+    // Query: BillingHead.find({ societyId })
+  },
+  {
+    timestamps: true,
+  },
+);
+
+// Pre-save hook
+// Clamp a day value to the last valid day of a given month/year
+function clampDay(day, month, year) {
+  if (!day) return day;
+  // Last day of that month: new Date(year, month, 0) = last day of month-1
+  const lastDay = new Date(year, month, 0).getDate();
+  return Math.min(day, lastDay);
+}
+
+SocietySchema.pre("save", function (next) {
+  if (this.isModified("config") || this.isModified("matrixConfig")) {
+    this.configVersion += 1;
+  }
+  // Clamp day fields so they never overflow for any given month.
+  // We clamp against the shortest month (Feb = 28 in non-leap, 29 in leap).
+  // Using Feb of current year as the reference — safest cross-month anchor.
+  if (this.config) {
+    const now = new Date();
+    const y = now.getFullYear();
+    // Feb = month 2, so new Date(y, 2, 0).getDate() = 28 or 29
+    const febLastDay = new Date(y, 2, 0).getDate(); // 28 or 29
+    if (this.config.billDueDay > febLastDay)
+      this.config.billDueDay = febLastDay;
+    if (this.config.billPayFinalDay > 31) this.config.billPayFinalDay = 31;
+    if (this.config.billGenerationDay > febLastDay)
+      this.config.billGenerationDay = febLastDay;
+    if (this.config.billPushDay > febLastDay)
+      this.config.billPushDay = febLastDay;
+    // Ensure new enum fields have valid defaults if missing
+    if (!this.config.interestRounding)
+      this.config.interestRounding = "TWO_DECIMAL";
+    if (!this.config.interestUseMode)
+      this.config.interestUseMode = "OLDEST_FIRST";
+  }
+  next();
+});
+
+// Indexes
+SocietySchema.index({ isDeleted: 1 });
+SocietySchema.index({ "subscription.status": 1 });
+
+export default mongoose.models.Society ||
+  mongoose.model("Society", SocietySchema);
+</file>
+
+</files>

@@ -8,16 +8,7 @@ import * as XLSX from "xlsx";
 import { calculateMemberCharges } from "../../../../lib/calculate-member-bill";
 import { validateBillRows } from "../../../../utils/excelValidator";
 
-const REQUIRED_COLS = [
-  "MemberId",
-  "Wing",
-  "FlatNo",
-  "OwnerName",
-  "Month",
-  "Year",
-  "DueDate",
-  "Total",
-];
+const REQUIRED_COLS = ["Wing", "FlatNo", "Period", "CurrentCharges"];
 
 export async function POST(request) {
   try {
@@ -48,9 +39,9 @@ export async function POST(request) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rawRows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
-    // Skip instruction row if present
+    // Skip instruction row (Wing cell starts with ⚠ or both Wing and FlatNo are blank)
     const dataRows = rawRows.filter(
-      (r) => !String(r.MemberId || "").startsWith("⚠"),
+      (r) => !String(r.Wing || "").startsWith("⚠") && (String(r.Wing || "").trim() || String(r.FlatNo || "").trim()),
     );
 
     const issues = [];
@@ -80,8 +71,11 @@ export async function POST(request) {
     ]);
 
     const memberMap = {};
+    const wingFlatMap = {};
     members.forEach((m) => {
       memberMap[m._id.toString()] = m;
+      const key = `${(m.wing || "").trim().toLowerCase()}-${(m.flatNo || "").trim().toLowerCase()}`;
+      wingFlatMap[key] = m;
     });
     const alreadyBilled = new Set(
       existingBills.map((b) => b.memberId?.toString()),
@@ -109,42 +103,65 @@ export async function POST(request) {
       });
     }
 
+    // Detect upload mode: if ALL data rows resolve to members that already have bills → payment-only upload
+    const resolvedMemberIds = dataRows
+      .map(r => {
+        const key = `${String(r.Wing || "").trim().toLowerCase()}-${String(r.FlatNo || "").trim().toLowerCase()}`;
+        return wingFlatMap[key]?._id.toString();
+      })
+      .filter(Boolean);
+    const uploadMode = resolvedMemberIds.length > 0 && resolvedMemberIds.every(id => alreadyBilled.has(id))
+      ? "PAYMENT_ONLY"
+      : "BILL_GENERATE";
+
     const validBills = [];
     const autoPreviewMap = {};
 
-    // Build auto-preview for comparison
-    for (const m of members) {
-      const { subtotal } = calculateMemberCharges(m, heads);
-      autoPreviewMap[m._id.toString()] = subtotal;
+    // Build auto-preview for comparison (only needed in BILL_GENERATE mode)
+    if (uploadMode === "BILL_GENERATE") {
+      for (const m of members) {
+        const { subtotal } = calculateMemberCharges(m, heads);
+        autoPreviewMap[m._id.toString()] = subtotal;
+      }
     }
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
-      const rowNum = i + 2; // 1 for header + 1-indexed
+      const rowNum = i + 2;
 
-      const memberId = String(row.MemberId || "").trim();
-      const rowMonth = parseInt(row.Month);
-      const rowYear = parseInt(row.Year);
-      const excelTotal = parseFloat(row.Total) || 0;
+      const wing = String(row.Wing || "").trim();
+      const flatNo = String(row.FlatNo || "").trim();
+      const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
+      const member = wingFlatMap[flatKey];
+      const memberId = member?._id.toString();
+
+      const period = String(row.Period || "").trim();
+      const [rowYearStr, rowMonthStr] = period.split("-");
+      const rowMonth = parseInt(rowMonthStr);
+      const rowYear = parseInt(rowYearStr);
+      const excelTotal = parseFloat(row.CurrentCharges ?? row.Total) || 0;
+
+      // Skip instruction row
+      if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
 
       // Unknown member
-      if (!memberId || !memberMap[memberId]) {
+      if (!member) {
         issues.push({
           row: rowNum,
           type: "error",
-          message: `MemberId "${memberId}" not found in system`,
-          fix: "Use the Download Template option to get correct MemberIds, or fix the ID to match an existing member.",
+          message: `Flat "${wing}-${flatNo}" not found in system`,
+          fix: "Use the Download Template option — do not change Wing or FlatNo.",
         });
         continue;
       }
 
-      // Wrong month/year
+      // Wrong period
       if (rowMonth !== month || rowYear !== year) {
         issues.push({
           row: rowNum,
           type: "error",
-          message: `Row has Month=${rowMonth}, Year=${rowYear} but generating for ${month}/${year}`,
-          fix: `Change Month to ${month} and Year to ${year} in this row.`,
+          message: `Row period "${period}" doesn't match selected ${year}-${String(month).padStart(2, "0")}`,
+          fix: `Re-download the template for the correct period.`,
         });
         continue;
       }
@@ -154,20 +171,20 @@ export async function POST(request) {
         issues.push({
           row: rowNum,
           type: "duplicate",
-          message: `Duplicate entry for MemberId "${memberId}" (${row.Wing}-${row.FlatNo})`,
-          fix: "Remove the duplicate row. Each member should appear only once.",
+          message: `Duplicate entry for ${wing}-${flatNo}`,
+          fix: "Remove the duplicate row.",
         });
         continue;
       }
       seenMembers.add(memberId);
 
-      // Already billed in DB
-      if (alreadyBilled.has(memberId)) {
+      // Already billed — only error in BILL_GENERATE mode
+      if (uploadMode === "BILL_GENERATE" && alreadyBilled.has(memberId)) {
         issues.push({
           row: rowNum,
           type: "error",
-          message: `Bills for ${row.Wing}-${row.FlatNo} already exist for ${month}/${year}`,
-          fix: "Delete existing bills for this period from View Bills before re-generating.",
+          message: `Bills for ${wing}-${flatNo} already exist for ${month}/${year}`,
+          fix: "Delete existing bills from View Bills before re-generating, or just fill AmountPaid to record payments.",
         });
         continue;
       }
@@ -200,21 +217,18 @@ export async function POST(request) {
         }
       }
 
-      // Read PreviousBalance and InterestDue from Excel columns if present
-      const excelPrevBalance = parseFloat(row["PreviousBalance"]) || 0;
-      const excelInterestDue = parseFloat(row["InterestDue"]) || 0;
+      // Read reference columns from unified template (read-only — generate route overwrites with live DB)
+      const excelCurrentInterest = parseFloat(row["CurrentInterest"]) || 0;
+      const excelOpeningPrincipal = parseFloat(row["OpeningPrincipal"]) || 0;
+      const excelOpeningInterest = parseFloat(row["OpeningInterest"]) || 0;
 
-      // CHANGE TO:
-      const excelGrandTotal =
-        parseFloat(row["GrandTotal"]) ||
-        excelTotal + excelPrevBalance + excelInterestDue;
       validBills.push({
         memberId,
         charges,
-        grandTotal: excelTotal, // current charges only — generate route overwrites with live total
-        subtotal: excelTotal, // current charges only
-        interestAmount: excelInterestDue,
-        previousBalance: excelPrevBalance, // used only for display — generate route overwrites with live DB
+        subtotal: excelTotal,
+        grandTotal: excelTotal,
+        interestAmount: excelCurrentInterest,
+        previousBalance: excelOpeningPrincipal + excelOpeningInterest,
         unpaidBills: [],
         recentTransactions: [],
       });
@@ -224,14 +238,13 @@ export async function POST(request) {
     const comparison = validBills.map((b) => {
       const m = memberMap[b.memberId];
       const autoTotal = autoPreviewMap[b.memberId] || 0;
-      // CHANGE TO:
       return {
         memberId: b.memberId,
         flat: `${m.wing}-${m.flatNo}`,
         name: m.ownerName,
         excelTotal: b.subtotal,
         autoTotal,
-        hasDiff: Math.abs(b.subtotal - autoTotal) > 0.5,
+        hasDiff: uploadMode === "PAYMENT_ONLY" ? false : Math.abs(b.subtotal - autoTotal) > 0.5,
       };
     });
 
@@ -260,19 +273,22 @@ export async function POST(request) {
     const canProceed = errorCount === 0 && warningCount === 0;
 
     // Build per-cell grid for ExcelPreviewGrid
-    const validMemberIdSet = new Set(members.map((m) => m._id.toString()));
     const billPeriodId = `${year}-${String(month).padStart(2, "0")}`;
     const { gridRows, summary: gridSummary } = validateBillRows(dataRows, {
-      validMemberIds: validMemberIdSet,
+      wingFlatMap,
       billPeriodId,
-      expectedColumns: ["MemberId", "Month", "Year"],
+      expectedColumns: ["Wing", "FlatNo", "Period"],
     });
     const gridColumns = Object.keys(dataRows[0] || {});
 
+    // Detect if any row has AmountPaid filled — unified template dual-mode detection
+    const hasPaymentData = dataRows.some(r => String(r.AmountPaid ?? "").trim() !== "");
+
     return NextResponse.json({
       success: true,
-
-      canProceed,
+      hasPaymentData,
+      uploadMode,
+      canProceed: uploadMode === "PAYMENT_ONLY" ? errorCount === 0 : canProceed,
       blockReason: !canProceed
         ? `${errorCount} error(s) and ${warningCount} warning(s) must be resolved before generating.`
         : null,
@@ -293,7 +309,7 @@ export async function POST(request) {
       diffCount,
       issues: [...issues, ...diffIssues],
       bills: validBills,
-      comparison,
+      comparison: uploadMode === "PAYMENT_ONLY" ? [] : comparison,
       gridRows,
       gridColumns,
       gridSummary,

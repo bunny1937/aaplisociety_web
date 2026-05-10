@@ -1,0 +1,6404 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: lib/**, models/**, utils/**, middleware.js, middleware.ts
+- Files matching these patterns are excluded: node_modules, .next, dist, build, .git, *.module.css, *.log, .env*, coverage
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+lib/admin-api.js
+lib/admin-middleware.js
+lib/admin-models.js
+lib/api-client.js
+lib/audit-logger.js
+lib/bill-renderer.js
+lib/bill-status-manager.js
+lib/billing-engine.js
+lib/cache.js
+lib/calculate-member-bill.js
+lib/complaintUtils.js
+lib/cron-jobs.js
+lib/date-utils.js
+lib/excel-handler.js
+lib/export-before-delete.js
+lib/export-to-admin-db.js
+lib/jwt.js
+lib/mongodb-admin.js
+lib/mongodb.js
+lib/notify.js
+lib/pdf-fields-config.js
+lib/pdf-generator.js
+lib/redis.js
+lib/socket-server.js
+lib/soft-delete-middleware.js
+lib/validators.js
+middleware.js
+models/admin/AdminLog.js
+models/admin/Export.js
+models/admin/SuperAdmin.js
+models/Archive.js
+models/AuditLog.js
+models/AuditReport.js
+models/Bill.js
+models/BillingHead.js
+models/Complaint.js
+models/ComplaintReply.js
+models/Context.js
+models/Member.js
+models/Notice.js
+models/Notification.js
+models/PaymentImport.js
+models/Receipt.js
+models/Society.js
+models/Transaction.js
+models/User.js
+utils/dateUtils.js
+utils/excelValidator.js
+utils/interestUtils.js
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="lib/cache.js">
+import redis from "./redis";
+
+const cache = {
+  async get(key) {
+    try {
+      const val = await redis.get(key);
+      return val ? JSON.parse(val) : null;
+    } catch (e) {
+      console.warn("Cache GET error:", e.message);
+      return null;
+    }
+  },
+
+  async set(key, data, ttlSeconds) {
+    try {
+      await redis.setex(key, ttlSeconds, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Cache SET error:", e.message);
+    }
+  },
+
+  async del(...keys) {
+    try {
+      if (keys.length) await redis.del(...keys);
+    } catch (e) {
+      console.warn("Cache DEL error:", e.message);
+    }
+  },
+
+  async delPattern(pattern) {
+    try {
+      if (!this.client?.isOpen) return;
+      const keys = await this.client.keys(pattern);
+      if (keys.length > 0)
+        await Promise.all(keys.map((k) => this.client.del(k)));
+    } catch (e) {
+      console.warn("Cache DELPATTERN error:", e.message);
+    }
+  },
+
+  // Stampede-safe fetch
+  async getOrSet(key, fetchFn, ttlSeconds) {
+    try {
+      const cached = await redis.get(key);
+      if (cached) return JSON.parse(cached);
+
+      const lockKey = `lock:${key}`;
+      const locked = await redis.set(lockKey, "1", "EX", 10, "NX");
+
+      if (!locked) {
+        await new Promise((r) => setTimeout(r, 250));
+        const retried = await redis.get(key);
+        return retried ? JSON.parse(retried) : null;
+      }
+
+      const data = await fetchFn();
+      await redis.setex(key, ttlSeconds, JSON.stringify(data));
+      await redis.del(lockKey);
+      return data;
+    } catch (e) {
+      console.warn("Cache getOrSet error:", e.message);
+      return await fetchFn(); // fallback to DB directly
+    }
+  },
+};
+
+export default cache;
+</file>
+
+<file path="lib/calculate-member-bill.js">
+/**
+ * Calculates per-member charges correctly.
+ * Parking heads are matched against member.parkingSlots — not applied blindly.
+ * Mirrors the logic in billing-config livePreview and generate-bills generatePreview.
+ */
+export function calculateMemberCharges(member, heads) {
+  const area = Number(
+    member.carpetAreaSqft || member.builtUpAreaSqft || member.areaSqFt || 0,
+  );
+  const slots = (member.parkingSlots || []).filter(
+    (s) => s.type !== "Stilt" && s.monthlyBilling !== false,
+  );
+
+  const breakdown = {};
+  let runningBase = 0;
+
+  for (const head of heads) {
+    if (!head.headName?.trim() || head.isActive === false) continue;
+
+    const headLower = head.headName.trim().toLowerCase();
+    const isParkingHead =
+      headLower.includes("parking") ||
+      headLower.includes("two-wheeler") ||
+      headLower.includes("four-wheeler") ||
+      headLower.includes("two wheeler") ||
+      headLower.includes("four wheeler");
+
+    const rate = parseFloat(head.defaultAmount) || 0;
+    let amount = 0;
+
+    if (isParkingHead && head.calculationType === "Fixed") {
+      // Count how many of this member's slots match this head
+      const matchingCount = slots.filter((slot) => {
+        const slotType = slot.type?.toLowerCase() || "";
+        const slotVehicle = slot.vehicleType?.toLowerCase() || "";
+        const vehicleNormalized = slotVehicle
+          .replace(/-/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        // Must match BOTH type AND vehicle — OR logic causes false positives
+        // e.g. "open parking - four wheeler" falsely matches Open Two-Wheeler via slotType="open"
+        return (
+          headLower.includes(slotType) &&
+          (headLower.includes(vehicleNormalized) ||
+            headLower.includes(slotVehicle))
+        );
+      }).length;
+
+      amount = matchingCount > 0 ? rate * matchingCount : 0;
+    } else if (head.calculationType === "Per Sq Ft") {
+      amount = area * rate;
+    } else if (head.calculationType === "Percentage") {
+      amount = runningBase * (rate / 100);
+    } else {
+      // Fixed, non-parking
+      amount = rate;
+    }
+
+    breakdown[head.headName] = parseFloat(amount.toFixed(2));
+    runningBase += amount;
+  }
+
+  const subtotal = Object.values(breakdown).reduce((s, v) => s + v, 0);
+  return { breakdown, subtotal: parseFloat(subtotal.toFixed(2)) };
+}
+</file>
+
+<file path="lib/complaintUtils.js">
+// Pseudonym generator — unique per complaint, not tied globally to member
+const ADJECTIVES = [
+  "Velvet",
+  "Lunar",
+  "Silent",
+  "Amber",
+  "Cobalt",
+  "Iron",
+  "Silver",
+  "Golden",
+  "Crimson",
+  "Jade",
+  "Neon",
+  "Rustic",
+  "Marble",
+  "Shadow",
+  "Crystal",
+  "Ashen",
+  "Blazing",
+  "Frosted",
+  "Misty",
+  "Storm",
+];
+const NOUNS = [
+  "Tiger",
+  "Echo",
+  "Circuit",
+  "Falcon",
+  "Phoenix",
+  "River",
+  "Prism",
+  "Ridge",
+  "Vortex",
+  "Cipher",
+  "Ember",
+  "Specter",
+  "Nexus",
+  "Orbit",
+  "Pulse",
+  "Torch",
+  "Haven",
+  "Maze",
+  "Signal",
+  "Drift",
+];
+
+export function generateAnonymousName() {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const suffix = Math.floor(Math.random() * 90 + 10); // 10-99
+  return `${adj}${noun}${suffix}`;
+}
+
+// Profanity filter placeholder — replace with `bad-words` npm package in prod
+const BANNED_WORDS = ["badword1", "badword2"];
+export function hasProfanity(text) {
+  const lower = text.toLowerCase();
+  return BANNED_WORDS.some((w) => lower.includes(w));
+}
+
+// Block links, emails, phone numbers
+const BLOCKED_PATTERNS = [
+  /https?:\/\//i, // URLs
+  /www\./i, // www links
+  /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i, // emails
+  /(\+91[\-\s]?)?[6-9]\d{9}/, // Indian phone numbers
+  /\b\d{10,}\b/, // long digit strings
+];
+
+export function hasBlockedContent(text) {
+  return BLOCKED_PATTERNS.some((p) => p.test(text));
+}
+
+// Rate limit check helper — called server-side before insert
+// Returns { allowed: boolean, reason: string | null }
+export function checkRateLimitResult(recentComplaints) {
+  const now = Date.now();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const todayCount = recentComplaints.filter(
+    (c) => new Date(c.createdAt) >= todayStart,
+  ).length;
+
+  if (todayCount >= 2) {
+    return {
+      allowed: false,
+      reason: "You can submit a maximum of 2 complaints per day.",
+    };
+  }
+
+  if (recentComplaints.length > 0) {
+    const last = new Date(recentComplaints[0].createdAt).getTime();
+    const diffMinutes = (now - last) / 60000;
+    if (diffMinutes < 15) {
+      const wait = Math.ceil(15 - diffMinutes);
+      return {
+        allowed: false,
+        reason: `Please wait ${wait} more minute(s) before submitting again.`,
+      };
+    }
+  }
+
+  return { allowed: true, reason: null };
+}
+</file>
+
+<file path="lib/notify.js">
+"use client";
+
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import styles from "@/styles/Dashboard.module.css";
+
+export default function DashboardLayout({
+  children,
+  role,
+  navigation,
+  title,
+  subtitle,
+  withQueryClient = false,
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 5 * 60 * 1000,
+            cacheTime: 10 * 60 * 1000,
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
+            retry: 1,
+          },
+        },
+      }),
+  );
+
+  useEffect(() => {
+    if (pathname.includes("/login")) return;
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
+
+        if (!res.ok) throw new Error();
+
+        const data = await res.json();
+        setUser(data.user);
+      } catch {
+        // 🔥 DO NOT redirect if already on login page
+        if (!pathname.includes("/login")) {
+          window.location.href = "/auth/login";
+        }
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/auth/login");
+  };
+
+  if (!user) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          height: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
+
+  const LayoutUI = (
+    <div className={styles.dashboardContainer}>
+      {/* SIDEBAR */}
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarHeader}>
+          <h1 className={styles.sidebarTitle}>{title}</h1>
+          <p className={styles.sidebarSubtitle}>{subtitle}</p>
+        </div>
+
+        <nav className={styles.sidebarNav}>
+          {navigation.map((group, i) => (
+            <div key={i} className={styles.navGroup}>
+              <div className={styles.navGroupTitle}>{group.title}</div>
+
+              {group.items.map((item) => (
+                <div
+                  key={item.path}
+                  className={`${styles.navItem} ${
+                    pathname.startsWith(item.path) ? styles.navItemActive : ""
+                  }`}
+                  onClick={() => router.push(item.path)}
+                >
+                  <span className={styles.navIcon}>{item.icon}</span>
+                  <span>{item.name}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        {/* FOOTER */}
+        <div className={styles.sidebarFooter}>
+          <div className={styles.userInfo}>
+            <div className={styles.userAvatar}>
+              {user.name?.charAt(0)?.toUpperCase()}
+            </div>
+
+            <div className={styles.userDetails}>
+              <div className={styles.userName}>{user.name}</div>
+              <div className={styles.userRole}>{user.role}</div>
+            </div>
+
+            <button className={styles.logoutBtn} onClick={handleLogout}>
+              🚪
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* MAIN */}
+      <main className={styles.mainContent}>{children}</main>
+    </div>
+  );
+
+  let EnhancedUI = LayoutUI;
+
+  // 🔥 SUPERADMIN EXTRA LAYER
+  if (role === "SuperAdmin") {
+    EnhancedUI = (
+      <>
+        {/* Optional: global banner / debug */}
+        {LayoutUI}
+      </>
+    );
+  }
+
+  return withQueryClient ? (
+    <QueryClientProvider client={queryClient}>{EnhancedUI}</QueryClientProvider>
+  ) : (
+    EnhancedUI
+  );
+}
+</file>
+
+<file path="lib/redis.js">
+import Redis from "ioredis";
+
+const redis = new Redis(process.env.REDIS_URL, {
+  maxRetriesPerRequest: 3,
+  retryStrategy(times) {
+    if (times > 3) return null; // stop retrying, let it fail gracefully
+    return Math.min(times * 100, 3000);
+  },
+  lazyConnect: true,
+});
+
+redis.on("error", (err) => {
+  console.warn("Redis connection error:", err.message);
+});
+
+export default redis;
+</file>
+
+<file path="lib/socket-server.js">
+import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
+
+let io;
+
+export function initSocketServer(httpServer) {
+  if (io) return io;
+
+  io = new Server(httpServer, {
+    path: "/api/socket",
+    cors: {
+      origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
+  });
+
+  // Auth middleware — validate JWT from handshake auth
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error("Unauthorized"));
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = decoded; // attach user to socket
+      next();
+    } catch {
+      next(new Error("Invalid token"));
+    }
+  });
+
+  io.on("connection", (socket) => {
+    const { userId, societyId, memberId, role } = socket.user;
+
+    // Join rooms
+    socket.join(`society:${societyId}`); // all members of society
+    socket.join(`user:${userId}`); // personal room
+
+    if (role === "Member" && memberId) {
+      socket.join(`member:${memberId}`);
+    }
+
+    // Wing room — client sends wing after connection
+    socket.on("join:wing", (wing) => {
+      if (wing) socket.join(`wing:${societyId}:${wing}`);
+    });
+
+    socket.on("disconnect", () => {});
+  });
+
+  return io;
+}
+
+export function getIO() {
+  return io;
+}
+
+// Emit notification to targeted rooms
+export function emitNotification(notification) {
+  if (!io) return;
+  const { societyId, recipientType, recipientIds } = notification;
+
+  const payload = {
+    _id: notification._id,
+    type: notification.type,
+    title: notification.title,
+    message: notification.message,
+    createdAt: notification.createdAt,
+    actionUrl: notification.actionUrl,
+    readBy: [],
+  };
+
+  if (recipientType === "all") {
+    io.to(`society:${societyId}`).emit("notification:new", payload);
+  } else if (recipientType === "member") {
+    recipientIds.forEach((id) =>
+      io.to(`member:${id}`).emit("notification:new", payload),
+    );
+  } else if (recipientType === "wing") {
+    recipientIds.forEach((wing) =>
+      io.to(`wing:${societyId}:${wing}`).emit("notification:new", payload),
+    );
+  } else if (recipientType === "flats") {
+    // flatIds map to memberIds — emit to member rooms
+    recipientIds.forEach((id) =>
+      io.to(`member:${id}`).emit("notification:new", payload),
+    );
+  }
+}
+</file>
+
+<file path="models/AuditReport.js">
+import mongoose from "mongoose";
+
+// Indian FY logic helper stored for reference
+// FY starts April 1. joinMonth >= 4 → joinFY = joinYear, else joinFY = joinYear - 1
+// Required period: April of (joinFY-1) → joinMonth-1 of joinYear
+
+const AuditReportSchema = new mongoose.Schema(
+  {
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    societyName: { type: String, required: true },
+    submittedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    submittedByName: { type: String },
+    submittedAt: { type: Date, default: Date.now, index: true },
+
+    // Join month/year of the society on this platform
+    joinMonth: { type: Number, required: true }, // 1-12
+    joinYear: { type: Number, required: true },
+
+    // Required audit window (calculated on submission)
+    auditFromMonth: { type: Number, required: true }, // 1-12 (always April=4)
+    auditFromYear: { type: Number, required: true },
+    auditToMonth: { type: Number, required: true }, // joinMonth - 1
+    auditToYear: { type: Number, required: true },
+    totalMonthsRequired: { type: Number, required: true },
+
+    // Validation summary
+    validation: {
+      totalMembersExpected: { type: Number },
+      totalMembersFound: { type: Number },
+      totalRowsExpected: { type: Number },
+      totalRowsFound: { type: Number },
+      columnChecks: { type: mongoose.Schema.Types.Mixed }, // { col: pass/fail }
+      amountChecks: { type: Number }, // count of amount mismatches
+      duplicateRows: { type: Number },
+      missingMonths: [String], // e.g. ['2025-04', '2025-05']
+      passed: { type: Boolean, required: true },
+      errors: [String],
+      warnings: [String],
+    },
+
+    // Stored bill data per member per month
+    billRows: [
+      {
+        memberId: String,
+        wing: String,
+        flatNo: String,
+        ownerName: String,
+        month: Number,
+        year: Number,
+        billPeriodId: String,
+        previousBalance: Number,
+        interestDue: Number,
+        charges: mongoose.Schema.Types.Mixed, // { headName: amount }
+        subtotal: Number,
+        grandTotal: Number,
+      },
+    ],
+
+    status: {
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
+      index: true,
+    },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reviewedAt: { type: Date },
+    reviewNotes: { type: String },
+
+    fileName: { type: String },
+    fileSize: { type: Number },
+  },
+  { timestamps: true },
+);
+
+AuditReportSchema.index({ societyId: 1, submittedAt: -1 });
+AuditReportSchema.index({ status: 1, submittedAt: -1 });
+
+export default mongoose.models.AuditReport ||
+  mongoose.model("AuditReport", AuditReportSchema);
+</file>
+
+<file path="models/Complaint.js">
+import mongoose from "mongoose";
+
+const ComplaintSchema = new mongoose.Schema(
+  {
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: true,
+      index: true,
+    },
+    anonymousName: { type: String, required: true, trim: true },
+    category: {
+      type: String,
+      required: true,
+      enum: [
+        "noise",
+        "parking",
+        "water",
+        "security",
+        "cleanliness",
+        "maintenance",
+        "billing",
+        "staff",
+        "pets",
+        "other",
+      ],
+      index: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 10,
+      maxlength: 120,
+    },
+    description: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 30,
+      maxlength: 1000,
+    },
+    status: {
+      type: String,
+      enum: ["PENDING", "APPROVED", "REJECTED", "CLOSED", "EXPIRED"],
+      default: "PENDING",
+      index: true,
+    },
+    adminRejectionReason: {
+      type: String,
+      trim: true,
+      minlength: 120,
+      maxlength: 500,
+    },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reviewedAt: { type: Date },
+    replyCount: { type: Number, default: 0 },
+    lastReplyAt: { type: Date },
+    expiresAt: { type: Date, index: true },
+  },
+  { timestamps: true },
+);
+
+// TTL index — MongoDB auto-expires approved complaints after expiresAt
+ComplaintSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+// Compound indexes
+ComplaintSchema.index({ societyId: 1, status: 1, createdAt: -1 });
+ComplaintSchema.index({ societyId: 1, memberId: 1, createdAt: -1 });
+
+export default mongoose.models.Complaint ||
+  mongoose.model("Complaint", ComplaintSchema);
+</file>
+
+<file path="models/ComplaintReply.js">
+import mongoose from "mongoose";
+
+const ComplaintReplySchema = new mongoose.Schema(
+  {
+    complaintId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Complaint",
+      required: true,
+      index: true,
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    authorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    authorRole: {
+      type: String,
+      enum: ["Member", "Admin", "Secretary"],
+      required: true,
+    },
+    // For member replies: shown as anonymous name from parent complaint
+    // For admin replies: shown as "Society Admin"
+    displayName: { type: String, required: true },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 10,
+      maxlength: 1000,
+    },
+  },
+  { timestamps: true },
+);
+
+ComplaintReplySchema.index({ complaintId: 1, createdAt: 1 });
+
+export default mongoose.models.ComplaintReply ||
+  mongoose.model("ComplaintReply", ComplaintReplySchema);
+</file>
+
+<file path="models/Context.js">
+import mongoose from "mongoose";
+
+const ContextSchema = new mongoose.Schema({
+  projectId: { type: String, required: true, unique: true },
+
+  project: String,
+  stack: String,
+  currentIssue: String,
+  notes: String,
+
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+export default mongoose.models.Context ||
+  mongoose.model("Context", ContextSchema);
+</file>
+
+<file path="models/Notice.js">
+import mongoose from "mongoose";
+
+const NoticeSchema = new mongoose.Schema(
+  {
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    createdByName: { type: String, required: true },
+
+    type: {
+      type: String,
+      required: true,
+      enum: [
+        "maintenance",
+        "meeting",
+        "water",
+        "electricity",
+        "parking",
+        "security",
+        "event",
+        "billing",
+        "custom",
+      ],
+      index: true,
+    },
+    priority: {
+      type: String,
+      required: true,
+      enum: ["low", "medium", "high", "urgent"],
+      default: "medium",
+      index: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 10,
+      maxlength: 150,
+    },
+    description: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 30,
+      maxlength: 2000,
+    },
+
+    pinned: { type: Boolean, default: false, index: true },
+
+    // Read tracking
+    viewedBy: [
+      {
+        memberId: { type: mongoose.Schema.Types.ObjectId, ref: "Member" },
+        viewedAt: { type: Date, default: Date.now },
+      },
+    ],
+
+    // Acknowledge tracking (urgent notices)
+    acknowledgedBy: [
+      {
+        memberId: { type: mongoose.Schema.Types.ObjectId, ref: "Member" },
+        acknowledgedAt: { type: Date, default: Date.now },
+      },
+    ],
+
+    expiresAt: { type: Date, index: true },
+    isDeleted: { type: Boolean, default: false, index: true },
+  },
+  { timestamps: true },
+);
+
+// TTL index — MongoDB auto-removes expired notices
+NoticeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+// Compound for main feed query
+NoticeSchema.index({ societyId: 1, isDeleted: 1, pinned: -1, createdAt: -1 });
+NoticeSchema.index({ societyId: 1, priority: 1, isDeleted: 1 });
+
+export default mongoose.models.Notice || mongoose.model("Notice", NoticeSchema);
+</file>
+
+<file path="models/Notification.js">
+import mongoose from "mongoose";
+
+const NotificationSchema = new mongoose.Schema(
+  {
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    createdByName: { type: String, default: "Admin" },
+
+    type: {
+      type: String,
+      required: true,
+      enum: [
+        "BILL_GENERATED",
+        "PAYMENT_RECEIVED",
+        "PAYMENT_FAILED",
+        "DUE_REMINDER",
+        "NOTICE_POSTED",
+        "COMPLAINT_APPROVED",
+        "COMPLAINT_REJECTED",
+        "MAINTENANCE_ALERT",
+        "ADMIN_MESSAGE",
+        "CUSTOM",
+      ],
+      index: true,
+    },
+
+    title: { type: String, required: true, trim: true, maxlength: 150 },
+    message: { type: String, required: true, trim: true, maxlength: 500 },
+
+    // Targeting
+    recipientType: {
+      type: String,
+      required: true,
+      enum: ["all", "member", "wing", "flats"],
+    },
+    // For member: [memberId], wing: [wingName], flats: [flatIds], all: []
+    recipientIds: [{ type: String }],
+
+    // Read tracking — array of userIds who read it
+    readBy: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        readAt: { type: Date, default: Date.now },
+      },
+    ],
+
+    actionUrl: { type: String, default: null },
+
+    expiresAt: { type: Date, index: true, default: null },
+    isDeleted: { type: Boolean, default: false, index: true },
+  },
+  { timestamps: true },
+);
+
+// TTL for auto-expiry (expiresAt set per notification)
+NotificationSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0, sparse: true },
+);
+NotificationSchema.index({ societyId: 1, isDeleted: 1, createdAt: -1 });
+
+export default mongoose.models.Notification ||
+  mongoose.model("Notification", NotificationSchema);
+</file>
+
+<file path="models/PaymentImport.js">
+import mongoose from "mongoose";
+
+const PaymentImportRowSchema = new mongoose.Schema(
+  {
+    memberId: { type: mongoose.Schema.Types.ObjectId, ref: "Member" },
+    flatNo: String,
+    wing: String,
+    ownerName: String,
+    amountPaid: { type: Number, default: 0 },
+    paymentDate: Date,
+    paymentMethod: { type: String, default: "Cash" },
+    chequeNo: String,
+    bankName: String,
+    upiId: String,
+    remarks: String,
+    status: { type: String, enum: ["Success", "Failed", "Skipped"], default: "Success" },
+    errorMessage: String,
+    billId: { type: mongoose.Schema.Types.ObjectId, ref: "Bill" },
+    interestCleared: { type: Number, default: 0 },
+    principalCleared: { type: Number, default: 0 },
+    advanceCredit: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+const PaymentImportSchema = new mongoose.Schema(
+  {
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    importMonth: { type: Number, required: true }, // 1-indexed
+    importYear: { type: Number, required: true },
+    billPeriodId: { type: String, required: true, index: true },
+
+    uploadedFileName: String,
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    uploadedAt: { type: Date, default: Date.now },
+
+    totalRows: { type: Number, default: 0 },
+    successRows: { type: Number, default: 0 },
+    failedRows: { type: Number, default: 0 },
+    skippedRows: { type: Number, default: 0 },
+
+    totalAmountUploaded: { type: Number, default: 0 },
+    totalInterestCleared: { type: Number, default: 0 },
+    totalPrincipalCleared: { type: Number, default: 0 },
+    totalAdvanceCredit: { type: Number, default: 0 },
+
+    rows: [PaymentImportRowSchema],
+
+    status: {
+      type: String,
+      enum: ["Pending", "Processing", "Completed", "Failed"],
+      default: "Completed",
+    },
+    notes: String,
+  },
+  { timestamps: true },
+);
+
+PaymentImportSchema.index({ societyId: 1, importYear: 1, importMonth: 1 });
+
+export default mongoose.models.PaymentImport ||
+  mongoose.model("PaymentImport", PaymentImportSchema);
+</file>
+
+<file path="models/Receipt.js">
+import mongoose from "mongoose";
+
+const ReceiptSchema = new mongoose.Schema(
+  {
+    receiptNo: { type: String, required: true, unique: true },
+    filename: { type: String, required: true },
+    billId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Bill",
+      required: true,
+    },
+    billPeriodId: { type: String, required: true },
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: true,
+      index: true,
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    amount: { type: Number, required: true },
+    previousBalanceSnapshot: { type: Number, default: 0 },
+    paymentMode: { type: String, default: "Online" },
+    paidAt: { type: Date, default: Date.now },
+    transactionId: { type: String },
+    notes: { type: String },
+    status: {
+      type: String,
+      enum: ["Generated", "Downloaded"],
+      default: "Generated",
+    },
+  },
+  { timestamps: true },
+);
+
+ReceiptSchema.index({ memberId: 1, societyId: 1, paidAt: -1 });
+
+export default mongoose.models.Receipt ||
+  mongoose.model("Receipt", ReceiptSchema);
+</file>
+
+<file path="utils/dateUtils.js">
+// utils/dateUtils.js
+/**
+ * Build a Date from year/month/day config values.
+ * Clamps day to the actual last day of that month so e.g.
+ * day=31 in February becomes Feb 28/29, never March 2.
+ * @param {number} year
+ * @param {number} month  1-based (Jan=1, Dec=12)
+ * @param {number} day    society config value (billDueDay etc.)
+ * @param {number} hh hours (default 0)
+ * @param {number} mm minutes (default 0)
+ * @param {number} ss seconds (default 0)
+ * @returns {Date}
+ */
+export function safeConfigDate(year, month, day, hh = 0, mm = 0, ss = 0) {
+  const lastDay = new Date(year, month, 0).getDate(); // day-0 of next month = last day of this month
+  const clamped = Math.min(Math.max(1, day || 1), lastDay);
+  return new Date(year, month - 1, clamped, hh, mm, ss, 0);
+}
+
+export function getFinancialYear(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1; // 1-based
+  return m >= 4 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+}
+</file>
+
+<file path="lib/admin-api.js">
+const API_BASE = "/api/admin";
+
+export const adminApi = {
+  async fetchSocieties() {
+    const res = await fetch(`${API_BASE}/societies`, {
+      credentials: "include",
+      headers: {},
+    });
+    if (!res.ok) throw new Error("Failed to fetch");
+    return res.json();
+  },
+
+  async fetchSociety(id) {
+    const res = await fetch(`${API_BASE}/societies/${id}`, {
+      credentials: "include",
+      headers: {},
+    });
+    if (!res.ok) throw new Error("Failed to fetch");
+    return res.json();
+  },
+
+  async fetchData(societyId, collection) {
+    const res = await fetch(
+      `${API_BASE}/data-browser?societyId=${societyId}&collection=${collection}`,
+      {
+        credentials: "include",
+      },
+    );
+    if (!res.ok) throw new Error("Failed to fetch");
+    return res.json();
+  },
+
+  async updateSociety(societyId, updates) {
+    const res = await fetch(`${API_BASE}/...`, {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ societyId, updates }),
+    });
+    if (!res.ok) throw new Error("Failed to update");
+    return res.json();
+  },
+};
+</file>
+
+<file path="lib/admin-middleware.js">
+import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
+
+/**
+ * ULTRA-STRICT admin route protection
+ * Validates:
+ * 1. Admin API key in headers
+ * 2. Valid JWT token
+ * 3. SuperAdmin role
+ * 4. Rate limiting
+ */
+
+const loginAttempts = new Map(); // Track login attempts
+
+export function validateAdminRequest(request) {
+  // ✅ CHECK 1: Admin API key in headers
+  const apiKey = request.headers.get("x-admin-api-key");
+
+  if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
+    console.warn("🚨 Unauthorized admin access attempt - Invalid API key");
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // CHECK 2: SuperAdmin uses admin_token cookie only
+  const token = request.cookies.get("admin_token")?.value;
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    // Verify with ADMIN-specific JWT secret
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
+    } catch {
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch {
+        return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      }
+    }
+    if (
+      decoded.role !== "SuperAdmin" &&
+      decoded.role !== "Admin" &&
+      decoded.role !== "Secretary"
+    ) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
+    return { valid: true, admin: decoded };
+  } catch (error) {
+    console.error("🚨 Invalid admin token:", error.message);
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  }
+}
+
+/**
+ * Rate limiting for admin login
+ */
+export function checkRateLimit(email) {
+  const now = Date.now();
+  const attempts = loginAttempts.get(email) || { count: 0, resetAt: now };
+
+  // Reset after 1 hour
+  if (now > attempts.resetAt) {
+    attempts.count = 0;
+    attempts.resetAt = now + 60 * 60 * 1000; // 1 hour
+  }
+
+  attempts.count += 1;
+  loginAttempts.set(email, attempts);
+
+  const maxAttempts = parseInt(process.env.RATE_LIMIT_ADMIN) || 5;
+
+  if (attempts.count > maxAttempts) {
+    console.warn(`🚨 Rate limit exceeded for admin login: ${email}`);
+    return { blocked: true, resetAt: attempts.resetAt };
+  }
+
+  return { blocked: false };
+}
+
+/**
+ * Clear rate limit on successful login
+ */
+export function clearRateLimit(email) {
+  loginAttempts.delete(email);
+}
+</file>
+
+<file path="lib/admin-models.js">
+import connectAdminDB from './mongodb-admin';
+import SuperAdminSchema from '@/models/admin/SuperAdmin';
+import ExportSchema from '@/models/admin/Export';
+import AdminLogSchema from '@/models/admin/AdminLog';
+
+let SuperAdmin, Export, AdminLog;
+
+export async function getAdminModels() {
+  const adminConn = await connectAdminDB();
+
+  if (!SuperAdmin) {
+    SuperAdmin = adminConn.model('SuperAdmin', SuperAdminSchema);
+  }
+  if (!Export) {
+    Export = adminConn.model('Export', ExportSchema);
+  }
+  if (!AdminLog) {
+    AdminLog = adminConn.model('AdminLog', AdminLogSchema);
+  }
+
+  return { SuperAdmin, Export, AdminLog };
+}
+
+export { SuperAdmin, Export, AdminLog };
+</file>
+
+<file path="lib/api-client.js">
+class ApiClient {
+  constructor(baseUrl = "") {
+    this.baseUrl = baseUrl;
+  }
+
+  async request(endpoint, options = {}) {
+    const normalized = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    const url = `${this.baseUrl}${normalized}`;
+
+    const config = {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+      credentials: "include", // ← Sends HttpOnly cookies automatically
+    };
+
+    try {
+      const response = await fetch(url, config);
+
+      if (response.status === 401) {
+        if (typeof window !== "undefined") {
+          window.location.href = "/auth/login";
+        }
+        throw new Error("Unauthorized");
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (contentType?.includes("application/json")) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || data.message || "Request failed");
+        }
+        return data;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`API Error [${endpoint}]:`, error);
+      throw error;
+    }
+  }
+
+  get(endpoint) {
+    return this.request(endpoint, { method: "GET" });
+  }
+
+  post(endpoint, body) {
+    return this.request(endpoint, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  put(endpoint, body) {
+    return this.request(endpoint, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  }
+
+  delete(endpoint) {
+    return this.request(endpoint, { method: "DELETE" });
+  }
+
+  async upload(endpoint, formData) {
+    const url = `${this.baseUrl}${endpoint}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        credentials: "include", // ← Send cookies
+        body: formData, // Don't set Content-Type for FormData
+      });
+
+      if (response.status === 401) {
+        if (typeof window !== "undefined") {
+          window.location.href = "/auth/login";
+        }
+        throw new Error("Unauthorized");
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`Upload Error [${endpoint}]:`, error);
+      throw error;
+    }
+  }
+
+  async download(endpoint, filename) {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      credentials: "include", // ← Send cookies
+    });
+
+    if (!response.ok) {
+      throw new Error("Download failed");
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "download";
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+}
+
+export const apiClient = new ApiClient("");
+</file>
+
+<file path="lib/audit-logger.js">
+import AuditLog from "@/models/AuditLog";
+
+export async function logAudit(userId, societyId, action, oldData, newData) {
+  try {
+    await AuditLog.create({
+      userId,
+      societyId,
+      action,
+      oldData,
+      newData,
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    console.error("Audit log error:", error);
+  }
+}
+
+export async function getAuditLogs(societyId, filters = {}) {
+  const query = { societyId };
+
+  if (filters.action) {
+    query.action = filters.action;
+  }
+
+  if (filters.userId) {
+    query.userId = filters.userId;
+  }
+
+  if (filters.startDate && filters.endDate) {
+    query.timestamp = {
+      $gte: new Date(filters.startDate),
+      $lte: new Date(filters.endDate),
+    };
+  }
+
+  const logs = await AuditLog.find(query)
+    .populate("userId", "name email")
+    .sort({ timestamp: -1 })
+    .limit(filters.limit || 100)
+    .lean();
+
+  return logs;
+}
+
+export async function getAuditTrailForEntity(entityType, entityId, societyId) {
+  const logs = await AuditLog.find({
+    societyId,
+    $or: [{ "oldData._id": entityId }, { "newData._id": entityId }],
+  })
+    .populate("userId", "name email")
+    .sort({ timestamp: -1 })
+    .lean();
+
+  return logs;
+}
+</file>
+
+<file path="lib/bill-renderer.js">
+import {
+  getOldestDueDate,
+  calculateMonthlyInterest,
+} from "../utils/interestUtils";
+export default function renderBillHtml(
+  templateHtml,
+  societyParam,
+  memberParam,
+  data,
+) {
+  const society = data.society || societyParam || {};
+  const member = data.member || memberParam || {};
+  const config = society.config || {};
+  const interestRate = config.interestRate || 21;
+  const gracePeriod = config.interestAfterDays ?? config.gracePeriodDays ?? 10;
+  const interestAfterDays = config.interestAfterDays;
+  const interestMethod = config.interestCalculationMethod || "SIMPLE";
+  const serviceTaxRate = config.serviceTaxRate || 0;
+  const previousBillHtml = data.previousBillHtml || null;
+
+  // ✅ Use Date objects, not formatted strings
+  const billDate =
+    data.billDate instanceof Date ? data.billDate : new Date(data.billDate);
+  const dueDate =
+    data.dueDate instanceof Date ? data.dueDate : new Date(data.dueDate);
+
+  const formatDate = (d) =>
+    new Date(d).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+  // Interest calculation — use central utility (same as bill generation, never diverges)
+
+  let interestAmount = 0;
+  let currInt = 0;
+  let monthInterest = 0;
+  let interestDays = 0;
+
+  // Interest on principal only — never on total balance (no interest-on-interest).
+  // prevRemPrincipal is the sum of unpaid bill principalBalances (or member.openingPrincipal for first bill).
+  const principalForInterest = data.prevRemPrincipal ?? data.previousBalance ?? 0;
+  const remIntFromPrior = data.prevRemInt ?? 0;
+  if (principalForInterest > 0 || remIntFromPrior > 0) {
+    // Use unpaid bills from data if available, else fallback
+    const unpaidForInterest = data.unpaidBills?.length
+      ? data.unpaidBills.map((b) => ({
+          dueDate: b.dueDate,
+          billYear: b.billYear,
+          billMonth: b.billMonth,
+        }))
+      : [];
+    const oldestDueDate = getOldestDueDate(
+      unpaidForInterest,
+      config.billDueDay || 10,
+      billDate.getFullYear(),
+      billDate.getMonth() + 1,
+    );
+    ({ currInt, monthInterest } = calculateMonthlyInterest({
+      remainingPrincipal: principalForInterest,
+      remInt: remIntFromPrior,
+      annualRate: interestRate,
+      gracePeriodDays: gracePeriod,
+      interestAfterDays,
+      billDueDate: oldestDueDate,
+      referenceDate: billDate,
+      interestRounding: config.interestRounding || "TWO_DECIMAL",
+      interestTriggerTiming: config.interestTriggerTiming || "NEXT_DAY",
+    }));
+    interestAmount = monthInterest;
+  }
+
+  const breakdown = data.breakdown || {};
+  const chargeRows = Object.entries(breakdown)
+    .map(
+      ([desc, amt], idx) => `
+    <tr style="background:${idx % 2 === 0 ? "#ffffff" : "#f9fafb"}">
+      <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">${idx + 1}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:500;color:#1f2937;">${desc}</td>
+      <td style="padding:10px 14px;text-align:right;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:700;color:#111827;">₹${parseFloat(amt).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+    </tr>`,
+    )
+    .join("");
+
+  const subtotal = Object.values(breakdown).reduce(
+    (s, v) => s + parseFloat(v),
+    0,
+  );
+  const serviceTax =
+    serviceTaxRate > 0 ? +((subtotal * serviceTaxRate) / 100).toFixed(2) : 0;
+  const currentBillTotal = +(subtotal + serviceTax).toFixed(2);
+  // previousBalance already contains carried interest (openingInterest).
+  // Only add currInt (new this month) to avoid double-counting.
+  const totalPayable = +(
+    (data.previousBalance || 0) +
+    currInt +
+    currentBillTotal
+  ).toFixed(2);
+
+  // Unpaid bills table (page 2)
+  const unpaidBillsHtml =
+    (data.unpaidBills || []).length > 0
+      ? `
+    <div style="margin-bottom:28px;">
+      <h3 style="margin:0 0 12px 0;font-size:15px;color:#991b1b;font-weight:700;">📋 Outstanding Bills Detail</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#fca5a5;color:#7f1d1d;">
+            <th style="padding:9px 12px;border:1px solid #fca5a5;text-align:left;">Bill Period</th>
+            <th style="padding:9px 12px;border:1px solid #fca5a5;text-align:right;">Bill Amount</th>
+            <th style="padding:9px 12px;border:1px solid #fca5a5;text-align:right;">Paid</th>
+            <th style="padding:9px 12px;border:1px solid #fca5a5;text-align:right;">Balance Due</th>
+            <th style="padding:9px 12px;border:1px solid #fca5a5;text-align:center;">Due Date</th>
+            <th style="padding:9px 12px;border:1px solid #fca5a5;text-align:center;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(data.unpaidBills || [])
+            .map(
+              (b, i) => `
+            <tr style="background:${i % 2 === 0 ? "#fff" : "#fff5f5"}">
+              <td style="padding:8px 12px;border-bottom:1px solid #fecaca;">${b.billPeriodId || b.period || "-"}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #fecaca;text-align:right;">₹${parseFloat(b.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #fecaca;text-align:right;">₹${parseFloat(b.amountPaid || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #fecaca;text-align:right;color:#dc2626;font-weight:700;">₹${parseFloat(b.balanceAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #fecaca;text-align:center;">${b.dueDate ? formatDate(b.dueDate) : "-"}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #fecaca;text-align:center;">
+                <span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">${b.status || "Unpaid"}</span>
+              </td>
+            </tr>`,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`
+      : `<div style="background:#d1fae5;border-radius:8px;padding:20px;text-align:center;color:#065f46;font-weight:600;margin-bottom:28px;">
+          ✅ No outstanding bills. Account is clear!
+        </div>`;
+
+  // Recent transactions (page 2)
+  const recentTxHtml =
+    (data.recentTransactions || []).length > 0
+      ? `
+    <div>
+      <h3 style="margin:0 0 12px 0;font-size:15px;color:#1e40af;font-weight:700;">🏦 Recent Payment History (Last 10)</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#dbeafe;color:#1e40af;">
+            <th style="padding:9px 12px;border:1px solid #bfdbfe;text-align:left;">Date</th>
+            <th style="padding:9px 12px;border:1px solid #bfdbfe;text-align:left;">Description</th>
+            <th style="padding:9px 12px;border:1px solid #bfdbfe;text-align:center;">Type</th>
+            <th style="padding:9px 12px;border:1px solid #bfdbfe;text-align:right;">Amount</th>
+            <th style="padding:9px 12px;border:1px solid #bfdbfe;text-align:right;">Balance After</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(data.recentTransactions || [])
+            .slice(0, 10)
+            .map(
+              (tx, i) => `
+            <tr style="background:${i % 2 === 0 ? "#ffffff" : "#eff6ff"}">
+              <td style="padding:8px 12px;border-bottom:1px solid #bfdbfe;">${tx.date ? formatDate(tx.date) : "-"}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #bfdbfe;">${tx.description || tx.category || "-"}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #bfdbfe;text-align:center;">
+                <span style="padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;background:${tx.type === "Credit" ? "#d1fae5" : "#fee2e2"};color:${tx.type === "Credit" ? "#065f46" : "#991b1b"}">${tx.type}</span>
+              </td>
+              <td style="padding:8px 12px;border-bottom:1px solid #bfdbfe;text-align:right;color:${tx.type === "Credit" ? "#059669" : "#dc2626"};font-weight:600;">₹${parseFloat(tx.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #bfdbfe;text-align:right;">₹${parseFloat(tx.balanceAfterTransaction || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+            </tr>`,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`
+      : "";
+
+  const html = `
+<div style="max-width:800px;margin:0 auto;font-family:Arial,sans-serif;font-size:14px;color:#1f2937;">
+
+  <!-- ═══════════════════ PAGE 1: CURRENT BILL ═══════════════════ -->
+  <div style="padding:40px;background:white;page-break-after:always;">
+
+    <!-- Society Header -->
+    <div style="background:linear-gradient(135deg,#1e40af,#3b82f6);color:white;padding:28px 32px;border-radius:10px;margin-bottom:24px;">
+      <h1 style="margin:0 0 6px 0;font-size:24px;font-weight:700;">${society.name || "Society"}</h1>
+      <p style="margin:0;font-size:12px;opacity:0.85;">${society.address || ""}</p>
+    </div>
+
+    <!-- Bill Title Row -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #e5e7eb;">
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:1px;color:#1e40af;">MAINTENANCE BILL</h2>
+      <div style="text-align:right;font-size:12px;color:#6b7280;line-height:1.8;">
+        <div>Bill No: <strong style="color:#1f2937;">${data.billPeriod}-${member.flatNo || ""}</strong></div>
+        <div>Date: <strong style="color:#1f2937;">${formatDate(billDate)}</strong></div>
+        <div>Due: <strong style="color:#dc2626;">${formatDate(dueDate)}</strong></div>
+      </div>
+    </div>
+
+    <!-- Member Info Grid -->
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:18px 22px;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;font-size:13px;">
+      <div><span style="color:#6b7280;">Bill Period:</span> <strong>${data.billPeriod}</strong></div>
+      <div><span style="color:#6b7280;">Flat:</span> <strong>${member.wing || ""}-${member.flatNo || ""}</strong></div>
+      <div><span style="color:#6b7280;">Owner Name:</span> <strong>${member.ownerName || ""}</strong></div>
+      <div><span style="color:#6b7280;">Carpet Area:</span> <strong>${member.carpetAreaSqft || 0} sq ft</strong></div>
+      <div><span style="color:#6b7280;">Contact:</span> <strong>${member.contactNumber || "-"}</strong></div>
+      <div><span style="color:#6b7280;">Due Date:</span> <strong style="color:#dc2626;">${formatDate(dueDate)}</strong></div>
+    </div>
+
+    <!-- ⚠️ Previous Outstanding (shown only if exists) -->
+    ${
+      (data.previousBalance || 0) > 0
+        ? `
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-left:5px solid #dc2626;padding:20px 24px;border-radius:8px;margin-bottom:20px;">
+      <h3 style="margin:0 0 16px 0;color:#991b1b;font-size:15px;font-weight:700;">⚠️ Previous Outstanding Balance</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;text-align:center;">
+        <div style="background:rgba(255,255,255,0.6);border-radius:8px;padding:14px;">
+          <div style="font-size:11px;color:#7f1d1d;margin-bottom:6px;font-weight:600;text-transform:uppercase;">Total Outstanding</div>
+          <div style="font-size:22px;font-weight:700;color:#dc2626;">₹${(data.previousBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.6);border-radius:8px;padding:14px;">
+          <div style="font-size:11px;color:#7f1d1d;margin-bottom:6px;font-weight:600;text-transform:uppercase;">Days Overdue</div>
+          <div style="font-size:22px;font-weight:700;color:${interestDays > 0 ? "#dc2626" : "#059669"};">${interestDays > 0 ? interestDays + " days" : "Within grace"}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.6);border-radius:8px;padding:14px;">
+          <div style="font-size:11px;color:#7f1d1d;margin-bottom:6px;font-weight:600;text-transform:uppercase;">Interest Charged</div>
+          <div style="font-size:22px;font-weight:700;color:#dc2626;">₹${interestAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,0.5);border-radius:6px;padding:12px 16px;font-size:12px;color:#7f1d1d;line-height:1.7;">
+        <strong>Interest Calculation:</strong> ₹${principalForInterest.toLocaleString("en-IN")} × ${interestRate}% p.a. ÷ 12
+        ${
+          currInt > 0
+            ? ` = <strong>₹${currInt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong> new` + (remIntFromPrior > 0 ? ` + ₹${remIntFromPrior.toLocaleString("en-IN", { minimumFractionDigits: 2 })} carried = <strong>₹${interestAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>` : "")
+            : ` — within ${gracePeriod}-day grace period` + (remIntFromPrior > 0 ? ` (carried: ₹${remIntFromPrior.toLocaleString("en-IN", { minimumFractionDigits: 2 })})` : " (no interest charged)")
+        }
+        <br/>Grace Period: <strong>${gracePeriod} days</strong> &nbsp;|&nbsp; See Page 2 for full account statement.
+      </div>
+    </div>`
+        : `
+    <div style="background:#d1fae5;border:1px solid #6ee7b7;border-left:5px solid #10b981;padding:14px 20px;border-radius:8px;margin-bottom:20px;font-size:13px;color:#065f46;font-weight:600;">
+      ✅ No previous outstanding balance. Account is clear!
+    </div>`
+    }
+
+    <!-- Current Month Charges -->
+    <h3 style="margin:0 0 14px 0;font-size:15px;color:#374151;font-weight:700;">Current Month Charges — ${data.billPeriod}</h3>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+      <thead>
+        <tr style="background:#1e40af;color:white;">
+                    <th style="padding:12px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Sr.</th>
+          <th style="padding:12px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Particulars</th>
+          <th style="padding:12px 14px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${chargeRows}
+        ${
+          serviceTax > 0
+            ? `<tr style="background:#f9fafb;"><td colspan="2" style="padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;color:#6b7280;font-size:13px;">Service Tax (${serviceTaxRate}%)</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">₹${serviceTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr>`
+            : ""
+        }
+              <tr style="background:#dbeafe;">
+          <td colspan="2" style="padding:13px 14px;text-align:right;color:#1e40af;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:0.4px;">Current Bill Total</td>
+          <td style="padding:13px 14px;text-align:right;color:#1e40af;font-weight:800;font-size:16px;">₹${currentBillTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Bill Summary Breakdown -->
+    ${
+      (data.previousBalance || 0) > 0
+        ? `
+    <div style="background:#f3f4f6;border-radius:8px;padding:16px 20px;margin-bottom:20px;font-size:13px;">
+      <div style="font-weight:700;color:#374151;margin-bottom:12px;">Bill Calculation Summary</div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e7eb;"><span style="color:#6b7280;">Previous Outstanding</span><span>₹${(data.previousBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e7eb;"><span style="color:#6b7280;">Interest on Arrears (${interestRate}% p.a.)</span><span style="color:#dc2626;">+ ₹${interestAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e7eb;"><span style="color:#6b7280;">Current Month Bill</span><span>+ ₹${currentBillTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;font-size:14px;color:#1e40af;"><span>TOTAL PAYABLE</span><span>₹${totalPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+    </div>`
+        : ""
+    }
+
+    <!-- Grand Total Box -->
+    <div style="background:linear-gradient(135deg,#1e3a8a,#1e40af);color:white;padding:24px 32px;border-radius:10px;margin-bottom:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;opacity:0.9;">Total Amount Payable</div>          <div style="font-size:12px;opacity:0.8;">Please pay by <strong>${formatDate(dueDate)}</strong> to avoid additional interest</div>
+        </div>
+        <div style="font-size:32px;font-weight:800;letter-spacing:-0.5px;">₹${totalPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>      </div>
+    </div>
+
+    <!-- Payment Instructions -->
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:18px 22px;margin-bottom:20px;font-size:12px;color:#6b7280;">
+      <strong style="color:#374151;display:block;margin-bottom:10px;">Payment Instructions:</strong>
+      <ol style="margin:0;padding-left:18px;line-height:2;">
+        <li>Please pay on or before <strong style="color:#dc2626;">${formatDate(dueDate)}</strong> to avoid interest charges.</li>
+        <li>Interest @ ${interestRate}% p.a. (${interestMethod}) is charged after ${gracePeriod}-day grace period.</li>
+        <li>For payment queries or discrepancies, contact the society office.</li>
+        <li>This is a computer-generated bill. No signature required.</li>
+      </ol>
+    </div>
+
+    <div style="text-align:center;font-size:11px;color:#9ca3af;padding-top:14px;border-top:1px solid #e5e7eb;">
+      Generated on ${new Date().toLocaleString("en-IN")} &nbsp;|&nbsp; Computer Generated Bill &nbsp;|&nbsp; Page 1 of 2
+    </div>
+  </div>
+
+  <!-- ═══════════════════ PAGE 2: ACCOUNT STATEMENT ═══════════════════ -->
+  <div style="padding:40px;background:white;border-top:4px solid #1e40af;margin-top:4px;">
+
+    <!-- Page 2 Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #e5e7eb;">
+      <div>
+        <h2 style="margin:0 0 4px 0;font-size:20px;font-weight:700;color:#1e40af;">Account Statement</h2>
+        <p style="margin:0;font-size:13px;color:#6b7280;">${society.name || ""} — ${member.wing || ""}-${member.flatNo || ""} — ${member.ownerName || ""}</p>
+      </div>
+      <div style="text-align:right;font-size:12px;color:#6b7280;line-height:1.8;">
+        <div>Period: <strong>${data.billPeriod}</strong></div>
+        <div>Flat: <strong>${member.wing || ""}-${member.flatNo || ""}</strong></div>
+        <div>Generated: <strong>${formatDate(new Date())}</strong></div>
+      </div>
+    </div>
+
+    <!-- Account Summary Cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;">
+      <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:11px;color:#1e40af;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Current Bill</div>
+        <div style="font-size:20px;font-weight:700;color:#1e40af;">₹${currentBillTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+      </div>
+      <div style="background:${(data.previousBalance || 0) > 0 ? "#fee2e2" : "#d1fae5"};border:1px solid ${(data.previousBalance || 0) > 0 ? "#fca5a5" : "#6ee7b7"};border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:11px;color:${(data.previousBalance || 0) > 0 ? "#7f1d1d" : "#065f46"};font-weight:700;text-transform:uppercase;margin-bottom:6px;">Prev Balance</div>
+        <div style="font-size:20px;font-weight:700;color:${(data.previousBalance || 0) > 0 ? "#dc2626" : "#059669"};">
+          ${(data.previousBalance || 0) > 0 ? `₹${(data.previousBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} DR` : "₹0.00 Clear"}
+        </div>
+      </div>
+      <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:11px;color:#92400e;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Interest</div>
+        <div style="font-size:20px;font-weight:700;color:${interestAmount > 0 ? "#dc2626" : "#059669"};">
+          ${interestAmount > 0 ? `₹${interestAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "₹0.00"}
+        </div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:11px;color:#14532d;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Total Payable</div>
+        <div style="font-size:20px;font-weight:700;color:#1e40af;">₹${totalPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+      </div>
+    </div>
+
+    <!-- Interest Calculation Detail (if applicable) -->
+    ${
+      (data.previousBalance || 0) > 0
+        ? `
+    <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:20px 24px;margin-bottom:28px;">
+      <h3 style="margin:0 0 16px 0;font-size:15px;color:#92400e;font-weight:700;">📐 Interest Calculation Detail</h3>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <tr><td style="padding:7px 12px;color:#6b7280;width:45%;">Principal (Chargeable Balance)</td><td style="padding:7px 12px;font-weight:600;">₹${principalForInterest.toLocaleString("en-IN", { minimumFractionDigits: 2 })}${remIntFromPrior > 0 ? ` <span style="font-size:11px;color:#6b7280;">(+ ₹${remIntFromPrior.toLocaleString("en-IN", { minimumFractionDigits: 2 })} carried interest)</span>` : ""}</td></tr>
+        <tr style="background:rgba(0,0,0,0.03)"><td style="padding:7px 12px;color:#6b7280;">Annual Interest Rate</td><td style="padding:7px 12px;font-weight:600;">${interestRate}% per annum</td></tr>
+        <tr><td style="padding:7px 12px;color:#6b7280;">Calculation Method</td><td style="padding:7px 12px;font-weight:600;">${interestMethod}</td></tr>
+        <tr style="background:rgba(0,0,0,0.03)"><td style="padding:7px 12px;color:#6b7280;">Grace Period (Interest After)</td><td style="padding:7px 12px;font-weight:600;">${gracePeriod} days</td></tr>
+    <tr><td style="padding:7px 12px;color:#6b7280;">Calculation Basis</td>
+<td style="padding:7px 12px;font-weight:600;">Monthly (Indian Standard — 1 day late = 1 full month)</td></tr>
+
+<tr style="background:rgba(0,0,0,0.03)"><td style="padding:7px 12px;color:#6b7280;">Days Overdue (after grace)</td>
+<td style="padding:7px 12px;font-weight:600;">${interestDays} days</td></tr>
+
+<tr style="background:rgba(0,0,0,0.03)">
+  <td style="padding:7px 12px;color:#6b7280;">Formula Applied</td>
+  <td style="padding:7px 12px;font-family:monospace;font-size:12px;">
+    ₹${(principalForInterest || 0).toLocaleString("en-IN")} × ${interestRate} ÷ 1200
+    = <strong>₹${currInt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>/month
+  </td>
+</tr>
+${
+  remIntFromPrior > 0
+    ? `
+<tr>
+  <td style="padding:7px 12px;color:#6b7280;">Carried-Forward Interest</td>
+  <td style="padding:7px 12px;font-weight:600;">
+    + ₹${remIntFromPrior.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+  </td>
+</tr>`
+    : ""
+}
+
+<tr style="background:#fde68a;"><td style="padding:9px 12px;font-weight:700;color:#92400e;">Interest Amount Charged</td>
+<td style="padding:9px 12px;font-weight:700;font-size:15px;color:#92400e;">₹${interestAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr>
+      </table>
+    </div>`
+        : ""
+    }
+
+    <!-- Outstanding Bills Detail -->
+    ${unpaidBillsHtml}
+
+    <!-- Recent Payment History -->
+    ${recentTxHtml}
+
+    <!-- Page 2 Footer -->
+    <div style="text-align:center;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;margin-top:28px;">
+      ${society.name || ""} &nbsp;|&nbsp; ${society.address || ""} &nbsp;|&nbsp; Page 2 of 2 &nbsp;|&nbsp; Computer Generated Bill
+    </div>
+  </div>
+
+</div>`;
+
+  // ✅ Return object so caller can access interestAmount
+  // Append previous bill as Page 3 if provided
+  // Append previous bill as Page 3 if provided (only once)
+  if (previousBillHtml) {
+    html += `
+      <div style="page-break-before:always; padding:40px; background:#fff;">
+        <div style="border-bottom:2px solid #e5e7eb; padding-bottom:12px; margin-bottom:24px;">
+          <h2 style="margin:0; font-size:16px; color:#6b7280;">📎 Previous Month's Bill (Reference Copy)</h2>
+        </div>
+        ${previousBillHtml}
+      </div>`;
+  }
+  return {
+    html,
+    billHtml: html,
+    currInt,
+    monthInterest,
+    interestAmount: monthInterest,
+    interestDays,
+  };
+}
+</file>
+
+<file path="lib/bill-status-manager.js">
+/**
+ * Bill Status Manager - Explicit status control
+ * No auto-calculation, all status changes are explicit and auditable
+ */
+
+/**
+ * Set bill status after payment recording
+ */
+export function calculateBillStatusAfterPayment(totalAmount, amountPaid) {
+  if (amountPaid >= totalAmount) {
+    return "Paid";
+  } else if (amountPaid > 0) {
+    return "Partial";
+  } else {
+    return "Unpaid";
+  }
+}
+
+/**
+ * Check if bill should be marked overdue (for cron job)
+ */
+export function shouldMarkOverdue(bill, currentDate = new Date()) {
+  if (bill.status === "Paid") return false;
+  if (bill.balanceAmount <= 0) return false;
+  return currentDate > new Date(bill.dueDate);
+}
+
+/**
+ * Get status for new bill generation
+ */
+export function getInitialBillStatus() {
+  return "Unpaid";
+}
+
+/**
+ * Validate status transition (for audit safety)
+ */
+export function isValidStatusTransition(currentStatus, newStatus) {
+  const validTransitions = {
+    Scheduled: ["Unpaid"], // only cron can flip Scheduled → Unpaid
+    Unpaid: ["Partial", "Paid", "Overdue"],
+    Partial: ["Paid", "Overdue", "Unpaid"],
+    Paid: ["Partial", "Unpaid"],
+    Overdue: ["Partial", "Paid", "Unpaid"],
+  };
+
+  return validTransitions[currentStatus]?.includes(newStatus) || false;
+}
+</file>
+
+<file path="lib/date-utils.js">
+export const FINANCIAL_YEAR_START_MONTH = 3; // April = 3 (0-indexed)
+
+export function getFinancialYear(date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  if (month >= FINANCIAL_YEAR_START_MONTH) {
+    return `FY${year}-${(year + 1).toString().slice(-2)}`;
+  } else {
+    return `FY${year - 1}-${year.toString().slice(-2)}`;
+  }
+}
+
+export function getFinancialYearRange(fyString) {
+  const startYear = parseInt(fyString.split("-")[0].replace("FY", ""));
+  const startDate = new Date(startYear, FINANCIAL_YEAR_START_MONTH, 1);
+  const endDate = new Date(
+    startYear + 1,
+    FINANCIAL_YEAR_START_MONTH,
+    0,
+    23,
+    59,
+    59
+  );
+
+  return { startDate, endDate };
+}
+
+export function calculateDaysBetween(fromDate, toDate) {
+  const from = new Date(fromDate);
+  const to = new Date(toDate);
+  const diffTime = Math.abs(to - from);
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+export function isDateAfterGracePeriod(
+  dueDate,
+  gracePeriodDays,
+  checkDate = new Date()
+) {
+  const graceEndDate = new Date(dueDate);
+  graceEndDate.setDate(graceEndDate.getDate() + gracePeriodDays);
+  return checkDate > graceEndDate;
+}
+
+export function getMonthYearString(date) {
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return `${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+export function getLastDayOfMonth(year, month) {
+  return new Date(year, month + 1, 0);
+}
+
+export function generateBillingPeriodId(month, year) {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+export function parseBillingPeriodId(periodId) {
+  const [year, month] = periodId.split("-").map(Number);
+  return { year, month: month - 1 };
+}
+
+export function isPeriodLocked(billingMonth, billingYear, lockAfterDays = 45) {
+  const billingDate = new Date(billingYear, billingMonth, 1);
+  const lockDate = new Date(billingDate);
+  lockDate.setDate(lockDate.getDate() + lockAfterDays);
+
+  return new Date() > lockDate;
+}
+</file>
+
+<file path="lib/export-before-delete.js">
+import fs from 'fs';
+import path from 'path';
+import ExcelJS from 'exceljs';
+
+/**
+ * Export data to Excel file before deletion
+ * Saves to: exports/{societyId}/{collection}/{date}/deleted_data.xlsx
+ */
+export async function exportBeforeDelete(data, metadata) {
+  const {
+    societyId,
+    collection,
+    deletedBy,
+    deletionReason
+  } = metadata;
+
+  try {
+    // Create exports directory structure
+    const timestamp = new Date().toISOString().split('T')[0]; // 2025-12-30
+    const exportDir = path.join(
+      process.cwd(),
+      'exports',
+      societyId.toString(),
+      collection,
+      timestamp
+    );
+
+    // Create directory if doesn't exist
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+
+    // Create Excel workbook
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Deleted Data');
+
+    // Add metadata sheet
+    const metaSheet = workbook.addWorksheet('Metadata');
+    metaSheet.addRow(['Deletion Date', new Date().toISOString()]);
+    metaSheet.addRow(['Deleted By', deletedBy.toString()]);
+    metaSheet.addRow(['Reason', deletionReason]);
+    metaSheet.addRow(['Collection', collection]);
+    metaSheet.addRow(['Society ID', societyId.toString()]);
+    metaSheet.addRow(['Total Records', data.length]);
+
+    // Add data to main sheet
+    if (data.length > 0) {
+      // Get all unique keys from all objects
+      const allKeys = new Set();
+      data.forEach(item => {
+        Object.keys(item).forEach(key => allKeys.add(key));
+      });
+
+      const headers = Array.from(allKeys);
+      worksheet.addRow(headers);
+
+      // Add data rows
+      data.forEach(item => {
+        const row = headers.map(header => {
+          const value = item[header];
+          
+          // Handle different data types
+          if (value === null || value === undefined) return '';
+          if (value instanceof Date) return value.toISOString();
+          if (typeof value === 'object') return JSON.stringify(value);
+          return String(value);
+        });
+        worksheet.addRow(row);
+      });
+
+      // Style header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9D9D9' }
+      };
+    }
+
+    // Generate filename with timestamp
+    const filename = `deleted_${collection}_${Date.now()}.xlsx`;
+    const filepath = path.join(exportDir, filename);
+
+    // Save file
+    await workbook.xlsx.writeFile(filepath);
+
+    console.log(`✅ Exported ${data.length} records to: ${filepath}`);
+
+    return {
+      success: true,
+      filepath,
+      filename,
+      recordCount: data.length
+    };
+
+  } catch (error) {
+    console.error('Export before delete error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Export to JSON format (alternative)
+ */
+export async function exportToJSON(data, metadata) {
+  const {
+    societyId,
+    collection,
+    deletedBy,
+    deletionReason
+  } = metadata;
+
+  try {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const exportDir = path.join(
+      process.cwd(),
+      'exports',
+      societyId.toString(),
+      collection,
+      timestamp
+    );
+
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+
+    const exportData = {
+      metadata: {
+        deletionDate: new Date().toISOString(),
+        deletedBy: deletedBy.toString(),
+        reason: deletionReason,
+        collection,
+        societyId: societyId.toString(),
+        totalRecords: data.length
+      },
+      data
+    };
+
+    const filename = `deleted_${collection}_${Date.now()}.json`;
+    const filepath = path.join(exportDir, filename);
+
+    fs.writeFileSync(filepath, JSON.stringify(exportData, null, 2));
+
+    console.log(`✅ Exported ${data.length} records to: ${filepath}`);
+
+    return {
+      success: true,
+      filepath,
+      filename,
+      recordCount: data.length
+    };
+
+  } catch (error) {
+    console.error('Export to JSON error:', error);
+    throw error;
+  }
+}
+</file>
+
+<file path="lib/export-to-admin-db.js">
+import { getAdminModels } from './admin-models';
+import Society from '@/models/Society';
+
+/**
+ * Export deleted data to admin.exports collection
+ * This is the MAIN function called before any deletion
+ */
+export async function exportToAdminDB(data, metadata) {
+  const {
+    collection,
+    societyId,
+    deletedBy,
+    deletedByName,
+    deletedByRole,
+    deletionReason,
+  } = metadata;
+
+  try {
+    const { Export } = await getAdminModels();
+
+    // Get society name
+    const society = await Society.findById(societyId).lean();
+    const societyName = society?.name || 'Unknown Society';
+
+    // Calculate statistics
+    let totalValue = 0;
+    if (collection === 'bills') {
+      totalValue = data.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
+    } else if (collection === 'transactions') {
+      totalValue = data.reduce((sum, txn) => sum + (txn.amount || 0), 0);
+    }
+
+    // Create export entry
+    const exportEntry = await Export.create({
+ collectionName: collection,  
+       societyId,
+      societyName,
+      deletedAt: new Date(),
+      deletedBy: {
+        userId: deletedBy,
+        userName: deletedByName,
+        userRole: deletedByRole,
+      },
+      deletionReason,
+      data: data, // Full data copy
+      recordCount: data.length,
+      totalValue,
+      isRestored: false,
+      willExpireAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+    });
+
+    console.log(`✅ Exported ${data.length} ${collection} records to admin.exports`);
+    console.log(`   Society: ${societyName}`);
+    console.log(`   Export ID: ${exportEntry._id}`);
+
+    return {
+      success: true,
+      exportId: exportEntry._id,
+      recordCount: data.length,
+      collection,
+    };
+  } catch (error) {
+    console.error('❌ Export to admin DB failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Log admin activity
+ */
+export async function logAdminActivity(activityData) {
+  try {
+    const { AdminLog } = await getAdminModels();
+
+    await AdminLog.create({
+      adminId: activityData.adminId,
+      adminName: activityData.adminName,
+      action: activityData.action,
+      targetSociety: activityData.targetSociety,
+      details: activityData.details,
+      ipAddress: activityData.ipAddress,
+      userAgent: activityData.userAgent,
+      timestamp: new Date(),
+    });
+
+    console.log(`📝 Logged admin action: ${activityData.action}`);
+  } catch (error) {
+    console.error('❌ Failed to log admin activity:', error);
+  }
+}
+</file>
+
+<file path="lib/mongodb-admin.js">
+import mongoose from 'mongoose';
+
+let adminConnection = null;
+
+/**
+ * ISOLATED admin database connection
+ * NO society users can access this
+ */
+async function connectAdminDB() {
+  // ✅ SECURITY: Only allow in server-side (never client)
+  if (typeof window !== 'undefined') {
+    throw new Error('Admin DB access forbidden from client');
+  }
+
+  // ✅ SECURITY: Require admin secret key
+  if (!process.env.ADMIN_SECRET_KEY) {
+    throw new Error('Admin secret key not configured');
+  }
+
+  if (adminConnection && adminConnection.readyState === 1) {
+    return adminConnection;
+  }
+
+  try {
+    const ADMIN_URI = process.env.MONGODB_ADMIN_URI;
+    
+    if (!ADMIN_URI) {
+      throw new Error('Admin DB URI not configured');
+    }
+
+    adminConnection = await mongoose.createConnection(ADMIN_URI, {
+      dbName: 'aapli_society_admin', // ✅ Separate database
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      maxPoolSize: 5, // Limit connections
+      minPoolSize: 1,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+
+    console.log('🔐 Admin Database Connected (Secure)');
+    return adminConnection;
+    
+  } catch (error) {
+    console.error('❌ Admin DB connection failed:', error);
+    throw error;
+  }
+}
+
+export default connectAdminDB;
+</file>
+
+<file path="lib/mongodb.js">
+import mongoose from "mongoose";
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error("Please define MONGODB_URI in .env.local");
+}
+
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
+async function connectDB() {
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+    };
+
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+      console.log("✓ MongoDB Connected");
+      return mongoose;
+    });
+  }
+
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
+
+  return cached.conn;
+}
+
+export default connectDB;
+</file>
+
+<file path="lib/pdf-fields-config.js">
+// This is SUPER flexible - you can adjust positions anytime
+export const PDF_FIELD_POSITIONS = {
+  // Header fields
+  companyName: {
+    x: 450,
+    y: 50,
+    fontSize: 14,
+    fontWeight: "bold",
+    maxWidth: 150,
+    align: "right",
+  },
+  invoiceNumber: {
+    x: 450,
+    y: 70,
+    fontSize: 12,
+    maxWidth: 150,
+    align: "right",
+  },
+
+  // Bill To section
+  customerName: {
+    x: 50,
+    y: 150,
+    fontSize: 11,
+    maxWidth: 250,
+  },
+  customerAddress: {
+    x: 50,
+    y: 170,
+    fontSize: 10,
+    maxWidth: 250,
+  },
+  customerPhone: {
+    x: 50,
+    y: 210,
+    fontSize: 10,
+  },
+
+  // Dates
+  billDate: {
+    x: 450,
+    y: 150,
+    fontSize: 11,
+    align: "right",
+  },
+  dueDate: {
+    x: 450,
+    y: 170,
+    fontSize: 11,
+    align: "right",
+  },
+
+  // Table area (dynamically calculated)
+  tableStart: {
+    x: 50,
+    y: 280,
+    maxWidth: 500,
+    rowHeight: 25,
+  },
+
+  // Amounts
+  subtotal: {
+    x: 450,
+    y: 500,
+    fontSize: 11,
+    align: "right",
+  },
+  tax: {
+    x: 450,
+    y: 520,
+    fontSize: 11,
+    align: "right",
+  },
+  total: {
+    x: 450,
+    y: 545,
+    fontSize: 13,
+    fontWeight: "bold",
+    align: "right",
+  },
+
+  // Footer
+  paymentDetails: {
+    x: 50,
+    y: 600,
+    fontSize: 9,
+    maxWidth: 400,
+  },
+};
+
+// Table column config - VERY flexible
+export const TABLE_CONFIG = {
+  columns: [
+    { header: "ID", width: 40, align: "center" },
+    { header: "Description", width: 250, align: "left" },
+    { header: "HSN code", width: 80, align: "center" },
+    { header: "Quantity", width: 70, align: "center" },
+    { header: "Rate", width: 80, align: "right" },
+    { header: "Amount", width: 80, align: "right" },
+  ],
+  headerHeight: 25,
+  rowHeight: 20,
+  fontSize: 10,
+  headerFontSize: 11,
+  borderColor: [200, 200, 200],
+  headerBgColor: [240, 240, 240],
+};
+</file>
+
+<file path="lib/soft-delete-middleware.js">
+import Archive from '@/models/Archive';
+
+/**
+ * Export data to Archive before deletion
+ * @param {Object} params
+ * @param {string} params.collection - Collection name (bills/members/transactions)
+ * @param {Array} params.documents - Array of documents to archive
+ * @param {string} params.userId - User performing deletion
+ * @param {string} params.reason - Reason for deletion
+ * @returns {Promise<number>} Number of archived documents
+ */
+export async function exportBeforeDelete({ collection, documents, userId, reason }) {
+  if (!documents || documents.length === 0) {
+    throw new Error('No documents provided for archival');
+  }
+
+  const archiveEntries = documents.map(doc => ({
+    originalCollection: collection,
+    originalId: doc._id,
+    societyId: doc.societyId,
+    data: doc,
+    deletedAt: new Date(),
+    deletedBy: userId,
+    deletionReason: reason || 'No reason provided',
+    willExpireAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) // 90 days
+  }));
+
+  await Archive.insertMany(archiveEntries);
+  
+  return archiveEntries.length;
+}
+
+/**
+ * Restore archived data
+ * @param {string} archiveId - Archive document ID
+ * @param {string} userId - User performing restoration
+ * @returns {Promise<Object>} Restored document
+ */
+export async function restoreFromArchive(archiveId, userId) {
+  const archived = await Archive.findById(archiveId);
+  
+  if (!archived) {
+    throw new Error('Archive not found');
+  }
+
+  if (archived.isRestored) {
+    throw new Error('Already restored');
+  }
+
+  // Get the model
+  const modelMap = {
+    bills: 'Bill',
+    members: 'Member',
+    transactions: 'Transaction',
+    billingheads: 'BillingHead'
+  };
+
+  const Model = require(`@/models/${modelMap[archived.originalCollection]}`).default;
+
+  // Restore the document
+  const restored = await Model.create({
+    ...archived.data,
+    _id: archived.originalId,
+    isDeleted: false,
+    deletedAt: null,
+    deletedBy: null
+  });
+
+  // Mark archive as restored
+  archived.isRestored = true;
+  archived.restoredAt = new Date();
+  archived.restoredBy = userId;
+  await archived.save();
+
+  return restored;
+}
+
+/**
+ * Get archived data for a society
+ * @param {string} societyId
+ * @param {string} collection - Optional: filter by collection
+ * @returns {Promise<Array>} Archived documents
+ */
+export async function getArchivedData(societyId, collection = null) {
+  const query = { societyId, isRestored: false };
+  
+  if (collection) {
+    query.originalCollection = collection;
+  }
+
+  return await Archive.find(query)
+    .sort({ deletedAt: -1 })
+    .lean();
+}
+</file>
+
+<file path="models/admin/AdminLog.js">
+import mongoose from 'mongoose';
+
+const AdminLogSchema = new mongoose.Schema(
+  {
+    adminId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      index: true,
+    },
+    adminName: {
+      type: String,
+      required: true,
+    },
+    action: {
+      type: String,
+      required: true,
+      enum: [
+        'LOGIN',
+        'LOGOUT',
+        'CREATE_SOCIETY',
+        'DELETE_SOCIETY',
+        'SUSPEND_SOCIETY',
+        'ACTIVATE_SOCIETY',
+        'VIEW_DATA',
+        'EXPORT_DATA',
+        'DELETE_DATA',
+        'RESTORE_DATA',
+        'UPDATE_CONFIG',
+      ],
+      index: true,
+    },
+    targetSociety: {
+      societyId: mongoose.Schema.Types.ObjectId,
+      societyName: String,
+    },
+    details: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    ipAddress: {
+      type: String,
+    },
+    userAgent: {
+      type: String,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Index for querying
+AdminLogSchema.index({ adminId: 1, timestamp: -1 });
+AdminLogSchema.index({ action: 1, timestamp: -1 });
+
+export default AdminLogSchema;
+</file>
+
+<file path="models/admin/Export.js">
+import mongoose from 'mongoose';
+
+const ExportSchema = new mongoose.Schema(
+  {
+    // What was deleted
+    collectionName: {
+      type: String,
+      required: true,
+      enum: ['bills', 'members', 'transactions', 'billingheads', 'societies'],
+      index: true,
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      index: true,
+    },
+    societyName: {
+      type: String,
+      required: true,
+    },
+
+    // Deletion metadata
+    deletedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    deletedBy: {
+      userId: mongoose.Schema.Types.ObjectId,
+      userName: String,
+      userRole: String,
+    },
+    deletionReason: {
+      type: String,
+      required: true,
+    },
+
+    // Export file info
+    exportFile: {
+      filename: String,
+      filepath: String,
+      filesize: Number, // in bytes
+      format: {
+        type: String,
+        enum: ['excel', 'json', 'csv'],
+        default: 'excel',
+      },
+    },
+
+    // Deleted data (full copy)
+    data: {
+      type: mongoose.Schema.Types.Mixed,
+      required: true,
+    },
+
+    // Statistics
+    recordCount: {
+      type: Number,
+      required: true,
+    },
+    totalValue: {
+      type: Number, // For bills: sum of amounts
+      default: 0,
+    },
+
+    // Restoration
+    isRestored: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    restoredAt: {
+      type: Date,
+    },
+    restoredBy: {
+      userId: mongoose.Schema.Types.ObjectId,
+      userName: String,
+    },
+
+    // Auto-expire after 90 days
+    willExpireAt: {
+      type: Date,
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// TTL index - MongoDB auto-deletes after expiry
+ExportSchema.index({ willExpireAt: 1 }, { expireAfterSeconds: 0 });
+
+// Compound indexes for queries
+ExportSchema.index({ societyId: 1, collectionName: 1, deletedAt: -1 });
+ExportSchema.index({ collectionName: 1, isRestored: 1 });
+
+export default ExportSchema;
+</file>
+
+<file path="models/admin/SuperAdmin.js">
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+
+const SuperAdminSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: true,
+    },
+    role: {
+      type: String,
+      default: 'SuperAdmin',
+      immutable: true, // Cannot change
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastLogin: {
+      type: Date,
+    },
+    loginHistory: [
+      {
+        timestamp: Date,
+        ipAddress: String,
+        userAgent: String,
+      },
+    ],
+    permissions: {
+      canDeleteSocieties: { type: Boolean, default: true },
+      canModifyBilling: { type: Boolean, default: true },
+      canAccessAllData: { type: Boolean, default: true },
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Hash password before saving
+SuperAdminSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+// Compare password method
+SuperAdminSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+export default SuperAdminSchema;
+</file>
+
+<file path="models/Archive.js">
+import mongoose from 'mongoose';
+
+const ArchiveSchema = new mongoose.Schema({
+  originalCollection: { 
+    type: String, 
+    required: true, 
+    index: true,
+    enum: ['bills', 'members', 'transactions', 'billingheads', 'societies']
+  },
+  originalId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    required: true, 
+    index: true 
+  },
+  societyId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Society', 
+    required: true, 
+    index: true 
+  },
+  
+  // Full document snapshot
+  data: { 
+    type: mongoose.Schema.Types.Mixed, 
+    required: true 
+  },
+  
+  // Deletion metadata
+  deletedAt: { type: Date, default: Date.now, index: true },
+  deletedBy: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true 
+  },
+  deletionReason: { type: String },
+  
+  // Restoration tracking
+  isRestored: { type: Boolean, default: false },
+  restoredAt: { type: Date },
+  restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  
+  // Auto-expire after 90 days
+  willExpireAt: { type: Date }
+  
+}, { timestamps: true });
+
+// TTL index for auto-deletion after 90 days
+ArchiveSchema.index({ willExpireAt: 1 }, { expireAfterSeconds: 0 });
+
+// Set expiry on creation
+ArchiveSchema.pre('save', function(next) {
+  if (this.isNew && !this.willExpireAt) {
+    this.willExpireAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  }
+  next();
+});
+
+export default mongoose.models.Archive || mongoose.model('Archive', ArchiveSchema);
+</file>
+
+<file path="models/Transaction.js">
+import mongoose from "mongoose";
+
+const TransactionSchema = new mongoose.Schema(
+  {
+    transactionId: {
+      type: String,
+      unique: true,
+      required: true,
+      index: true,
+    },
+    date: {
+      type: Date,
+      required: true,
+      index: true,
+    },
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: true,
+      index: true,
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+    type: {
+      type: String,
+      enum: ["Debit", "Credit"],
+      required: true,
+    },
+    category: {
+      type: String,
+      required: true,
+      enum: [
+        "Maintenance",
+        "Arrears",
+        "Interest",
+        "Payment",
+        "Adjustment",
+        "Refund",
+        "Fine",
+        "Opening Balance",
+      ],
+    },
+    description: {
+      type: String,
+      required: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+    },
+    // For Payment transactions: how much of amount cleared interest vs principal
+    interestCleared: {
+      type: Number,
+      default: 0,
+    },
+    principalCleared: {
+      type: Number,
+      default: 0,
+    },
+    balanceAfterTransaction: {
+      type: Number,
+      required: true,
+    },
+    referenceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      refPath: "referenceModel",
+    },
+    referenceModel: {
+      type: String,
+      enum: ["Bill", "Payment", "Member"],
+    },
+    billPeriodId: {
+      type: String,
+      index: true,
+    },
+    notes: { type: String, trim: true },
+    // Payment breakdown for transparency (interestCleared, principalCleared, advanceCredit)
+    paymentBreakdown: {
+      interestCleared: { type: Number, default: 0 },
+      principalCleared: { type: Number, default: 0 },
+      advanceCredit: { type: Number, default: 0 },
+    },
+    paymentMode: {
+      type: String,
+      enum: ["Cash", "Cheque", "Online", "UPI", "NEFT", "RTGS", "System"],
+    },
+    // Top-level payment fields (used by record route)
+    chequeNo: { type: String },
+    bankName: { type: String },
+    upiId: { type: String },
+    transactionRef: { type: String },
+    // Also keep nested for backwards compat
+    paymentDetails: {
+      chequeNo: String,
+      bankName: String,
+      transactionRef: String,
+      upiId: String,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    isReversed: {
+      type: Boolean,
+      default: false,
+    },
+    reversalTransactionId: {
+      type: String,
+    },
+    financialYear: {
+      type: String,
+      index: true,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+TransactionSchema.index({ societyId: 1, memberId: 1, date: -1 });
+TransactionSchema.index({ societyId: 1, category: 1, date: -1 });
+TransactionSchema.index({ societyId: 1, financialYear: 1 });
+
+TransactionSchema.statics.generateTransactionId = function () {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `TXN${timestamp}${random}`;
+};
+
+export default mongoose.models.Transaction ||
+  mongoose.model("Transaction", TransactionSchema);
+</file>
+
+<file path="utils/excelValidator.js">
+/**
+ * excelValidator.js — pure validation for bill and payment Excel templates.
+ * No DB calls. All DB lookups happen in the route; pass pre-fetched sets here.
+ */
+
+const PAYMENT_METHODS = new Set(["Cash", "Cheque", "Online", "NEFT", "UPI"]);
+
+/**
+ * validateBillRows — validate bill generation template rows.
+ *
+ * @param {object[]} rows         — parsed Excel rows (1 object per row)
+ * @param {object}   opts
+ * @param {Set}      opts.validMemberIds   — Set of valid memberID strings from DB
+ * @param {string}   opts.billPeriodId     — expected e.g. "2026-05"
+ * @param {string[]} opts.expectedColumns  — mandatory column names
+ *
+ * @returns {{ gridRows, summary: { valid, warning, error } }}
+ */
+export function validateBillRows(rows, { validMemberIds, billPeriodId, expectedColumns = [] }) {
+  const [expectedYear, expectedMonthStr] = billPeriodId.split("-");
+  const expectedMonth = parseInt(expectedMonthStr);
+
+  const seenMemberIds = new Map();
+  const gridRows = [];
+
+  const SKIP_COLS = new Set(["MemberId", "Wing", "FlatNo", "OwnerName", "Month", "Year", "DueDate", "PreviousBalance", "InterestDue", "GrandTotal"]);
+
+  for (let i = 0; i < rows.length; i++) {
+    const raw = rows[i];
+    const rowNum = i + 2;
+    const cells = {};
+    let rowStatus = "valid";
+
+    const markCell = (col, value, status, message) => {
+      cells[col] = { value, status, message };
+      if (status === "error" && rowStatus !== "error") rowStatus = "error";
+      if (status === "warning" && rowStatus === "valid") rowStatus = "warning";
+    };
+    const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
+
+    // MemberId
+    const memberId = String(raw["MemberId"] || "").trim();
+    if (!memberId) {
+      markCell("MemberId", memberId, "error", "MemberId is required");
+    } else if (!validMemberIds.has(memberId)) {
+      markCell("MemberId", memberId, "error", "Unknown member ID — not in DB");
+    } else if (seenMemberIds.has(memberId)) {
+      markCell("MemberId", memberId, "error", `Duplicate row — already seen at row ${seenMemberIds.get(memberId)}`);
+      rowStatus = "error";
+    } else {
+      seenMemberIds.set(memberId, rowNum);
+      okCell("MemberId", memberId);
+    }
+
+    // Month
+    const month = parseInt(raw["Month"]);
+    if (isNaN(month) || month !== expectedMonth) {
+      markCell("Month", raw["Month"], "error", `Month must be ${expectedMonth}`);
+    } else {
+      okCell("Month", month);
+    }
+
+    // Year
+    const year = parseInt(raw["Year"]);
+    if (isNaN(year) || year !== parseInt(expectedYear)) {
+      markCell("Year", raw["Year"], "error", `Year must be ${expectedYear}`);
+    } else {
+      okCell("Year", year);
+    }
+
+    // Numeric charge columns
+    for (const col of Object.keys(raw)) {
+      if (SKIP_COLS.has(col) || cells[col]) continue;
+      const val = parseFloat(raw[col]);
+      if (isNaN(val)) {
+        markCell(col, raw[col], "warning", "Expected a number — defaulting to 0");
+      } else if (val < 0) {
+        markCell(col, val, "warning", "Negative charge — is this intentional?");
+      } else {
+        okCell(col, val);
+      }
+    }
+
+    // Fill skip cols as-is
+    for (const col of SKIP_COLS) {
+      if (!cells[col] && raw[col] !== undefined) okCell(col, raw[col]);
+    }
+
+    // Ensure all expected columns present
+    for (const col of expectedColumns) {
+      if (!cells[col]) markCell(col, "", "error", `Column "${col}" missing from this row`);
+    }
+
+    gridRows.push({ rowNum, status: rowStatus, cells });
+  }
+
+  const summary = {
+    valid: gridRows.filter((r) => r.status === "valid").length,
+    warning: gridRows.filter((r) => r.status === "warning").length,
+    error: gridRows.filter((r) => r.status === "error").length,
+  };
+
+  return { gridRows, summary };
+}
+
+/**
+ * validatePaymentRows — validate payment collection template rows.
+ *
+ * @param {object[]} rows
+ * @param {object}   opts
+ * @param {Set}      opts.validMemberIds       — Set<string>
+ * @param {Map}      opts.existingBillMap       — Map<memberId, { balanceAmount, status }>
+ * @param {Date}     opts.today                — for future-date check
+ *
+ * @returns {{ gridRows, summary, validPayments: object[] }}
+ */
+export function validatePaymentRows(rows, { validMemberIds, existingBillMap, today }) {
+  const seenMemberIds = new Map();
+  const gridRows = [];
+  const validPayments = [];
+
+  const REF_COLS = ["Wing","FlatNo","OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","RemainingDue","BillStatus","LastReceiptNo","LastPaymentDate"];
+
+  for (let i = 0; i < rows.length; i++) {
+    const raw = rows[i];
+    const rowNum = i + 2;
+
+    // Skip instruction rows (MemberId starts with ⚠ or is not a 24-char hex ObjectId)
+    const _rawId = String(raw["MemberId"] || "").trim();
+    if (_rawId && !/^[a-f0-9]{24}$/i.test(_rawId)) continue;
+
+    const cells = {};
+    let rowStatus = "valid";
+
+    const markCell = (col, value, status, message) => {
+      cells[col] = { value, status, message };
+      if (status === "error" && rowStatus !== "error") rowStatus = "error";
+      if (status === "warning" && rowStatus === "valid") rowStatus = "warning";
+    };
+    const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
+
+    // MemberId
+    const memberId = String(raw["MemberId"] || "").trim();
+    if (!memberId) {
+      markCell("MemberId", memberId, "error", "MemberId is required");
+    } else if (!validMemberIds.has(memberId)) {
+      markCell("MemberId", memberId, "error", "Unknown member ID");
+    } else if (seenMemberIds.has(memberId)) {
+      markCell("MemberId", memberId, "error", `Duplicate — already at row ${seenMemberIds.get(memberId)}`);
+    } else {
+      seenMemberIds.set(memberId, rowNum);
+      okCell("MemberId", memberId);
+    }
+
+    okCell("Month", raw["Month"]);
+    okCell("Year", raw["Year"]);
+
+    // AmountPaid
+    const amountStr = String(raw["AmountPaid"] || "").trim();
+    const amount = parseFloat(amountStr);
+    if (!amountStr) {
+      markCell("AmountPaid", amountStr, "error", "AmountPaid is required");
+    } else if (isNaN(amount) || amount <= 0) {
+      markCell("AmountPaid", amountStr, "error", `Invalid amount: ${amountStr} — must be > 0`);
+    } else {
+      const bill = existingBillMap?.get(memberId);
+      const remaining = bill?.balanceAmount ?? Infinity;
+      if (amount > remaining + 0.01) {
+        markCell("AmountPaid", amount, "warning", `Paying ₹${amount} but only ₹${remaining.toFixed(2)} remaining — overpayment`);
+      } else {
+        okCell("AmountPaid", amount);
+      }
+    }
+
+    // PaymentMethod
+    const method = String(raw["PaymentMethod"] || "").trim();
+    if (!method) {
+      markCell("PaymentMethod", method, "error", "PaymentMethod is required");
+    } else if (!PAYMENT_METHODS.has(method)) {
+      markCell("PaymentMethod", method, "error", `Invalid method "${method}" — use: ${[...PAYMENT_METHODS].join(", ")}`);
+    } else {
+      okCell("PaymentMethod", method);
+    }
+
+    // PaymentDate — handle JS Date (cellDates:true), XLSX serial, YYYY-MM-DD, DD-MM-YYYY
+    const rawDate = raw["PaymentDate"];
+    const dateStr = String(rawDate ?? "").trim();
+    if (!dateStr || dateStr === "Invalid Date") {
+      markCell("PaymentDate", "", "error", "PaymentDate is required");
+    } else {
+      let parsedDate = null;
+      if (rawDate instanceof Date) {
+        parsedDate = rawDate;
+      } else if (typeof rawDate === "number") {
+        // XLSX serial: days since 1899-12-30
+        parsedDate = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        parsedDate = new Date(dateStr);
+      } else if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+        const [dd, mm, yyyy] = dateStr.split("-");
+        parsedDate = new Date(`${yyyy}-${mm}-${dd}`);
+      }
+      const displayDate = parsedDate && !isNaN(parsedDate.getTime())
+        ? parsedDate.toISOString().split("T")[0]
+        : dateStr;
+      if (!parsedDate || isNaN(parsedDate.getTime())) {
+        markCell("PaymentDate", displayDate, "error", "Invalid date format — use YYYY-MM-DD or DD-MM-YYYY");
+      } else if (parsedDate > (today || new Date())) {
+        markCell("PaymentDate", displayDate, "error", "Future payment date not allowed");
+      } else {
+        okCell("PaymentDate", displayDate);
+      }
+    }
+
+    okCell("Remarks", raw["Remarks"] || "");
+
+    for (const col of REF_COLS) {
+      if (!cells[col]) okCell(col, raw[col] ?? "");
+    }
+
+    gridRows.push({ rowNum, status: rowStatus, cells });
+    if (rowStatus !== "error") {
+      validPayments.push({ ...raw, _rowNum: rowNum, _parsedAmount: parseFloat(raw["AmountPaid"]) });
+    }
+  }
+
+  const summary = {
+    valid: gridRows.filter((r) => r.status === "valid").length,
+    warning: gridRows.filter((r) => r.status === "warning").length,
+    error: gridRows.filter((r) => r.status === "error").length,
+  };
+
+  return { gridRows, summary, validPayments };
+}
+</file>
+
+<file path="utils/interestUtils.js">
+/**
+ * CENTRAL INTEREST UTILITY — v2 (Interest-Satisfy-First)
+ * Monthly-only. No DAILY. No SIMPLE/COMPOUND config.
+ * interestRate=0 → bypass all logic.
+ */
+
+/**
+ * roundInterest — society rounding config.
+ * TWO_DECIMAL: 10.256 → 10.26  (standard 2dp rounding)
+ * ROUND_UP:    10.251 → 10.26  (ceiling to 2 decimal places, never loses a paisa)
+ * ROUND_UP_INT: 10.001 → 11   (ceiling to nearest whole rupee)
+ */
+export function roundInterest(value, mode = "TWO_DECIMAL") {
+  if (!value || value <= 0) return 0;
+  if (mode === "ROUND_UP_INT") return Math.ceil(value);
+  if (mode === "ROUND_UP")
+    return Math.ceil(Math.round(value * 100000) / 1000) / 100;
+  return parseFloat(value.toFixed(2));
+}
+
+/**
+ * calculateMonthlyInterest — single source of truth.
+ *
+ * @param {number} remainingPrincipal — unpaid principal this bill
+ * @param {number} remInt             — carried unpaid interest from prev periods
+ * @param {number} annualRate         — society annual rate (e.g. 21)
+ * @param {number} gracePeriodDays
+ * @param {Date}   billDueDate        — due date of THIS bill month
+ * @param {Date}   referenceDate      — generation date (1st of billing month)
+ * @param {string} interestRounding   — 'TWO_DECIMAL' | 'ROUND_UP'
+ * @returns {{ currInt, monthInterest, remInt }}
+ *   currInt       = interest on principal this month (0 if paid before grace)
+ *   monthInterest = currInt + remInt (total interest on this bill)
+ *   remInt        = monthInterest (carried forward if not cleared)
+ */
+export function calculateMonthlyInterest({
+  remainingPrincipal,
+  remInt = 0,
+  annualRate,
+  gracePeriodDays = 0,      // kept for backward compat
+  interestAfterDays,        // NEW — takes priority over gracePeriodDays
+  billDueDate,
+  referenceDate,
+  interestRounding = "TWO_DECIMAL",
+  interestTriggerTiming = "NEXT_DAY", // SAME_DAY | NEXT_DAY
+}) {
+  // interestRate = 0 → bypass
+  if (!annualRate || annualRate <= 0) {
+    return { currInt: 0, monthInterest: 0, remInt: 0 };
+  }
+
+  // VIEW vs APPLICABLE: math is identical at bill generation time.
+  // VIEW = UI warning label only; interest still calculated when next bill generates.
+
+  // No principal → carry remInt only
+  if (!remainingPrincipal || remainingPrincipal <= 0) {
+    const carried = roundInterest(remInt || 0, interestRounding);
+    return { currInt: 0, monthInterest: carried, remInt: carried };
+  }
+
+  // Resolve effective grace days: new field takes priority
+  const effectiveGraceDays = interestAfterDays !== undefined ? interestAfterDays : (gracePeriodDays || 0);
+
+  const due = new Date(billDueDate);
+  const graceEnd = new Date(due);
+  graceEnd.setDate(graceEnd.getDate() + effectiveGraceDays);
+  // Normalize to midnight so date comparisons are day-level only
+  graceEnd.setHours(0, 0, 0, 0);
+
+  const ref =
+    referenceDate instanceof Date ? new Date(referenceDate) : new Date(referenceDate);
+  ref.setHours(0, 0, 0, 0);
+
+  // SAME_DAY: interest starts ON graceEnd day (ref >= graceEnd)
+  // NEXT_DAY: interest starts the day AFTER graceEnd (ref > graceEnd)
+  const isPastGrace =
+    interestTriggerTiming === "SAME_DAY" ? ref >= graceEnd : ref > graceEnd;
+
+  // currInt on principal only (your confirmed formula)
+  const currInt = isPastGrace
+    ? roundInterest((remainingPrincipal * annualRate) / 1200, interestRounding)
+    : 0;
+
+  const totalMonthInterest = roundInterest(
+    (remInt || 0) + currInt,
+    interestRounding,
+  );
+
+  return {
+    currInt,
+    monthInterest: totalMonthInterest,
+    remInt: totalMonthInterest,
+  };
+}
+
+/**
+ * getBillPayFinalDate — interest cap date for a bill month.
+ */
+export function getBillPayFinalDate(billYear, billMonth, billPayFinalDay) {
+  if (!billPayFinalDay || billPayFinalDay <= 0) return null;
+  // billMonth is 1-based from callers. JS Date month is 0-based.
+  const lastDay = new Date(billYear, billMonth, 0).getDate(); // day-0 of next month = last day of billMonth
+  const clampedDay = Math.min(billPayFinalDay, lastDay);
+  return new Date(billYear, billMonth - 1, clampedDay, 23, 59, 59, 999);
+}
+
+/**
+ * getOldestDueDate — anchor date for interest.
+ */
+export function getOldestDueDate(unpaidBills, billDueDay, refYear, refMonth) {
+  if (unpaidBills && unpaidBills.length > 0) {
+    const oldest = unpaidBills[0];
+    if (oldest.dueDate) return new Date(oldest.dueDate);
+    return new Date(oldest.billYear, oldest.billMonth, billDueDay || 10);
+  }
+  let prevYear = refYear;
+  let prevMonth = refMonth - 1;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  return new Date(prevYear, prevMonth - 1, billDueDay || 10);
+}
+
+/**
+ * calculateInterestAmount — backwards-compat wrapper.
+ * Callers that haven't migrated still work.
+ */
+export function calculateInterestAmount(
+  principal,
+  oldestDueDate,
+  referenceDate,
+  gracePeriodDays,
+  interestRate,
+  _ignoredMethod, // was interestCalculationMethod — ignored now
+  _ignoredCapDate, // was billPayFinalDate — ignored (handled at call site)
+  interestRounding = "TWO_DECIMAL",
+) {
+  if (!principal || principal <= 0) {
+    return {
+      interestAmount: 0,
+      interestDays: 0,
+      effectiveDays: 0,
+      chargeableMonths: 0,
+    };
+  }
+
+  const { monthInterest } = calculateMonthlyInterest({
+    remainingPrincipal: principal,
+    remInt: 0,
+    annualRate: interestRate || 0,
+    gracePeriodDays: gracePeriodDays || 0,
+    billDueDate: oldestDueDate,
+    referenceDate,
+    interestRounding,
+  });
+
+  return {
+    interestAmount: monthInterest,
+    interestDays: 0,
+    effectiveDays: 0,
+    chargeableMonths: monthInterest > 0 ? 1 : 0,
+  };
+}
+
+/**
+ * allocatePaymentInterestFirst — CORE ENGINE.
+ *
+ * Takes a payment amount and list of unpaid bills (oldest-first).
+ * Returns updated bill payment state + advance credit.
+ *
+ * Rules:
+ *  1. Clear all interest across all bills first (oldest-first).
+ *  2. Then clear principal oldest-first.
+ *  3. Overpayment → advanceCredit.
+ *
+ * @param {number} paymentAmount
+ * @param {Array}  bills  — sorted oldest-first, each: { _id, interestBalance, principalBalance, balanceAmount, totalAmount, amountPaid }
+ * @returns {{
+ *   billUpdates: Array<{ billId, interestCleared, principalCleared, newInterestBalance, newPrincipalBalance, newBalanceAmount, newAmountPaid, newStatus }>,
+ *   totalInterestCleared: number,
+ *   totalPrincipalCleared: number,
+ *   advanceCredit: number,
+ *   breakdown: { interestCleared, principalCleared, advanceCredit }
+ * }}
+ */
+export function allocatePaymentInterestFirst(
+  paymentAmount,
+  bills,
+  allocationMode = "INTEREST_FIRST", // INTEREST_FIRST | PRINCIPAL_FIRST
+) {
+  let remaining = parseFloat(paymentAmount);
+  let totalInterestCleared = 0;
+  let totalPrincipalCleared = 0;
+
+  // Deep clone to avoid mutating originals.
+  const workBills = bills.map((b) => ({
+    billId: b._id,
+    interestBalance: b.interestBalance || 0,
+    principalBalance: b.principalBalance || 0,
+    balanceAmount: b.balanceAmount || 0,
+    totalAmount: b.totalAmount || 0,
+    amountPaid: b.amountPaid || 0,
+  }));
+
+  function clearInterest() {
+    for (const wb of workBills) {
+      if (remaining <= 0) break;
+      if (wb.interestBalance <= 0) continue;
+      const clear = Math.min(remaining, wb.interestBalance);
+      wb.interestBalance = parseFloat((wb.interestBalance - clear).toFixed(2));
+      wb.balanceAmount = parseFloat((wb.balanceAmount - clear).toFixed(2));
+      wb.amountPaid = parseFloat((wb.amountPaid + clear).toFixed(2));
+      totalInterestCleared += clear;
+      remaining = parseFloat((remaining - clear).toFixed(2));
+    }
+  }
+
+  function clearPrincipal() {
+    for (const wb of workBills) {
+      if (remaining <= 0) break;
+      if (wb.principalBalance <= 0) continue;
+      const clear = Math.min(remaining, wb.principalBalance);
+      wb.principalBalance = parseFloat((wb.principalBalance - clear).toFixed(2));
+      wb.balanceAmount = parseFloat((wb.balanceAmount - clear).toFixed(2));
+      wb.amountPaid = parseFloat((wb.amountPaid + clear).toFixed(2));
+      totalPrincipalCleared += clear;
+      remaining = parseFloat((remaining - clear).toFixed(2));
+    }
+  }
+
+  if (allocationMode === "PRINCIPAL_FIRST") {
+    clearPrincipal();
+    clearInterest();
+  } else {
+    // INTEREST_FIRST (default)
+    clearInterest();
+    clearPrincipal();
+  }
+
+  // previousBalance is DISPLAY-ONLY — not cleared here.
+
+  const advanceCredit = parseFloat(remaining.toFixed(2));
+
+  const billUpdates = workBills.map((wb) => {
+    let newStatus;
+    const balance = parseFloat(wb.balanceAmount.toFixed(2));
+    if (balance <= 0.005)
+      newStatus = "Paid"; // ₹0.005 epsilon for float precision
+    else if (wb.amountPaid > 0) newStatus = "Partial";
+    else newStatus = "Unpaid";
+
+    return {
+      billId: wb.billId,
+      interestCleared: parseFloat(
+        (bills.find((b) => String(b._id) === String(wb.billId))
+          ?.interestBalance || 0) - wb.interestBalance,
+      ).toFixed(2),
+      principalCleared: parseFloat(
+        (bills.find((b) => String(b._id) === String(wb.billId))
+          ?.principalBalance || 0) - wb.principalBalance,
+      ).toFixed(2),
+      newInterestBalance: wb.interestBalance,
+      newPrincipalBalance: wb.principalBalance,
+      newPreviousBalance: wb.previousBalance,
+      newBalanceAmount: wb.balanceAmount,
+      newAmountPaid: wb.amountPaid,
+      newStatus,
+    };
+  });
+
+  return {
+    billUpdates,
+    totalInterestCleared: parseFloat(totalInterestCleared.toFixed(2)),
+    totalPrincipalCleared: parseFloat(totalPrincipalCleared.toFixed(2)),
+    advanceCredit,
+    breakdown: {
+      interestCleared: parseFloat(totalInterestCleared.toFixed(2)),
+      principalCleared: parseFloat(totalPrincipalCleared.toFixed(2)),
+      advanceCredit,
+    },
+  };
+}
+</file>
+
+<file path="lib/cron-jobs.js">
+const cron = require("node-cron");
+const fetch = require("node-fetch");
+
+// ✅ JOB 1: Mark overdue bills (runs at 12:01 AM daily)
+cron.schedule("1 0 * * *", async () => {
+  console.log("[CRON] Marking overdue bills...");
+  try {
+    const res = await fetch("http://localhost:3000/api/bills/mark-overdue", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await res.json();
+    console.log("[CRON] Mark overdue result:", data);
+  } catch (error) {
+    console.error("[CRON] Mark overdue failed:", error);
+  }
+});
+
+// ✅ JOB 2: Calculate interest (runs at 12:05 AM daily)
+cron.schedule("5 0 * * *", async () => {
+  console.log("[CRON] Running interest calculation...");
+  try {
+    const res = await fetch(
+      "http://localhost:3000/api/ledger/calculate-interest",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    const data = await res.json();
+    console.log("[CRON] Interest calculation result:", data);
+  } catch (error) {
+    console.error("[CRON] Interest calculation failed:", error);
+  }
+});
+
+// ✅ JOB 3: Auto-push Scheduled bills when their pushDate is reached (runs at 12:10 AM daily)
+cron.schedule("10 0 * * *", async () => {
+  console.log("[CRON] Pushing scheduled bills...");
+  try {
+    const res = await fetch("http://localhost:3000/api/bills/push-scheduled", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    console.log("[CRON] Push scheduled result:", data);
+  } catch (error) {
+    console.error("[CRON] Push scheduled failed:", error);
+  }
+});
+
+// JOB 4: Auto-close rejected complaints with 3 days of inactivity
+cron.schedule("30 0 * * *", async () => {
+  console.log("CRON: Auto-closing inactive complaint threads...");
+  try {
+    const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const result = await fetch(
+      "http://localhost:3000/api/complaints/admin/auto-close",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    const data = await result.json();
+    console.log("CRON: Auto-close result:", data);
+  } catch (error) {
+    console.error("CRON: Auto-close failed:", error);
+  }
+});
+
+console.log("Cron jobs scheduled");
+console.log("  - Mark overdue bills:    12:01 AM daily");
+console.log("  - Calculate interest:    12:05 AM daily");
+console.log("  - Push scheduled bills:  12:10 AM daily");
+</file>
+
+<file path="lib/excel-handler.js">
+import ExcelJS from "exceljs";
+
+export async function generateMemberTemplate() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Members");
+
+  worksheet.columns = [
+    { header: "flatno", key: "flatno", width: 12 },
+    { header: "wing", key: "wing", width: 8 },
+    { header: "name", key: "name", width: 25 },
+    { header: "role", key: "role", width: 12 },
+    { header: "email", key: "email", width: 30 },
+    { header: "mobileno", key: "mobileno", width: 15 },
+    { header: "areasqft", key: "areasqft", width: 12 },
+    { header: "openingPrincipal", key: "openingPrincipal", width: 18 },
+    { header: "openingInterest", key: "openingInterest", width: 18 },
+    { header: "config", key: "config", width: 12 },
+  ];
+
+  // Add note row after header explaining columns
+  worksheet.addRow({});
+  const noteRow = worksheet.addRow({
+    flatno:
+      "NOTE: openingPrincipal = outstanding dues (principal only). openingInterest = interest already accrued. Both default 0 for new members.",
+  });
+  noteRow.font = { italic: true, color: { argb: "FF6B7280" } };
+
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF2563EB" },
+  };
+  worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer;
+}
+
+export function validateExcelStructure(headers) {
+  const requiredColumns = ["flatno", "name", "email", "mobileno", "areasqft"];
+  // wing, openingPrincipal, openingInterest, config are optional
+  const errors = [];
+
+  requiredColumns.forEach((col) => {
+    if (!headers.includes(col)) {
+      errors.push(`Missing required column: "${col}"`);
+    }
+  });
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    headers,
+  };
+}
+
+export async function parseMemberExcel(buffer) {
+  try {
+    const workbook = new ExcelJS.Workbook();
+
+    const parsePromise = workbook.xlsx.load(buffer);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("File parsing timeout")), 30000),
+    );
+
+    await Promise.race([parsePromise, timeoutPromise]);
+
+    if (workbook.worksheets.length === 0) {
+      return { success: false, error: "Excel file is empty or corrupted" };
+    }
+
+    const worksheet = workbook.worksheets[0];
+
+    if (worksheet.rowCount > 1001) {
+      return {
+        success: false,
+        error: "File too large. Maximum 1000 members allowed per upload.",
+      };
+    }
+
+    if (worksheet.rowCount < 2) {
+      return {
+        success: false,
+        error:
+          "Excel sheet is empty. Please add member data below the headers.",
+      };
+    }
+
+    const headerRow = worksheet.getRow(1);
+    const headers = [];
+
+    headerRow.eachCell((cell) => {
+      const headerValue = String(cell.value || "")
+        .trim()
+        .toLowerCase();
+      if (headerValue) {
+        headers.push(headerValue);
+      }
+    });
+
+    const structureValidation = validateExcelStructure(headers);
+    if (!structureValidation.isValid) {
+      return {
+        success: false,
+        error: "Excel structure validation failed",
+        details: structureValidation.errors,
+      };
+    }
+
+    const columnMap = {};
+    headers.forEach((header, index) => {
+      columnMap[header] = index + 1;
+    });
+
+    const members = [];
+    const rowErrors = [];
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+
+      const errors = [];
+
+      const getCell = (columnName) => {
+        const colIndex = columnMap[columnName];
+        if (!colIndex) return "";
+        const cell = row.getCell(colIndex);
+        return String(cell.value || "").trim();
+      };
+
+      const flatno = getCell("flatno");
+      const wing = getCell("wing");
+      const name = getCell("name");
+      const role = getCell("role");
+      const email = getCell("email");
+      const mobileno = getCell("mobileno");
+      const areasqftRaw = getCell("areasqft");
+      // Support both legacy "balance" and new split columns
+      const balanceLegacyRaw = getCell("balance");
+      const openingPrincipalRaw = getCell("openingPrincipal");
+      const openingInterestRaw = getCell("openingInterest");
+      const config = getCell("config");
+
+      if (!flatno) {
+        errors.push("flatno is required");
+      }
+
+      if (!name) {
+        errors.push("name is required");
+      }
+
+      if (!email) {
+        errors.push("email is required");
+      } else if (!email.includes("@")) {
+        errors.push("email must be valid");
+      }
+
+      if (!areasqftRaw) {
+        errors.push("areasqft is required");
+      } else {
+        const areasqft = parseFloat(areasqftRaw);
+        if (isNaN(areasqft)) {
+          errors.push(`areasqft must be a number, found: "${areasqftRaw}"`);
+        } else if (areasqft <= 0) {
+          errors.push(`areasqft must be > 0, found: ${areasqft}`);
+        }
+      }
+
+      if (!mobileno) {
+        errors.push("mobileno is required");
+      } else if (mobileno.length < 10) {
+        errors.push("mobileno must be at least 10 digits");
+      }
+
+      // Validate opening financial fields
+      const openingPrincipal = openingPrincipalRaw
+        ? parseFloat(openingPrincipalRaw)
+        : balanceLegacyRaw
+          ? parseFloat(balanceLegacyRaw) // legacy fallback
+          : 0;
+      const openingInterest = openingInterestRaw
+        ? parseFloat(openingInterestRaw)
+        : 0;
+
+      if (openingPrincipalRaw && isNaN(openingPrincipal)) {
+        errors.push(
+          `openingPrincipal must be a number, found: "${openingPrincipalRaw}"`,
+        );
+      } else if (!isNaN(openingPrincipal) && openingPrincipal < 0) {
+        errors.push(
+          `openingPrincipal cannot be negative, found: ${openingPrincipal}`,
+        );
+      }
+
+      if (openingInterestRaw && isNaN(openingInterest)) {
+        errors.push(
+          `openingInterest must be a number, found: "${openingInterestRaw}"`,
+        );
+      } else if (!isNaN(openingInterest) && openingInterest < 0) {
+        errors.push(
+          `openingInterest cannot be negative, found: ${openingInterest}`,
+        );
+      }
+
+      if (errors.length > 0) {
+        rowErrors.push({
+          row: rowNumber,
+          errors: errors,
+        });
+      } else {
+        // ⬇️ CHANGED: Map flatno → roomNo for Member model
+        const resolvedPrincipal = openingPrincipalRaw
+          ? parseFloat(openingPrincipalRaw)
+          : balanceLegacyRaw
+            ? parseFloat(balanceLegacyRaw)
+            : 0;
+        const resolvedInterest = openingInterestRaw
+          ? parseFloat(openingInterestRaw)
+          : 0;
+
+        members.push({
+          roomNo: flatno.substring(0, 50),
+          wing: wing.substring(0, 10),
+          ownerName: name.substring(0, 100),
+          role: role.substring(0, 20),
+          email: email.substring(0, 100),
+          contact: mobileno.substring(0, 20),
+          areaSqFt: parseFloat(areasqftRaw),
+          openingBalance: resolvedPrincipal + resolvedInterest, // legacy field, sum
+          openingPrincipal: resolvedPrincipal,
+          openingInterest: resolvedInterest,
+          config: config.substring(0, 50),
+        });
+      }
+    });
+
+    if (rowErrors.length > 0) {
+      return {
+        success: false,
+        error: "Row validation failed",
+        details: rowErrors.map(
+          (err) => `Row ${err.row}: ${err.errors.join(", ")}`,
+        ),
+      };
+    }
+
+    return { success: true, members };
+  } catch (error) {
+    console.error("Excel parsing error:", error);
+    return {
+      success: false,
+      error: "Excel parsing error. Please ensure the file is valid .xlsx.",
+    };
+  }
+}
+
+export async function generateCredentialsExcel(credentialsData) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Login Credentials");
+
+  worksheet.columns = [
+    { header: "Flat No", key: "roomNo", width: 15 }, // ← CHANGED
+    { header: "Wing", key: "wing", width: 8 },
+    { header: "Member Name", key: "ownerName", width: 25 },
+    { header: "Email", key: "email", width: 30 },
+    { header: "Password", key: "password", width: 15 },
+    { header: "Portal URL", key: "portalUrl", width: 35 },
+  ];
+
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF10B981" },
+  };
+  worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+  credentialsData.forEach((cred) => {
+    worksheet.addRow({
+      roomNo: cred.roomNo, // ← CHANGED from flatNo
+      wing: cred.wing,
+      ownerName: cred.ownerName,
+      email: cred.email,
+      password: cred.password,
+      portalUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    });
+  });
+
+  const instructionsSheet = workbook.addWorksheet("Instructions");
+  instructionsSheet.columns = [
+    { header: "Instructions", key: "step", width: 60 },
+  ];
+
+  const instructions = [
+    "1. Use the Email and Password to login to the member portal",
+    "2. On first login, please change your password",
+    "3. Keep your login credentials confidential",
+    "4. If you forget your password, contact the society office",
+    "",
+    "Portal Features:",
+    "- View billing statements",
+    "- Track payment history",
+    "- Download receipts",
+    "- View society announcements",
+  ];
+
+  instructions.forEach((instruction) => {
+    instructionsSheet.addRow({ step: instruction });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer;
+}
+
+// NEW: Enhanced member template with all detailed fields
+export async function generateEnhancedMemberTemplate() {
+  const workbook = new ExcelJS.Workbook();
+
+  // === SHEET 1: BASIC INFO (Required) ===
+  const basicSheet = workbook.addWorksheet("1. Basic Info (Required)");
+
+  basicSheet.columns = [
+    { header: "flatNo*", key: "flatNo", width: 12 },
+    { header: "wing", key: "wing", width: 8 },
+    { header: "floor", key: "floor", width: 8 },
+    { header: "ownerName*", key: "ownerName", width: 25 },
+    { header: "contactNumber*", key: "contactNumber", width: 15 },
+    { header: "emailPrimary*", key: "emailPrimary", width: 30 },
+    { header: "carpetAreaSqft*", key: "carpetAreaSqft", width: 15 },
+    { header: "flatType", key: "flatType", width: 12 },
+    { header: "ownershipType", key: "ownershipType", width: 18 },
+    { header: "openingPrincipal", key: "openingPrincipal", width: 20 },
+    { header: "openingInterest", key: "openingInterest", width: 20 },
+  ];
+
+  // Style header
+  basicSheet.getRow(1).font = { bold: true };
+  basicSheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF10B981" },
+  };
+  basicSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+  // Add sample row
+  basicSheet.addRow({
+    flatNo: "1310",
+    wing: "A",
+    floor: 13,
+    ownerName: "Arjun Rastogi",
+    contactNumber: "9876543210",
+    emailPrimary: "arjun@example.com",
+    carpetAreaSqft: 1800,
+    flatType: "2BHK",
+    ownershipType: "Owner-Occupied",
+    openingPrincipal: 0,
+    openingInterest: 0,
+  });
+
+  // Second example — member with existing dues
+  basicSheet.addRow({
+    flatNo: "202",
+    wing: "B",
+    floor: 2,
+    ownerName: "Priya Sharma (with dues)",
+    contactNumber: "9876500000",
+    emailPrimary: "priya@example.com",
+    carpetAreaSqft: 1200,
+    flatType: "2BHK",
+    ownershipType: "Owner-Occupied",
+    openingPrincipal: 5000, // ← 5000 principal outstanding as on cutover date
+    openingInterest: 875, // ← 875 interest outstanding (21% pa on 5000 = 875 for 1yr)
+  });
+
+  // Color second row differently to show it's an example with dues
+  const exRow = basicSheet.getRow(3);
+  exRow.getCell("openingPrincipal").fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFFEF3C7" },
+  };
+  exRow.getCell("openingInterest").fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFFEF3C7" },
+  };
+
+  // Add instructions
+  basicSheet.addRow({});
+  basicSheet.addRow({ flatNo: "INSTRUCTIONS:" });
+  basicSheet.addRow({ flatNo: "* = Required fields" });
+  basicSheet.addRow({
+    flatNo:
+      "flatType options: 1BHK, 2BHK, 3BHK, 4BHK, 5BHK+, Studio, Penthouse, Shop, Office",
+  });
+  basicSheet.addRow({
+    flatNo: "ownershipType: Owner-Occupied, Rented, Vacant, Under-Dispute",
+  });
+  basicSheet.addRow({});
+  basicSheet.addRow({
+    flatNo: "FINANCIAL FIELDS (Opening Balances as on cutover date):",
+  });
+  basicSheet.addRow({
+    flatNo:
+      "openingPrincipal = Total principal dues (maintenance, water, parking etc.) outstanding BEFORE this system. Enter 0 for new members.",
+  });
+  basicSheet.addRow({
+    flatNo:
+      "openingInterest  = Interest already accrued on old dues as on cutover date. Enter 0 for new members or if no historic interest.",
+  });
+  basicSheet.addRow({
+    flatNo:
+      "RULE: System will always clear openingInterest FIRST, then openingPrincipal (Interest Satisfy First rule).",
+  });
+
+  // === SHEET 2: ADDITIONAL DETAILS (Optional) ===
+  const detailsSheet = workbook.addWorksheet("2. Additional Details");
+
+  detailsSheet.columns = [
+    { header: "flatNo*", key: "flatNo", width: 12 },
+    { header: "panCard", key: "panCard", width: 15 },
+    { header: "aadhaar", key: "aadhaar", width: 15 },
+    { header: "alternateContact", key: "alternateContact", width: 15 },
+    { header: "whatsappNumber", key: "whatsappNumber", width: 15 },
+    { header: "emailSecondary", key: "emailSecondary", width: 30 },
+    { header: "builtUpAreaSqft", key: "builtUpAreaSqft", width: 15 },
+    { header: "possessionDate", key: "possessionDate", width: 15 },
+  ];
+
+  detailsSheet.getRow(1).font = { bold: true };
+  detailsSheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF3B82F6" },
+  };
+  detailsSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+  detailsSheet.addRow({
+    flatNo: "1310",
+    panCard: "ABCDE1234F",
+    aadhaar: "123456789012",
+    alternateContact: "9123456789",
+    whatsappNumber: "9876543210",
+    emailSecondary: "arjun.alt@example.com",
+    builtUpAreaSqft: 2000,
+    possessionDate: "2024-01-15",
+  });
+
+  // === SHEET 3: PARKING SLOTS ===
+  const parkingSheet = workbook.addWorksheet("3. Parking Slots");
+
+  parkingSheet.columns = [
+    { header: "flatNo", key: "flatNo", width: 12 },
+    { header: "slotNumber", key: "slotNumber", width: 15 },
+    { header: "type", key: "type", width: 12 },
+    { header: "vehicleType", key: "vehicleType", width: 15 },
+    // monthlyBilling is NOT in Excel — auto-derived on import
+  ];
+
+  parkingSheet.getRow(1).font = { bold: true };
+  parkingSheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFF59E0B" },
+  };
+  parkingSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+  parkingSheet.addRow({
+    flatNo: "1310",
+    slotNumber: "P-A-101",
+    type: "Stilt",
+    vehicleType: "Four-Wheeler",
+  });
+  parkingSheet.addRow({
+    flatNo: "1310",
+    slotNumber: "P-A-102",
+    type: "Open",
+    vehicleType: "Two-Wheeler",
+  });
+  parkingSheet.addRow({
+    flatNo: "1310",
+    slotNumber: "P-A-103",
+    type: "Open",
+    vehicleType: "Two-Wheeler",
+  });
+  parkingSheet.addRow({
+    flatNo: "1310",
+    slotNumber: "P-A-104",
+    type: "Covered",
+    vehicleType: "Four-Wheeler",
+  });
+
+  parkingSheet.addRow({});
+  parkingSheet.addRow({ flatNo: "INSTRUCTIONS" });
+  parkingSheet.addRow({
+    flatNo:
+      "Type: Stilt (one-time purchase, NOT billed monthly) | Open | Covered",
+  });
+  parkingSheet.addRow({ flatNo: "VehicleType: Two-Wheeler | Four-Wheeler" });
+  parkingSheet.addRow({
+    flatNo:
+      "One row = one parking slot. Add multiple rows for multiple slots per flat.",
+  });
+  parkingSheet.addRow({
+    flatNo:
+      "Stilt slots will NOT generate monthly parking charges. Open/Covered will.",
+  });
+
+  // === SHEET 4: FAMILY MEMBERS === (moved from Sheet 5)
+  const familySheet = workbook.addWorksheet("4. Family Members");
+  familySheet.columns = [
+    { header: "flatNo*", key: "flatNo", width: 12 },
+    { header: "name", key: "name", width: 25 },
+    { header: "relation", key: "relation", width: 15 },
+    { header: "age", key: "age", width: 8 },
+    { header: "contactNumber", key: "contactNumber", width: 15 },
+    { header: "occupation", key: "occupation", width: 20 },
+  ];
+  familySheet.getRow(1).font = { bold: true };
+  familySheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFEC4899" },
+  };
+  familySheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  familySheet.addRow({
+    flatNo: "1310",
+    name: "Aarav Rastogi",
+    relation: "Son",
+    age: 12,
+    contactNumber: "",
+    occupation: "Student",
+  });
+
+  // === SHEET 5: OWNER HISTORY ===
+  const ownerHistorySheet = workbook.addWorksheet("5. Owner History");
+  ownerHistorySheet.columns = [
+    { header: "flatNo*", key: "flatNo", width: 12 },
+    { header: "ownerSequence", key: "ownerSequence", width: 15 },
+    { header: "ownerName", key: "ownerName", width: 25 },
+    { header: "contactNumber", key: "contactNumber", width: 15 },
+    { header: "emailPrimary", key: "emailPrimary", width: 30 },
+    { header: "panCard", key: "panCard", width: 15 },
+    { header: "ownershipStartDate", key: "ownershipStartDate", width: 18 },
+    { header: "ownershipEndDate", key: "ownershipEndDate", width: 18 },
+    { header: "purchaseAmount", key: "purchaseAmount", width: 15 },
+    { header: "saleAmount", key: "saleAmount", width: 15 },
+  ];
+  ownerHistorySheet.getRow(1).font = { bold: true };
+  ownerHistorySheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFEF4444" },
+  };
+  ownerHistorySheet.getRow(1).font = {
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+  };
+  ownerHistorySheet.addRow({
+    flatNo: "1310",
+    ownerSequence: 1,
+    ownerName: "Previous Owner Name",
+    contactNumber: "9123456789",
+    emailPrimary: "prev@example.com",
+    panCard: "OLDPN1234A",
+    ownershipStartDate: "2015-01-01",
+    ownershipEndDate: "2020-06-30",
+    purchaseAmount: 2500000,
+    saleAmount: 3200000,
+  });
+  ownerHistorySheet.addRow({});
+  ownerHistorySheet.addRow({
+    flatNo: "NOTE: Only add previous owners (not current owner)",
+  });
+
+  // === SHEET 6: TENANT HISTORY ===
+  const tenantHistorySheet = workbook.addWorksheet("6. Tenant History");
+  tenantHistorySheet.columns = [
+    // ✅ CORRECT
+    { header: "flatNo*", key: "flatNo", width: 12 },
+    { header: "tenantSequence", key: "tenantSequence", width: 15 },
+    { header: "name", key: "name", width: 25 },
+    { header: "contactNumber", key: "contactNumber", width: 15 },
+    { header: "email", key: "email", width: 30 },
+    { header: "panCard", key: "panCard", width: 15 },
+    { header: "startDate", key: "startDate", width: 15 },
+    { header: "endDate", key: "endDate", width: 15 },
+    { header: "depositAmount", key: "depositAmount", width: 15 },
+    { header: "rentPerMonth", key: "rentPerMonth", width: 15 },
+    { header: "isCurrent", key: "isCurrent", width: 12 },
+  ];
+  tenantHistorySheet.getRow(1).font = { bold: true };
+  tenantHistorySheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF06B6D4" },
+  };
+  tenantHistorySheet.getRow(1).font = {
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+  };
+
+  // Add past tenant sample
+  tenantHistorySheet.addRow({
+    flatNo: "1311",
+    tenantSequence: 1,
+    name: "Past Tenant",
+    contactNumber: "9999999998",
+    email: "tenant1@example.com",
+    panCard: "TEN111234A",
+    startDate: "2020-01-01",
+    endDate: "2022-12-31",
+    depositAmount: 50000,
+    rentPerMonth: 20000,
+    isCurrent: "No",
+  });
+
+  // Add current tenant sample
+  tenantHistorySheet.addRow({
+    flatNo: "1311",
+    tenantSequence: 2,
+    name: "Current Tenant",
+    contactNumber: "9999999999",
+    email: "tenant2@example.com",
+    panCard: "TEN221234B",
+    startDate: "2023-01-01",
+    endDate: "",
+    depositAmount: 60000,
+    rentPerMonth: 25000,
+    isCurrent: "Yes",
+  });
+
+  tenantHistorySheet.addRow({});
+  tenantHistorySheet.addRow({
+    flatNo: "NOTE: Leave endDate blank for current tenant",
+  });
+  tenantHistorySheet.addRow({ flatNo: "isCurrent: Yes or No" });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer;
+}
+</file>
+
+<file path="lib/jwt.js">
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET =
+  process.env.JWT_SECRET || "your-super-secret-key-change-in-production";
+
+export function signToken(payload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
+
+// Helper to check if decoded token has memberId
+export function isMemberToken(decoded) {
+  return decoded && decoded.memberId;
+}
+
+export function verifyToken(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    console.error("JWT verification failed:", error.message);
+
+    return null;
+  }
+}
+
+/**
+ * SECURE: Extract token from HttpOnly cookie (preferred) or Authorization header (for API clients)
+ */
+export function getTokenFromRequest(request) {
+  // Priority 1: HttpOnly cookie (browser/web clients)
+  const cookieToken = request.cookies.get("token")?.value;
+  if (cookieToken) return cookieToken;
+
+  // Priority 2: Authorization header (mobile apps, Postman)
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.substring(7);
+  }
+
+  return null;
+}
+</file>
+
+<file path="lib/pdf-generator.js">
+import { PDFDocument as PDFLibDocument, StandardFonts, rgb } from "pdf-lib";
+import fs from "fs";
+import { PDF_FIELD_POSITIONS, TABLE_CONFIG } from "./pdf-fields-config";
+
+export class FlexiblePDFGenerator {
+  constructor(templatePath) {
+    this.templatePath = templatePath;
+  }
+
+  async generateBill(billData) {
+    try {
+      // Read existing PDF template
+      const templateBuffer = fs.readFileSync(this.templatePath);
+      const pdfDoc = await PDFLibDocument.load(templateBuffer);
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+
+      if (fields.length > 0 && billData.formFieldData) {
+        this._fillFormFields(form, billData.formFieldData);
+        form.flatten();
+        return await pdfDoc.save();
+      }
+
+      // Get first page
+      const pages = pdfDoc.getPages();
+      const firstPage = pages[0];
+      const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      // Add text fields
+      this._addTextField(
+        firstPage,
+        "companyName",
+        billData.companyName,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "invoiceNumber",
+        billData.invoiceNumber,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "customerName",
+        billData.customerName,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "customerAddress",
+        billData.customerAddress,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "customerPhone",
+        billData.customerPhone,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "billDate",
+        billData.billDate,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "dueDate",
+        billData.dueDate,
+        fontRegular,
+        fontBold,
+      );
+
+      // Add table
+      if (billData.items && billData.items.length > 0) {
+        this._addTable(firstPage, billData.items, fontRegular, fontBold);
+      }
+
+      // Add amounts
+      this._addTextField(
+        firstPage,
+        "subtotal",
+        `₹ ${billData.subtotal}`,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "tax",
+        `₹ ${billData.tax || 0}`,
+        fontRegular,
+        fontBold,
+      );
+      this._addTextField(
+        firstPage,
+        "total",
+        `₹ ${billData.total}`,
+        fontRegular,
+        fontBold,
+      );
+
+      // Add payment details
+      if (billData.paymentDetails) {
+        this._addTextField(
+          firstPage,
+          "paymentDetails",
+          billData.paymentDetails,
+          fontRegular,
+          fontBold,
+        );
+      }
+
+      // Save final PDF
+      const finalBuffer = await pdfDoc.save();
+      return finalBuffer;
+    } catch (error) {
+      console.error("PDF Generation Error:", error);
+      throw error;
+    }
+  }
+
+  _toPdfY(page, topY, fontSize) {
+    const { height } = page.getSize();
+    return height - topY - fontSize;
+  }
+
+  _normalizeText(value) {
+    if (value === null || value === undefined) return "";
+    if (value instanceof Date) {
+      return this._sanitizeWinAnsi(
+        value.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }),
+      );
+    }
+    return this._sanitizeWinAnsi(String(value));
+  }
+
+  _sanitizeWinAnsi(text) {
+    return String(text)
+      .replace(/₹/g, "Rs.")
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"');
+  }
+
+  _fillFormFields(form, fieldData) {
+    const entries = Object.entries(fieldData || {});
+    const fields = form.getFields();
+
+    const normalize = (s) =>
+      String(s || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+
+    const fieldMap = new Map();
+    fields.forEach((f) => fieldMap.set(normalize(f.getName()), f));
+
+    for (const [key, rawValue] of entries) {
+      if (rawValue === undefined || rawValue === null || rawValue === "")
+        continue;
+      const value = this._normalizeText(rawValue);
+
+      const direct = fields.find((f) => f.getName() === key);
+      const fuzzy = fieldMap.get(normalize(key));
+      const target = direct || fuzzy;
+      if (!target) continue;
+
+      try {
+        target.setText(String(value));
+      } catch {
+        // Ignore non-text/incompatible fields safely.
+      }
+    }
+  }
+
+  _addTextField(page, fieldKey, value, fontRegular, fontBold) {
+    const config = PDF_FIELD_POSITIONS[fieldKey];
+    if (!config || !value) return;
+
+    const text = this._normalizeText(value);
+    const size = config.fontSize || 11;
+    const font = config.fontWeight === "bold" ? fontBold : fontRegular;
+    const maxWidth = config.maxWidth || 250;
+
+    const textWidth = font.widthOfTextAtSize(text, size);
+    let x = config.x;
+
+    if (config.align === "right") {
+      x = config.x - maxWidth + Math.max(0, maxWidth - textWidth);
+    } else if (config.align === "center") {
+      x = config.x + Math.max(0, (maxWidth - textWidth) / 2);
+    }
+
+    page.drawText(text, {
+      x,
+      y: this._toPdfY(page, config.y, size),
+      size,
+      font,
+      color: rgb(0, 0, 0),
+      maxWidth,
+    });
+  }
+
+  _addTable(page, items, fontRegular, fontBold) {
+    const tableConfig = TABLE_CONFIG;
+    const startPos = PDF_FIELD_POSITIONS.tableStart;
+    const tableWidth = tableConfig.columns.reduce(
+      (sum, col) => sum + col.width,
+      0,
+    );
+    const startX = startPos.x;
+
+    let currentY = startPos.y;
+
+    // Draw header
+    this._drawTableHeader(
+      page,
+      currentY,
+      tableConfig,
+      fontBold,
+      tableWidth,
+      startX,
+    );
+    currentY += tableConfig.headerHeight;
+
+    // Draw rows
+    items.forEach((item, index) => {
+      this._drawTableRow(
+        page,
+        currentY,
+        item,
+        tableConfig,
+        index + 1,
+        fontRegular,
+        startX,
+      );
+      currentY += tableConfig.rowHeight;
+    });
+
+    const totalHeight =
+      tableConfig.headerHeight + items.length * tableConfig.rowHeight;
+    page.drawRectangle({
+      x: startX,
+      y: this._toPdfY(page, startPos.y, 0) - totalHeight,
+      width: tableWidth,
+      height: totalHeight,
+      borderColor: rgb(0.78, 0.78, 0.78),
+      borderWidth: 0.5,
+      color: rgb(1, 1, 1),
+      opacity: 0,
+      borderOpacity: 1,
+    });
+  }
+
+  _drawTableHeader(page, y, config, fontBold, tableWidth, startX) {
+    let x = startX;
+
+    config.columns.forEach((col) => {
+      page.drawText(col.header, {
+        x: x + 4,
+        y: this._toPdfY(page, y, config.headerFontSize || 11),
+        size: config.headerFontSize || 11,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+        maxWidth: col.width - 8,
+      });
+      x += col.width;
+    });
+
+    page.drawRectangle({
+      x: startX,
+      y: this._toPdfY(page, y, 0) - config.headerHeight,
+      width: tableWidth,
+      height: config.headerHeight,
+      borderColor: rgb(0.78, 0.78, 0.78),
+      borderWidth: 0.5,
+      color: rgb(1, 1, 1),
+      opacity: 0,
+      borderOpacity: 1,
+    });
+  }
+
+  _drawTableRow(page, y, item, config, rowNumber, fontRegular, startX) {
+    let x = startX;
+    const columns = [
+      rowNumber.toString(),
+      item.description || "",
+      item.hsnCode || "",
+      String(item.quantity || ""),
+      item.rate ? `₹ ${item.rate}` : "",
+      item.amount ? `₹ ${item.amount}` : "",
+    ];
+
+    config.columns.forEach((col, idx) => {
+      const text = this._normalizeText(columns[idx] || "");
+      const size = config.fontSize || 10;
+      const width = fontRegular.widthOfTextAtSize(text, size);
+      let textX = x + 4;
+
+      if (col.align === "right") {
+        textX = x + col.width - width - 4;
+      } else if (col.align === "center") {
+        textX = x + (col.width - width) / 2;
+      }
+
+      page.drawText(text, {
+        x: textX,
+        y: this._toPdfY(page, y, size),
+        size,
+        font: fontRegular,
+        color: rgb(0, 0, 0),
+        maxWidth: col.width - 8,
+      });
+
+      page.drawRectangle({
+        x,
+        y: this._toPdfY(page, y, 0) - config.rowHeight,
+        width: col.width,
+        height: config.rowHeight,
+        borderColor: rgb(0.85, 0.85, 0.85),
+        borderWidth: 0.4,
+        color: rgb(1, 1, 1),
+        opacity: 0,
+        borderOpacity: 1,
+      });
+
+      x += col.width;
+    });
+  }
+}
+</file>
+
+<file path="lib/validators.js">
+import { z } from "zod";
+
+export const societyConfigSchema = z.object({
+  name: z.string().min(2, "Society name must be at least 2 characters"),
+  registrationNo: z.string().optional(),
+  address: z.string().optional(),
+  config: z.object({
+    maintenanceRate: z.number().min(0),
+    sinkingFundRate: z.number().min(0),
+    repairFundRate: z.number().min(0),
+    interestRate: z.number().min(0).max(100),
+    serviceTaxRate: z.number().min(0).max(100),
+    gracePeriodDays: z.number().min(0).max(90),
+    billDueDay: z.number().min(1).max(31).default(10),
+    billPayFinalDay: z.number().min(1).max(31).default(25),
+    interestCalculationMethod: z.enum(["SIMPLE", "COMPOUND"]).default("SIMPLE"),
+    interestBasis: z.enum(["MONTHLY", "DAILY"]).default("MONTHLY"),
+    billGenerationDay: z.number().min(1).max(28).default(1),
+    billPushDay: z.number().min(1).max(28).default(1),
+    fixedCharges: z.object({
+      water: z.number().min(0),
+      security: z.number().min(0),
+      electricity: z.number().min(0),
+    }),
+  }),
+});
+
+export const matrixConfigSchema = z.object({
+  L: z.number().min(1).max(50),
+  R: z.number().min(1).max(50),
+  billingHeads: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string().min(1),
+    }),
+  ),
+});
+
+export const memberSchema = z.object({
+  roomNo: z.string().min(1),
+  wing: z.string().optional(),
+  ownerName: z.string().min(2),
+  areaSqFt: z.number().min(1),
+  contact: z.string().optional(),
+  openingBalance: z.number().optional(), // legacy — kept for backward compat
+  openingPrincipal: z.number().min(0).optional().default(0),
+  openingInterest: z.number().min(0).optional().default(0),
+});
+export const bulkMemberSchema = z.array(memberSchema);
+</file>
+
+<file path="middleware.js">
+import { NextResponse } from "next/server";
+
+export function middleware(request) {
+  const { pathname } = request.nextUrl;
+
+  const token = request.cookies.get("token")?.value;
+  const adminToken = request.cookies.get("admin_token")?.value;
+
+  function parseJwt(t) {
+    try {
+      const base64Url = t.split(".")[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join(""),
+      );
+      return JSON.parse(jsonPayload);
+    } catch {
+      return null;
+    }
+  }
+
+  // ✅ PUBLIC ROUTES
+  const publicRoutes = [
+    "/auth/login",
+    "/auth/signup",
+    "/admin/login",
+    "/member/login",
+    "/superadmin/login",
+  ];
+  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // ─── ROOT REDIRECT ───────────────────────────────────────────────
+  if (pathname === "/") {
+    // SuperAdmin: has adminToken, no token
+    if (adminToken) {
+      const adminPayload = parseJwt(adminToken);
+      if (adminPayload?.role === "SuperAdmin") {
+        return NextResponse.redirect(
+          new URL("/superadmin/dashboard", request.url),
+        );
+      }
+    }
+    // Admin / Member: has token
+    if (token) {
+      const payload = parseJwt(token);
+      if (payload?.role === "Admin" || payload?.role === "Secretary") {
+        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      }
+      if (payload?.role === "Member") {
+        return NextResponse.redirect(new URL("/member/dashboard", request.url));
+      }
+    }
+    return NextResponse.next();
+  }
+
+  // ─── SUPERADMIN ROUTES ───────────────────────────────────────────
+  // Handled entirely via adminToken — never needs token
+  if (pathname.startsWith("/superadmin")) {
+    if (!adminToken) {
+      return NextResponse.redirect(new URL("/superadmin/login", request.url));
+    }
+    const adminPayload = parseJwt(adminToken);
+    if (!adminPayload || adminPayload.role !== "SuperAdmin") {
+      return NextResponse.redirect(new URL("/superadmin/login", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  // ─── ADMIN + MEMBER PROTECTED ROUTES ─────────────────────────────
+  if (!token) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  const payload = parseJwt(token);
+  if (!payload) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  const role = payload.role;
+
+  // /admin exact → redirect to dashboard
+  if (pathname === "/admin") {
+    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+  }
+
+  if (
+    pathname.startsWith("/admin") &&
+    role !== "Admin" &&
+    role !== "Secretary"
+  ) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  if (pathname.startsWith("/member") && role !== "Member") {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/", "/admin/:path*", "/member/:path*", "/superadmin/:path*"],
+};
+</file>
+
+<file path="models/AuditLog.js">
+import mongoose from "mongoose";
+
+const AuditLogSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+   action: {
+  type: String,
+  required: true,
+  enum: [
+    'UPDATE_SOCIETY_CONFIG',
+    'UPDATE_MATRIX_CONFIG',
+    'GENERATE_BILLS',
+    'RECORD_PAYMENT',
+    'IMPORT_MEMBERS',
+    'IMPORT_MEMBERS_ENHANCED',  // ← ADD THIS
+    'UPDATE_MEMBER',
+    'DELETE_MEMBER',
+    'FINANCIAL_YEAR_CLOSE',
+  ],
+},
+
+    oldData: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    newData: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+export default mongoose.models.AuditLog ||
+  mongoose.model("AuditLog", AuditLogSchema);
+</file>
+
+<file path="models/BillingHead.js">
+import mongoose from "mongoose";
+
+const BillingHeadSchema = new mongoose.Schema(
+  {
+    headName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    calculationType: {
+      type: String,
+      enum: ["Fixed", "Per Sq Ft", "Percentage"],
+      required: true,
+    },
+    defaultAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    canBeArchived: { type: Boolean, default: false },
+isDeleted: { type: Boolean, default: false },
+deletedAt: { type: Date },
+deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+lastModifiedAt: { type: Date },
+lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    order: {
+      type: Number,
+      default: 0,
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+BillingHeadSchema.index({ societyId: 1, order: 1 });
+BillingHeadSchema.index({ societyId: 1, headName: 1 }, { unique: true });
+BillingHeadSchema.index({ societyId: 1, isDeleted: 1 });
+
+
+export default mongoose.models.BillingHead ||
+  mongoose.model("BillingHead", BillingHeadSchema);
+</file>
+
+<file path="models/User.js">
+import mongoose from "mongoose";
+
+const UserSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: true,
+    },
+    role: {
+      type: String,
+enum: ["SuperAdmin", "Admin", "Secretary", "Accountant", "Member"],      default: "Member",
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+    },
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: false,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+export default mongoose.models.User || mongoose.model("User", UserSchema);
+</file>
+
+<file path="lib/billing-engine.js">
+import Member from "@/models/Member";
+import User from "@/models/User";
+import Bill from "@/models/Bill";
+import Transaction from "@/models/Transaction";
+import BillingHead from "../models/BillingHead";
+import Society from "@/models/Society";
+import {
+  calculateDaysBetween,
+  isDateAfterGracePeriod,
+  getLastDayOfMonth,
+  generateBillingPeriodId,
+  getFinancialYear,
+} from "./date-utils";
+
+export class BillingEngine {
+  constructor(societyId, userId) {
+    this.societyId = societyId;
+    this.userId = userId;
+    this.society = null;
+    this.errors = [];
+    this.successCount = 0;
+    this.failedMembers = [];
+  }
+
+  async initialize() {
+    this.society = await Society.findById(this.societyId);
+    if (!this.society) {
+      throw new Error("Society not found");
+    }
+    return this;
+  }
+
+  async calculateArrears(memberId) {
+    const unpaidBills = await Bill.find({
+      memberId,
+      societyId: this.societyId,
+      status: { $in: ["Unpaid", "Partial", "Overdue"] },
+    }).sort({ billYear: 1, billMonth: 1 });
+
+    let totalArrears = 0;
+    let oldestUnpaidDate = null;
+
+    unpaidBills.forEach((bill) => {
+      totalArrears += bill.balanceAmount;
+      if (!oldestUnpaidDate) {
+        oldestUnpaidDate = bill.dueDate;
+      }
+    });
+
+    return {
+      totalArrears,
+      unpaidBillCount: unpaidBills.length,
+      oldestUnpaidDate,
+      bills: unpaidBills,
+    };
+  }
+
+  applyInterest(
+    principalAmount,
+    interestRate,
+    dueDate,
+    gracePeriodDays,
+    referenceDate = null,
+    billYear = null,
+    billMonth = null,
+  ) {
+    if (principalAmount <= 0) return 0;
+    const {
+      getBillPayFinalDate,
+      calculateInterestAmount,
+    } = require("../utils/interestUtils");
+    const billPayFinalDay = this.society.config?.billPayFinalDay || 0;
+    const billPayFinalDate =
+      billYear && billMonth
+        ? getBillPayFinalDate(billYear, billMonth, billPayFinalDay)
+        : null;
+    const effectiveNow = referenceDate ? new Date(referenceDate) : new Date();
+    const method = this.society.config.interestCalculationMethod || "SIMPLE";
+    const basis = this.society.config.interestBasis || "MONTHLY"; // ← new
+    const result = calculateInterestAmount(
+      principalAmount,
+      new Date(dueDate),
+      effectiveNow,
+      gracePeriodDays,
+      interestRate,
+      method,
+      billPayFinalDate,
+      basis, // ← pass through
+    );
+    return result.interestAmount;
+  }
+  calculateMaintenanceCharges(member) {
+    const { config } = this.society;
+
+    const maintenance = member.areaSqFt * (config.maintenanceRate || 0);
+    const sinkingFund = member.areaSqFt * (config.sinkingFundRate || 0);
+    const repairFund = member.areaSqFt * (config.repairFundRate || 0);
+
+    return {
+      maintenance: Math.round(maintenance * 100) / 100,
+      sinkingFund: Math.round(sinkingFund * 100) / 100,
+      repairFund: Math.round(repairFund * 100) / 100,
+    };
+  }
+
+  calculateFixedCharges() {
+    const { fixedCharges } = this.society.config;
+
+    const total =
+      (fixedCharges.water || 0) +
+      (fixedCharges.security || 0) +
+      (fixedCharges.electricity || 0);
+
+    return {
+      water: fixedCharges.water || 0,
+      security: fixedCharges.security || 0,
+      electricity: fixedCharges.electricity || 0,
+      total,
+    };
+  }
+
+  calculateServiceTax(baseAmount) {
+    const taxRate = this.society.config.serviceTaxRate || 0;
+    const tax = (baseAmount * taxRate) / 100;
+    return Math.round(tax * 100) / 100;
+  }
+
+  async getMemberCurrentBalance(memberId) {
+    const lastTransaction = await Transaction.findOne({
+      memberId,
+      societyId: this.societyId,
+      isReversed: false,
+    }).sort({ date: -1, createdAt: -1 });
+
+    return lastTransaction ? lastTransaction.balanceAfterTransaction : 0;
+  }
+
+  async executeBillingCycle(month, year, customCharges = {}) {
+    if (!this.society) {
+      await this.initialize();
+    }
+
+    const billPeriodId = generateBillingPeriodId(month, year);
+
+    const existingBills = await Bill.countDocuments({
+      societyId: this.societyId,
+      billPeriodId,
+    });
+
+    if (existingBills > 0) {
+      throw new Error(
+        `Bills for ${billPeriodId} already generated. Delete existing bills first or use update operation.`,
+      );
+    }
+
+    const [members, billingHeads] = await Promise.all([
+      Member.find({ societyId: this.societyId }),
+      BillingHead.find({
+        societyId: this.societyId,
+        isActive: true,
+        isDeleted: false,
+      }),
+    ]);
+    if (members.length === 0) throw new Error("No members found...");
+
+    this.errors = [];
+    this.successCount = 0;
+    this.failedMembers = [];
+
+    const dueDate = getLastDayOfMonth(year, month);
+    dueDate.setDate(10);
+    if (dueDate.getMonth() !== month) {
+      dueDate.setMonth(month + 1, 10);
+    }
+
+    const billPromises = members.map((member) =>
+      this.generateSingleBill(
+        member,
+        month,
+        year,
+        billPeriodId,
+        dueDate,
+        customCharges,
+        billingHeads,
+      ),
+    );
+
+    await Promise.allSettled(billPromises);
+
+    return {
+      success: this.errors.length === 0,
+      totalMembers: members.length,
+      successCount: this.successCount,
+      failedCount: this.failedMembers.length,
+      errors: this.errors,
+      failedMembers: this.failedMembers,
+      billPeriodId,
+    };
+  }
+
+  async generateSingleBill(
+    member,
+    month,
+    year,
+    billPeriodId,
+    dueDate,
+    billingHeads = [],
+    customCharges = {},
+  ) {
+    try {
+      const memberKey = `${member.wing}-${member.roomNo}`;
+
+      const arrearsData = await this.calculateArrears(member._id);
+
+      const maintenanceBreakdown = this.calculateMaintenanceCharges(member);
+      const fixedChargesBreakdown = this.calculateFixedCharges();
+
+      let dynamicChargesTotal = 0;
+      const chargesMap = new Map();
+
+      if (customCharges[memberKey]) {
+        Object.entries(customCharges[memberKey]).forEach(([label, amount]) => {
+          const numAmount = parseFloat(amount) || 0;
+          chargesMap.set(label, numAmount);
+          dynamicChargesTotal += numAmount;
+        });
+      }
+
+      // Read parking rates from BillingHead collection (passed in as billingHeads param)
+      const parkingHeads = (billingHeads || []).filter(
+        (h) =>
+          h.isActive &&
+          !h.isDeleted &&
+          h.headName?.toLowerCase().includes("parking"),
+      );
+      member.parkingSlots
+        .filter((s) => s.monthlyBilling !== false && s.type !== "Stilt")
+        .forEach((slot) => {
+          const slotLabel =
+            `${slot.type} Parking - ${slot.vehicleType}`.toLowerCase();
+          const matchingHead = parkingHeads.find(
+            (h) => h.headName?.toLowerCase() === slotLabel,
+          );
+          if (!matchingHead || matchingHead.defaultAmount <= 0) return;
+          const label = `${slot.type} Parking - ${slot.vehicleType} (${slot.slotNumber})`;
+          chargesMap.set(label, matchingHead.defaultAmount);
+          dynamicChargesTotal += matchingHead.defaultAmount;
+        });
+
+      let interestOnArrears = 0;
+      if (arrearsData.totalArrears > 0 && arrearsData.oldestUnpaidDate) {
+        interestOnArrears = this.applyInterest(
+          arrearsData.totalArrears,
+          this.society.config.interestRate,
+          arrearsData.oldestUnpaidDate,
+          this.society.config.gracePeriodDays,
+        );
+      }
+
+      const subtotal =
+        maintenanceBreakdown.maintenance +
+        maintenanceBreakdown.sinkingFund +
+        maintenanceBreakdown.repairFund +
+        fixedChargesBreakdown.total +
+        dynamicChargesTotal;
+
+      const serviceTax = this.calculateServiceTax(subtotal);
+
+      const totalAmount =
+        subtotal + serviceTax + arrearsData.totalArrears + interestOnArrears;
+
+      const bill = await Bill.create({
+        billPeriodId,
+        billMonth: month,
+        billYear: year,
+        memberId: member._id,
+        societyId: this.societyId,
+        charges: chargesMap,
+        breakdown: {
+          maintenance: maintenanceBreakdown.maintenance,
+          sinkingFund: maintenanceBreakdown.sinkingFund,
+          repairFund: maintenanceBreakdown.repairFund,
+          fixedCharges: fixedChargesBreakdown.total,
+          dynamicCharges: dynamicChargesTotal,
+          previousArrears: arrearsData.totalArrears,
+          interestOnArrears,
+          serviceTax,
+        },
+        previousBalance: arrearsData.totalArrears,
+        currInt: Math.round(interestOnArrears * 100) / 100,
+        monthInterest: Math.round(interestOnArrears * 100) / 100,
+        totalAmount: Math.round(totalAmount * 100) / 100,
+        amountPaid: 0,
+        principalBalance: Math.round((subtotal + serviceTax) * 100) / 100,
+        interestBalance: Math.round(interestOnArrears * 100) / 100,
+        // balanceAmount set by pre-save hook = principalBalance + interestBalance
+        dueDate: new Date(dueDate),
+        status: "Unpaid",
+        generatedBy: this.userId,
+        generatedAt: new Date(),
+      });
+
+      const currentBalance = await this.getMemberCurrentBalance(member._id);
+      const newBalance = currentBalance + bill.totalAmount;
+
+      await Transaction.create({
+        transactionId: Transaction.generateTransactionId(),
+        date: new Date(),
+        memberId: member._id,
+        societyId: this.societyId,
+        type: "Debit",
+        category: "Maintenance",
+        description: `Bill generated for ${billPeriodId}`,
+        amount: bill.totalAmount,
+        balanceAfterTransaction: newBalance,
+        referenceId: bill._id,
+        referenceModel: "Bill",
+        billPeriodId,
+        paymentMode: "System",
+        createdBy: this.userId,
+        financialYear: getFinancialYear(new Date()),
+      });
+
+      this.successCount++;
+    } catch (error) {
+      this.errors.push({
+        member: `${member.wing}-${member.roomNo}`,
+        error: error.message,
+      });
+      this.failedMembers.push({
+        memberId: member._id,
+        roomNo: member.roomNo,
+        wing: member.wing,
+        ownerName: member.ownerName,
+        error: error.message,
+      });
+    }
+  }
+
+  async getDefaultersList(monthsThreshold = 3) {
+    const members = await Member.find({ societyId: this.societyId });
+    const defaulters = [];
+
+    for (const member of members) {
+      const arrearsData = await this.calculateArrears(member._id);
+
+      if (arrearsData.unpaidBillCount >= monthsThreshold) {
+        defaulters.push({
+          memberId: member._id,
+          roomNo: member.roomNo,
+          wing: member.wing,
+          ownerName: member.ownerName,
+          contact: member.contact,
+          unpaidBills: arrearsData.unpaidBillCount,
+          totalArrears: arrearsData.totalArrears,
+          oldestUnpaidDate: arrearsData.oldestUnpaidDate,
+        });
+      }
+    }
+
+    return defaulters.sort((a, b) => b.totalArrears - a.totalArrears);
+  }
+
+  async finalizeMonthlyCycle(month, year) {
+    const billPeriodId = generateBillingPeriodId(month, year);
+
+    const result = await Bill.updateMany(
+      {
+        societyId: this.societyId,
+        billPeriodId,
+        isLocked: false,
+      },
+      {
+        $set: { isLocked: true },
+      },
+    );
+
+    return {
+      billPeriodId,
+      lockedCount: result.modifiedCount,
+    };
+  }
+}
+
+export async function calculateMemberOutstanding(memberId, societyId) {
+  const bills = await Bill.find({
+    memberId,
+    societyId,
+    status: { $in: ["Unpaid", "Partial", "Overdue"] },
+  });
+
+  let outstanding = 0;
+  bills.forEach((bill) => {
+    outstanding += bill.balanceAmount;
+  });
+
+  return outstanding;
+}
+
+export async function getMemberLedger(
+  memberId,
+  societyId,
+  startDate = null,
+  endDate = null,
+) {
+  const query = {
+    memberId,
+    societyId,
+    isReversed: false,
+  };
+
+  if (startDate && endDate) {
+    query.date = {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate),
+    };
+  }
+
+  const transactions = await Transaction.find(query)
+    .sort({ date: 1, createdAt: 1 })
+    .populate("createdBy", "name email")
+    .lean();
+
+  return transactions;
+}
+</file>
+
+<file path="models/Bill.js">
+import mongoose from "mongoose";
+
+const BillSchema = new mongoose.Schema(
+  {
+    billPeriodId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    billMonth: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 12,
+    },
+    billYear: {
+      type: Number,
+      required: true,
+    },
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: true,
+      index: true,
+    },
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+
+    // ── Immutable bill-state fields (set at generation, never mutated) ──────
+    // openingPrincipal = previous month's closingPrincipal
+    openingPrincipal: { type: Number, default: 0 },
+    // openingInterest = previous month's closingInterest
+    openingInterest: { type: Number, default: 0 },
+    // currentCharges = sum of this month's maintenance + fixed + custom heads
+    currentCharges: { type: Number, default: 0 },
+    // currentInterest = openingPrincipal × annualRate / 1200 (simple, non-compounding)
+    currentInterest: { type: Number, default: 0 },
+    // billPrincipalBalance = openingPrincipal + currentCharges (immutable)
+    billPrincipalBalance: { type: Number, default: 0 },
+    // billInterestBalance = openingInterest + currentInterest (immutable)
+    billInterestBalance: { type: Number, default: 0 },
+    // totalBillDue = billPrincipalBalance + billInterestBalance (immutable)
+    totalBillDue: { type: Number, default: 0 },
+
+    // ── Closing-state fields (set after payment, separate from bill state) ──
+    closingPrincipal: { type: Number, default: null },
+    closingInterest: { type: Number, default: null },
+    closingTotal: { type: Number, default: null },
+    paymentUploadedAt: { type: Date, default: null },
+    paymentImportId: { type: mongoose.Schema.Types.ObjectId, ref: "PaymentImport", default: null },
+
+    // ── Legacy / compat fields (kept for existing generate route + reports) ─
+    previousBalance: { type: Number, default: 0 },
+    previousPrincipal: { type: Number, default: 0 },
+    previousInterest: { type: Number, default: 0 },
+    currInt: { type: Number, default: 0 },
+    monthInterest: { type: Number, default: 0 },
+    interestAmount: { type: Number, default: 0 },
+    principalBalance: { type: Number, default: 0 },
+    interestBalance: { type: Number, default: 0 },
+    subtotal: Number,
+    serviceTax: { type: Number, default: 0 },
+    currentBillTotal: Number,
+
+    charges: {
+      type: Map,
+      of: Number,
+      default: new Map(),
+    },
+
+    totalAmount: {
+      type: Number,
+      required: true,
+    },
+    amountPaid: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    balanceAmount: {
+      type: Number,
+      required: true,
+    },
+    dueDate: {
+      type: Date,
+      required: true,
+    },
+
+    status: {
+      type: String,
+      // Scheduled: generated but not yet visible to member (pushDate not reached)
+      enum: ["Scheduled", "Unpaid", "Partial", "Paid", "Overdue"],
+      default: "Unpaid",
+      index: true,
+    },
+    // Set when bill is generated before billPushDay. Cron flips to 'Unpaid' on this date.
+    scheduledPushDate: { type: Date, default: null },
+
+    importedFrom: {
+      type: String,
+      enum: ["Manual", "Excel", "API", "System"],
+      default: "System",
+    },
+    importBatchId: { type: String }, // ❌ REMOVED: index: true
+    importMetadata: {
+      fileName: String,
+      uploadedAt: Date,
+      rowNumber: Number,
+      validationStatus: {
+        type: String,
+        enum: ["Valid", "Warning", "Error"],
+        default: "Valid",
+      },
+      validationMessages: [String],
+    },
+
+    generationMetadata: {
+      societyConfigVersion: Number,
+      memberAreaAtGeneration: Number,
+      ratesApplied: mongoose.Schema.Types.Mixed,
+    },
+
+    isLocked: {
+      type: Boolean,
+      default: false,
+    },
+    generatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    generatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    lastModifiedAt: {
+      type: Date,
+    },
+    lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    notes: {
+      type: String,
+      trim: true,
+    },
+    interestOverrideReason: { type: String, trim: true, default: null },
+    interestOverridden: { type: Boolean, default: false },
+    billPdfUrl: String,
+    billHtml: String, // Stored HTML for preview and print
+    renderedHtml: { type: String, select: false }, // stored but not returned by default
+    // Soft delete - NO INDEX HERE
+    isDeleted: { type: Boolean, default: false }, // ❌ REMOVED: index: true
+    deletedAt: { type: Date },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+// ✅ ALL INDEXES DEFINED HERE (single place)
+BillSchema.index(
+  { societyId: 1, billPeriodId: 1, memberId: 1 },
+  { unique: true },
+);
+BillSchema.index({ societyId: 1, status: 1, dueDate: 1 });
+BillSchema.index({ status: 1, scheduledPushDate: 1 }); // for cron job query
+BillSchema.index({ importBatchId: 1 }); // ✅ Defined here only
+BillSchema.index({ "importMetadata.validationStatus": 1 });
+BillSchema.index({ isDeleted: 1 }); // ✅ Defined here only
+
+BillSchema.pre("save", function (next) {
+  // balanceAmount = only this bill's own outstanding (principal + interest).
+  // previousBalance is a DISPLAY-ONLY snapshot of the ledger at generation time
+  // and must NOT be added here — doing so double-counts prior bills' balances.
+  const computedBalance = parseFloat(
+    ((this.principalBalance || 0) + (this.interestBalance || 0)).toFixed(2),
+  );
+  if (computedBalance >= 0 || this.isNew) {
+    this.balanceAmount = computedBalance;
+  }
+  this.interestAmount = this.monthInterest || this.interestAmount || 0;
+  next();
+});
+
+export default mongoose.models.Bill || mongoose.model("Bill", BillSchema);
+</file>
+
+<file path="models/Member.js">
+import mongoose from "mongoose";
+
+// Owner History Schema (embedded subdocument)
+const OwnerHistorySchema = new mongoose.Schema(
+  {
+    ownerName: { type: String, required: true, trim: true },
+    panCard: { type: String, trim: true, uppercase: true },
+    aadhaar: { type: String, trim: true },
+    contactNumber: { type: String, required: true },
+    emailPrimary: { type: String, trim: true, lowercase: true },
+
+    // Ownership period
+    ownershipStartDate: { type: Date, required: true },
+    ownershipEndDate: { type: Date }, // null if current owner
+    durationMonths: { type: Number }, // auto-calculated
+
+    // Purchase/Sale details
+    purchaseAmount: { type: Number },
+    saleAmount: { type: Number },
+
+    // Transfer details
+    transferType: {
+      type: String,
+      enum: ["Purchase", "Inheritance", "Gift", "Court Order", "Other"],
+      default: "Purchase",
+    },
+    transferDate: { type: Date },
+    registrationNumber: { type: String }, // Sale deed registration number
+
+    // Why ownership ended
+    exitReason: {
+      type: String,
+      enum: ["Sold", "Transferred", "Deceased", "Other"],
+    },
+
+    isCurrent: { type: Boolean, default: false },
+
+    // Notes
+    notes: { type: String, trim: true },
+  },
+  { _id: true, timestamps: true },
+);
+
+// Tenant/Occupant History Schema (embedded subdocument)
+const TenantHistorySchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    panCard: { type: String, trim: true },
+    aadhaar: { type: String, trim: true },
+    contactNumber: { type: String, required: true },
+    email: { type: String, trim: true },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date }, // null if current tenant
+    duration: { type: Number }, // in months, auto-calculated
+    depositAmount: { type: Number, default: 0 },
+    rentPerMonth: { type: Number, default: 0 },
+    isCurrent: { type: Boolean, default: false },
+    moveOutReason: { type: String, trim: true },
+    emergencyContact: {
+      name: { type: String },
+      relation: { type: String },
+      phone: { type: String },
+    },
+  },
+  { _id: true, timestamps: true },
+);
+
+// Main Member Schema
+const MemberSchema = new mongoose.Schema(
+  {
+    // === FLAT MASTER DATA (Highest Level) ===
+
+    // Flat Identification (VERY UNIQUE)
+    flatNo: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+    },
+    wing: {
+      type: String,
+      trim: true,
+      default: "",
+      uppercase: true,
+    },
+    floor: {
+      type: Number,
+      min: -3, // Basement levels
+      max: 150,
+    },
+
+    // Flat Physical Details
+    carpetAreaSqft: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    builtUpAreaSqft: { type: Number, min: 0 },
+    superBuiltUpAreaSqft: { type: Number, min: 0 },
+
+    flatType: {
+      type: String,
+      enum: [
+        "1BHK",
+        "2BHK",
+        "3BHK",
+        "4BHK",
+        "5BHK+",
+        "Studio",
+        "Penthouse",
+        "Shop",
+        "Office",
+      ],
+      default: "2BHK",
+    },
+
+    parkingSlots: [
+      {
+        slotNumber: String,
+        type: { type: String, enum: ["Stilt", "Open", "Covered"] },
+        vehicleType: { type: String, enum: ["Two-Wheeler", "Four-Wheeler"] },
+        monthlyBilling: { type: Boolean, default: true }, // auto-set: false for Stilt, true for Open/Covered
+      },
+    ],
+    isActive: { type: Boolean, default: true },
+
+    // Ownership Status
+    ownershipType: {
+      type: String,
+      enum: ["Owner-Occupied", "Rented", "Vacant", "Under-Dispute"],
+      default: "Owner-Occupied",
+    },
+
+    possessionDate: { type: Date },
+
+    // === CURRENT OWNER DATA (from ownerHistory array - most recent) ===
+
+    ownerName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    // Primary Contact Information
+    contactNumber: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+    alternateContact: { type: String, trim: true },
+    whatsappNumber: { type: String, trim: true },
+    emailPrimary: { type: String, trim: true, lowercase: true },
+    emailSecondary: { type: String, trim: true, lowercase: true },
+
+    // Identity Documents
+    panCard: { type: String, trim: true, uppercase: true },
+    aadhaar: { type: String, trim: true },
+
+    // Permanent Address (if different from flat address)
+    permanentAddress: {
+      line1: String,
+      line2: String,
+      city: String,
+      state: String,
+      pincode: String,
+      country: { type: String, default: "India" },
+    },
+
+    // Emergency Contact
+    emergencyContact: {
+      name: { type: String },
+      relation: { type: String },
+      phoneNumber: { type: String },
+      address: { type: String },
+    },
+
+    // Family Members (residing in the flat)
+    familyMembers: [
+      {
+        name: { type: String, required: true },
+        relation: { type: String }, // Spouse, Son, Daughter, Parent, etc.
+        age: { type: Number },
+        contactNumber: { type: String },
+        occupation: { type: String },
+      },
+    ],
+
+    // === OWNER HISTORY (Array of all owners - COMPLETE TIMELINE) ===
+
+    ownerHistory: [OwnerHistorySchema],
+
+    // === TENANT/OCCUPANT DATA (Array of Historical Records) ===
+
+    currentTenant: TenantHistorySchema, // Current tenant if rented
+    tenantHistory: [TenantHistorySchema], // All previous tenants
+
+    // === FINANCIAL DATA ===
+
+    // Total legacy opening outstanding (principal + interest together)
+    openingBalance: {
+      type: Number,
+      default: 0,
+    },
+
+    // Optional split of opening balance for new logic (used going forward)
+    openingPrincipal: {
+      type: Number,
+      default: 0,
+    },
+    openingInterest: {
+      type: Number,
+      default: 0,
+    },
+
+    // Advance credit (prepaid amount). Used only after all interest/principal cleared.
+    advanceCredit: {
+      type: Number,
+      default: 0,
+    },
+
+    securityDeposit: {
+      amount: { type: Number, default: 0 },
+      depositDate: { type: Date },
+      refundDate: { type: Date },
+      status: {
+        type: String,
+        enum: ["Pending", "Deposited", "Refunded", "Adjusted"],
+        default: "Pending",
+      },
+    },
+
+    // Special Charges/Discounts
+    specialDiscount: {
+      percentage: { type: Number, min: 0, max: 100, default: 0 },
+      reason: { type: String },
+      validUntil: { type: Date },
+    },
+
+    // === MEMBERSHIP STATUS ===
+
+    membershipStatus: {
+      type: String,
+      enum: ["Active", "Inactive", "Suspended", "Blocked", "Exited"],
+      default: "Active",
+    },
+
+    membershipNumber: {
+      type: String,
+      sparse: true,
+    },
+
+    // Voting Rights
+    hasVotingRights: { type: Boolean, default: true },
+
+    // === BILLING PREFERENCES ===
+
+    billingPreferences: {
+      emailBill: { type: Boolean, default: true },
+      whatsappBill: { type: Boolean, default: false },
+      printedBill: { type: Boolean, default: false },
+      billDeliveryDay: { type: Number, min: 1, max: 31 },
+    },
+
+    // === MAINTENANCE DUES CONFIG ===
+
+    customMaintenanceConfig: {
+      isCustom: { type: Boolean, default: false },
+      customRatePerSqft: { type: Number },
+      reason: { type: String },
+    },
+
+    // === NOTES & REMARKS ===
+
+    internalNotes: { type: String, trim: true }, // Admin-only notes
+    publicRemarks: { type: String, trim: true }, // Visible to member
+
+    // === SYSTEM FIELDS ===
+
+    societyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Society",
+      required: true,
+      index: true,
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    isDeleted: { type: Boolean, default: false },
+  },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
+
+// Indexes for performance
+// 🔐 1. Unique membership number per society
+MemberSchema.index({ societyId: 1, membershipNumber: 1 }, { unique: true });
+
+// 🏠 2. Unique flat per society
+MemberSchema.index({ societyId: 1, flatNo: 1, wing: 1 }, { unique: true });
+
+// 📊 3. Query optimization indexes
+MemberSchema.index({ societyId: 1, membershipStatus: 1 });
+MemberSchema.index({ societyId: 1, ownershipType: 1 });
+
+// 🪪 4. Optional identity indexes
+MemberSchema.index({ panCard: 1 }, { sparse: true });
+
+// 📞 5. Contact (can be non-unique unless required)
+MemberSchema.index(
+  { societyId: 1, contactNumber: 1 },
+  { unique: false }, // or true if needed
+);
+// 📧 6. Email (non-unique OR make unique per society if needed)
+MemberSchema.index(
+  { societyId: 1, emailPrimary: 1 },
+  { unique: true, sparse: true },
+);
+// 🗑️ 7. Soft delete
+MemberSchema.index({ isDeleted: 1 });
+
+// Virtual for full flat identifier
+MemberSchema.virtual("fullFlatId").get(function () {
+  return this.wing ? `${this.wing}-${this.flatNo}` : this.flatNo;
+});
+
+// Virtual for current occupant name
+MemberSchema.virtual("currentOccupantName").get(function () {
+  if (this.ownershipType === "Rented" && this.currentTenant) {
+    return this.currentTenant.name;
+  }
+  return this.ownerName;
+});
+
+// Virtual to get current owner from history
+MemberSchema.virtual("currentOwnerFromHistory").get(function () {
+  const currentOwner = this.ownerHistory.find((owner) => owner.isCurrent);
+  return currentOwner || null;
+});
+
+// Pre-save middleware to auto-generate membership number
+MemberSchema.pre("save", async function (next) {
+  if (this.isNew && !this.membershipNumber) {
+    try {
+      // Get count of existing members in this society
+      const lastMember = await this.constructor
+        .findOne({ societyId: this.societyId })
+        .sort({ createdAt: -1 });
+
+      let nextNumber = 1;
+
+      if (lastMember && lastMember.membershipNumber) {
+        const lastNum = parseInt(lastMember.membershipNumber.split("-")[1]);
+        nextNumber = lastNum + 1;
+      }
+
+      this.membershipNumber = `MEM-${String(nextNumber).padStart(4, "0")}`;
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (attempts < maxAttempts) {
+        this.membershipNumber = `MEM-${String(nextNumber).padStart(4, "0")}`;
+
+        // Check if this number already exists
+        const existing = await this.constructor.findOne({
+          societyId: this.societyId,
+          membershipNumber: this.membershipNumber,
+        });
+
+        if (!existing) {
+          break; // Found unique number
+        }
+
+        nextNumber++;
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error("Failed to generate unique membership number");
+      }
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  // Calculate tenant duration if endDate is set
+  if (
+    this.currentTenant &&
+    this.currentTenant.endDate &&
+    this.currentTenant.startDate
+  ) {
+    const months = Math.floor(
+      (this.currentTenant.endDate - this.currentTenant.startDate) /
+        (1000 * 60 * 60 * 24 * 30),
+    );
+    this.currentTenant.duration = months;
+  }
+
+  // Calculate owner duration for history entries
+  this.ownerHistory.forEach((owner) => {
+    if (owner.ownershipEndDate && owner.ownershipStartDate) {
+      const months = Math.floor(
+        (owner.ownershipEndDate - owner.ownershipStartDate) /
+          (1000 * 60 * 60 * 24 * 30),
+      );
+      owner.durationMonths = months;
+    }
+  });
+
+  next();
+});
+
+// ========== METHODS ==========
+
+// Method to transfer ownership to new owner
+MemberSchema.methods.transferOwnership = function (
+  newOwnerData,
+  transferDetails,
+) {
+  // Move current owner to history
+  if (this.ownerName) {
+    const currentOwnerHistory = {
+      ownerName: this.ownerName,
+      panCard: this.panCard,
+      aadhaar: this.aadhaar,
+      contactNumber: this.contactNumber,
+      emailPrimary: this.emailPrimary,
+      ownershipStartDate:
+        this.ownerHistory.length > 0
+          ? this.ownerHistory[this.ownerHistory.length - 1].ownershipEndDate ||
+            this.possessionDate
+          : this.possessionDate,
+      ownershipEndDate: transferDetails.transferDate || new Date(),
+      isCurrent: false,
+      ...transferDetails, // includes purchaseAmount, saleAmount, exitReason, etc.
+    };
+
+    this.ownerHistory.push(currentOwnerHistory);
+  }
+
+  // Set new owner as current
+  this.ownerName = newOwnerData.ownerName;
+  this.panCard = newOwnerData.panCard;
+  this.aadhaar = newOwnerData.aadhaar;
+  this.contactNumber = newOwnerData.contactNumber;
+  this.emailPrimary = newOwnerData.emailPrimary;
+
+  // Add new owner to history as current
+  this.ownerHistory.push({
+    ...newOwnerData,
+    ownershipStartDate: transferDetails.transferDate || new Date(),
+    isCurrent: true,
+  });
+};
+
+// Method to move current tenant to history
+MemberSchema.methods.moveCurrentTenantToHistory = function (moveOutReason) {
+  if (this.currentTenant) {
+    this.currentTenant.endDate = new Date();
+    this.currentTenant.isCurrent = false;
+    this.currentTenant.moveOutReason = moveOutReason;
+
+    // Calculate duration
+    const months = Math.floor(
+      (this.currentTenant.endDate - this.currentTenant.startDate) /
+        (1000 * 60 * 60 * 24 * 30),
+    );
+    this.currentTenant.duration = months;
+
+    this.tenantHistory.push(this.currentTenant.toObject());
+    this.currentTenant = null;
+    this.ownershipType = "Owner-Occupied";
+  }
+};
+
+// Method to add new tenant
+MemberSchema.methods.addNewTenant = function (tenantData) {
+  // Move current tenant to history if exists
+  if (this.currentTenant) {
+    this.moveCurrentTenantToHistory("New tenant moved in");
+  }
+
+  this.currentTenant = {
+    ...tenantData,
+    isCurrent: true,
+    startDate: tenantData.startDate || new Date(),
+  };
+  this.ownershipType = "Rented";
+};
+
+export default mongoose.models.Member || mongoose.model("Member", MemberSchema);
+</file>
+
+<file path="models/Society.js">
+import mongoose from "mongoose";
+
+const SocietySchema = new mongoose.Schema(
+  {
+    // Basic Information
+    name: { type: String, required: true, trim: true },
+    registrationNo: { type: String, unique: true, trim: true, minlength: 4 },
+    dateOfRegistration: { type: Date },
+    address: { type: String, trim: true },
+    panNo: { type: String, trim: true },
+    tanNo: { type: String, trim: true },
+
+    // Contact Details
+    personOfContact: { type: String, trim: true },
+    contactEmail: { type: String, trim: true },
+    contactPhone: { type: String, trim: true },
+
+    // Carpet Area
+    carpetAreaSqft: { type: Number, default: 0 },
+
+    // Bill Template - UPDATED STRUCTURE
+    billTemplate: {
+      type: {
+        type: String,
+        enum: ["default", "custom", "uploaded-pdf", "uploaded-image"],
+        default: "default",
+      },
+      // For uploaded PDF
+      pdfUrl: { type: String },
+      hasFormFields: { type: Boolean, default: false },
+      detectedFields: [{ type: String }],
+
+      // For uploaded image
+      imageUrl: { type: String },
+
+      // For custom design
+      design: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+        headerBg: String,
+        headerColor: String,
+        societyNameSize: Number,
+        addressSize: Number,
+        billTitleSize: Number,
+        billTitleAlign: String,
+        tableHeaderBg: String,
+        tableHeaderColor: String,
+        tableRowBg1: String,
+        tableRowBg2: String,
+        tableBorderColor: String,
+        totalBg: String,
+        totalColor: String,
+        totalSize: Number,
+        footerSize: Number,
+        footerText: [String],
+        showSignature: Boolean,
+        signatureLabel: String,
+      },
+
+      // Common assets
+      logoUrl: { type: String },
+      signatureUrl: { type: String },
+
+      uploadedAt: { type: Date },
+      uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      // OLD FIELDS - keep for backward compatibility
+      fileName: { type: String },
+      filePath: { type: String },
+    },
+
+    // Configuration
+    config: {
+      // billing settings (non-charge)
+      interestRate: { type: Number, default: 0 },
+      serviceTaxRate: { type: Number, default: 0 },
+      gracePeriodDays: { type: Number, default: 10 },
+      billDueDay: { type: Number, min: 1, max: 31, default: 10 },
+      billPayFinalDay: { type: Number, min: 1, max: 31, default: 25 }, // ← NEW: last day to accept payment/interest for the month
+      // NEW CONFIG FLAGS
+      interestRounding: {
+        type: String,
+        enum: ["TWO_DECIMAL", "ROUND_UP"],
+        default: "TWO_DECIMAL",
+      },
+      interestUseMode: {
+        // OLDEST_FIRST: clear oldest bill's interest first
+        // TOTAL: treat all interest as one bucket (still oldest-first physically)
+        type: String,
+        enum: ["OLDEST_FIRST", "TOTAL"],
+        default: "OLDEST_FIRST",
+      },
+      advanceAutoApply: {
+        type: Boolean,
+        default: false, // admin decided: NO automation per your answer
+      },
+      adjustmentApplicationMode: {
+        type: String,
+        enum: ["INTEREST_FIRST", "PRINCIPAL_FIRST"],
+        default: "INTEREST_FIRST",
+      },
+      interestTriggerTiming: {
+        type: String,
+        enum: ["SAME_DAY", "NEXT_DAY"],
+        default: "NEXT_DAY",
+      },
+      memberPaymentBreakdownVisible: {
+        type: Boolean,
+        default: true, // transparent by default
+      },
+      interestBasis: {
+        type: String,
+        enum: ["MONTHLY"],
+        default: "MONTHLY",
+      },
+
+      // Scheduled bill generation/push
+      // billGenerationDay: day of month admin generates bills (e.g., 1 = 1st of month)
+      // billPushDay: day of month bills become visible to members / go Unpaid (e.g., 5 = 5th)
+      // If billPushDay > today at generation time → bills stored as 'Scheduled', auto-pushed by cron
+      billGenerationDay: { type: Number, min: 1, max: 28, default: 1 },
+      billPushDay: { type: Number, min: 1, max: 28, default: 1 },
+      // Interest Activation Settings (replaces gracePeriodDays / billDueDay / billPayFinalDay)
+      interestAfterDays: { type: Number, min: 0, max: 365, default: 15 },
+      interestActivationMode: {
+        type: String,
+        enum: ["VIEW", "APPLICABLE"],
+        default: "VIEW",
+      },
+      // Bill Generation Mode (replaces billGenerationDay)
+      billGenerationMode: {
+        type: String,
+        enum: ["MANUAL", "AUTOMATIC"],
+        default: "MANUAL",
+      },
+      billAutoGenerateDay: { type: Number, min: 1, max: 5, default: 1 },
+      // dynamic charges — single source of truth
+      charges: [
+        {
+          label: { type: String },
+          type: {
+            type: String,
+            enum: ["Fixed", "Per Sq Ft", "Per Vehicle"],
+            default: "Fixed",
+          },
+          value: { type: Number, default: 0 },
+          isActive: { type: Boolean, default: true },
+          vehicleType: {
+            type: String,
+            enum: ["Two-Wheeler", "Four-Wheeler", null],
+            default: null,
+          },
+        },
+      ],
+    },
+    // Inside society.config schema:
+    parkingRates: {
+      Open: {
+        "Two-Wheeler": { type: Number, default: 0 },
+        "Four-Wheeler": { type: Number, default: 0 },
+      },
+      Covered: {
+        "Two-Wheeler": { type: Number, default: 0 },
+        "Four-Wheeler": { type: Number, default: 0 },
+      },
+      // Stilt has no entry — never billed
+    },
+    // Subscription
+    subscription: {
+      planType: {
+        type: String,
+        enum: ["Free", "Basic", "Premium", "Enterprise"],
+        default: "Free",
+      },
+      startDate: { type: Date, default: Date.now },
+      lastPaymentDate: { type: Date },
+      nextPaymentDate: { type: Date },
+      amountPaid: { type: Number, default: 0 },
+      status: {
+        type: String,
+        enum: ["Active", "Suspended", "Trial", "Expired"],
+        default: "Trial",
+      },
+      paymentHistory: [
+        {
+          date: { type: Date, required: true },
+          amount: { type: Number, required: true },
+          transactionId: { type: String },
+          method: { type: String },
+        },
+      ],
+    },
+    societyId: { type: String, unique: true, sparse: true }, // e.g. green_valley_andheri_2018_47
+    area: { type: String },
+    buildDate: { type: Date },
+    credentials: {
+      adminEmail: { type: String },
+      plainPassword: { type: String, select: true }, // explicitly included
+    },
+    // Soft delete support
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    deletionReason: { type: String },
+
+    // Config versioning
+    configVersion: { type: Number, default: 1 },
+
+    // Matrix Config
+    matrixConfig: {
+      L: { type: Number, default: 0 },
+      R: { type: Number, default: 0 },
+    },
+
+    // ❌ FIX #2: REMOVED billingHeads[] array
+    // Use BillingHead model as SINGLE SOURCE OF TRUTH:
+    // Query: BillingHead.find({ societyId })
+  },
+  {
+    timestamps: true,
+  },
+);
+
+// Pre-save hook
+// Clamp a day value to the last valid day of a given month/year
+function clampDay(day, month, year) {
+  if (!day) return day;
+  // Last day of that month: new Date(year, month, 0) = last day of month-1
+  const lastDay = new Date(year, month, 0).getDate();
+  return Math.min(day, lastDay);
+}
+
+SocietySchema.pre("save", function (next) {
+  if (this.isModified("config") || this.isModified("matrixConfig")) {
+    this.configVersion += 1;
+  }
+  // Clamp day fields so they never overflow for any given month.
+  // We clamp against the shortest month (Feb = 28 in non-leap, 29 in leap).
+  // Using Feb of current year as the reference — safest cross-month anchor.
+  if (this.config) {
+    const now = new Date();
+    const y = now.getFullYear();
+    // Feb = month 2, so new Date(y, 2, 0).getDate() = 28 or 29
+    const febLastDay = new Date(y, 2, 0).getDate(); // 28 or 29
+    if (this.config.billDueDay > febLastDay)
+      this.config.billDueDay = febLastDay;
+    if (this.config.billPayFinalDay > 31) this.config.billPayFinalDay = 31;
+    if (this.config.billGenerationDay > febLastDay)
+      this.config.billGenerationDay = febLastDay;
+    if (this.config.billPushDay > febLastDay)
+      this.config.billPushDay = febLastDay;
+    // Ensure new enum fields have valid defaults if missing
+    if (!this.config.interestRounding)
+      this.config.interestRounding = "TWO_DECIMAL";
+    if (!this.config.interestUseMode)
+      this.config.interestUseMode = "OLDEST_FIRST";
+  }
+  next();
+});
+
+// Indexes
+SocietySchema.index({ isDeleted: 1 });
+SocietySchema.index({ "subscription.status": 1 });
+
+export default mongoose.models.Society ||
+  mongoose.model("Society", SocietySchema);
+</file>
+
+</files>

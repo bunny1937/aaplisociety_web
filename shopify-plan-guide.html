@@ -1,0 +1,3903 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Shopify Blueprint — Perfume Brand Guide</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --gold: #c9a84c;
+        --gold-light: #e8d5a3;
+        --gold-dark: #8b6914;
+        --black: #0a0a0a;
+        --charcoal: #141414;
+        --card: #1a1a1a;
+        --card-hover: #222222;
+        --border: rgba(201, 168, 76, 0.2);
+        --border-bright: rgba(201, 168, 76, 0.6);
+        --text: #e8e0d0;
+        --text-muted: #9a8e7a;
+        --green: #4caf76;
+        --red: #cf6679;
+        --basic: #6b7b8d;
+        --grow: #c9a84c;
+        --advanced: #9b7fd4;
+        --plus: #cf6679;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background: var(--black);
+        color: var(--text);
+        font-family: "Jost", sans-serif;
+        font-weight: 300;
+        line-height: 1.7;
+        overflow-x: hidden;
+      }
+
+      /* ─── NOISE OVERLAY ─── */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 0;
+        opacity: 0.4;
+      }
+
+      /* ─── HERO ─── */
+      .hero {
+        position: relative;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 4rem 2rem;
+        overflow: hidden;
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        width: 700px;
+        height: 700px;
+        background: radial-gradient(
+          circle,
+          rgba(201, 168, 76, 0.12) 0%,
+          transparent 70%
+        );
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+
+      .hero-eyebrow {
+        font-family: "Jost", sans-serif;
+        font-size: 1rem;
+        letter-spacing: 0.4em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 2rem;
+        animation: fadeUp 0.8s ease both;
+      }
+
+      .hero h1 {
+        font-family: "Cormorant Garamond", serif;
+        font-size: clamp(3rem, 8vw, 6.5rem);
+        font-weight: 300;
+        line-height: 1.05;
+        letter-spacing: -0.01em;
+        margin-bottom: 1.5rem;
+        animation: fadeUp 0.8s 0.15s ease both;
+      }
+
+      .hero h1 em {
+        font-style: italic;
+        color: var(--gold);
+      }
+
+      .hero-sub {
+        font-size: 1.2rem;
+        color: var(--text-muted);
+        max-width: 560px;
+        animation: fadeUp 0.8s 0.3s ease both;
+        margin-bottom: 3rem;
+      }
+
+      .hero-ornament {
+        width: 120px;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--gold),
+          transparent
+        );
+        margin: 0 auto 3rem;
+        animation: fadeIn 1s 0.5s ease both;
+      }
+
+      .scroll-hint {
+        position: absolute;
+        bottom: 2.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-muted);
+        font-size: 0.65rem;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        animation: fadeIn 1s 1s ease both;
+      }
+
+      .scroll-line {
+        width: 1px;
+        height: 50px;
+        background: linear-gradient(to bottom, var(--gold), transparent);
+        animation: scrollLine 2s 1s ease infinite;
+      }
+
+      /* ─── NAV ─── */
+      .sticky-nav {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(10, 10, 10, 0.95);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        padding: 1rem 2rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .sticky-nav a {
+        font-size: 0.72rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: color 0.3s;
+        padding: 0.3rem 0.5rem;
+      }
+
+      .sticky-nav a:hover {
+        color: var(--gold);
+      }
+
+      /* ─── SECTION ─── */
+      .section {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 6rem 2rem;
+      }
+
+      .section-title {
+        font-family: "Cormorant Garamond", serif;
+        font-size: clamp(2rem, 4vw, 3.5rem);
+        font-weight: 300;
+        margin-bottom: 0.5rem;
+      }
+
+      .section-title em {
+        color: var(--gold);
+        font-style: italic;
+      }
+
+      .section-sub {
+        color: var(--text-muted);
+        font-size: 1.2rem;
+        max-width: 600px;
+        margin-bottom: 4rem;
+      }
+
+      .divider {
+        width: 60px;
+        height: 1px;
+        background: var(--gold);
+        margin: 1rem 0 1.5rem;
+      }
+
+      /* ─── PLAN PILLS ─── */
+      .plan-legend {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 3rem;
+      }
+
+      .plan-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 1rem;
+        border-radius: 100px;
+        font-size: 1rem;
+        letter-spacing: 0.1em;
+        font-weight: 500;
+        border: 1px solid;
+      }
+
+      .pill-basic {
+        color: var(--basic);
+        border-color: var(--basic);
+        background: rgba(107, 123, 141, 0.08);
+      }
+      .pill-grow {
+        color: var(--grow);
+        border-color: var(--grow);
+        background: rgba(201, 168, 76, 0.08);
+      }
+      .pill-advanced {
+        color: var(--advanced);
+        border-color: var(--advanced);
+        background: rgba(155, 127, 212, 0.08);
+      }
+      .pill-plus {
+        color: var(--plus);
+        border-color: var(--plus);
+        background: rgba(207, 102, 121, 0.08);
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .dot-basic {
+        background: var(--basic);
+      }
+      .dot-grow {
+        background: var(--grow);
+      }
+      .dot-advanced {
+        background: var(--advanced);
+      }
+      .dot-plus {
+        background: var(--plus);
+      }
+
+      /* ─── PRICING CARDS ─── */
+      .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 4rem;
+      }
+
+      .price-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        position: relative;
+        transition: all 0.4s ease;
+        overflow: hidden;
+      }
+
+      .price-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 0.4s;
+        border-radius: 16px;
+      }
+
+      .price-card:hover {
+        transform: translateY(-4px);
+      }
+      .price-card:hover::before {
+        opacity: 1;
+      }
+
+      .card-basic::before {
+        background: radial-gradient(
+          circle at top,
+          rgba(107, 123, 141, 0.08),
+          transparent 60%
+        );
+      }
+      .card-grow::before {
+        background: radial-gradient(
+          circle at top,
+          rgba(201, 168, 76, 0.1),
+          transparent 60%
+        );
+      }
+      .card-advanced::before {
+        background: radial-gradient(
+          circle at top,
+          rgba(155, 127, 212, 0.1),
+          transparent 60%
+        );
+      }
+      .card-plus::before {
+        background: radial-gradient(
+          circle at top,
+          rgba(207, 102, 121, 0.12),
+          transparent 60%
+        );
+      }
+
+      .card-grow {
+        border-color: rgba(201, 168, 76, 0.4);
+      }
+
+      .price-tag {
+        font-size: 0.65rem;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        margin-bottom: 1rem;
+      }
+
+      .price-tag.basic {
+        color: var(--basic);
+      }
+      .price-tag.grow {
+        color: var(--grow);
+      }
+      .price-tag.advanced {
+        color: var(--advanced);
+      }
+      .price-tag.plus {
+        color: var(--plus);
+      }
+
+      .price-name {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 2rem;
+        font-weight: 400;
+        margin-bottom: 0.5rem;
+      }
+
+      .price-amount {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 0.2rem;
+      }
+
+      .price-amount span {
+        font-size: 0.85rem;
+        font-weight: 300;
+        color: var(--text-muted);
+      }
+
+      .price-yearly {
+        font-size: 0.8rem;
+        color: var(--green);
+        margin-bottom: 1.5rem;
+      }
+
+      .price-desc {
+        font-size: 1rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+        border-top: 1px solid var(--border);
+        padding-top: 1rem;
+      }
+
+      .recommended-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: var(--gold);
+        color: var(--black);
+        font-size: 0.6rem;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        padding: 0.3rem 0.7rem;
+        border-radius: 100px;
+      }
+
+      /* ─── FEATURE BLOCKS ─── */
+      .feature-category {
+        margin-bottom: 5rem;
+      }
+
+      .category-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      .category-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: rgba(201, 168, 76, 0.1);
+        border: 1px solid var(--border-bright);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+      }
+
+      .category-name {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 1.8rem;
+        font-weight: 400;
+      }
+
+      .feature-table {
+        width: 100%;
+        border-collapse: collapse;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+
+      .feature-table thead {
+        background: #111;
+      }
+
+      .feature-table th {
+        padding: 1rem 1.2rem;
+        font-size: 0.7rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        font-weight: 500;
+        text-align: center;
+      }
+
+      .th-feature {
+        text-align: left;
+        color: var(--text-muted);
+      }
+      .th-basic {
+        color: var(--basic);
+      }
+      .th-grow {
+        color: var(--grow);
+      }
+      .th-advanced {
+        color: var(--advanced);
+      }
+      .th-plus {
+        color: var(--plus);
+      }
+
+      .feature-table tbody tr {
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        transition: background 0.2s;
+      }
+
+      .feature-table tbody tr:hover {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .feature-table td {
+        padding: 1.2rem 1.2rem;
+        vertical-align: top;
+        text-align: center;
+      }
+
+      .td-feature {
+        text-align: left;
+      }
+
+      .feat-name {
+        font-size: 1.2rem;
+        font-weight: 500;
+        color: var(--text);
+        margin-bottom: 0.3rem;
+      }
+
+      .feat-explain {
+        font-size: 1rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+      }
+
+      .feat-perfume {
+        font-size: 1rem;
+        color: var(--gold);
+        font-style: italic;
+        margin-top: 0.4rem;
+      }
+
+      .check {
+        color: var(--green);
+        font-size: 1.1rem;
+      }
+      .cross {
+        color: #444;
+        font-size: 1rem;
+      }
+
+      .val {
+        font-size: 0.82rem;
+        font-weight: 500;
+        line-height: 1.4;
+      }
+
+      .val-basic {
+        color: var(--basic);
+      }
+      .val-grow {
+        color: var(--grow);
+      }
+      .val-advanced {
+        color: var(--advanced);
+      }
+      .val-plus {
+        color: var(--plus);
+      }
+
+      /* ─── RECOMMENDATION BOX ─── */
+      .recommendation {
+        background: linear-gradient(
+          135deg,
+          rgba(201, 168, 76, 0.08),
+          rgba(201, 168, 76, 0.03)
+        );
+        border: 1px solid var(--border-bright);
+        border-radius: 20px;
+        padding: 3rem;
+        margin: 4rem 0;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .recommendation::before {
+        content: "✦";
+        position: absolute;
+        top: -20px;
+        right: 2rem;
+        font-size: 8rem;
+        color: rgba(201, 168, 76, 0.04);
+        pointer-events: none;
+      }
+
+      .rec-label {
+        font-size: 0.65rem;
+        letter-spacing: 0.4em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 1rem;
+      }
+
+      .rec-title {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 2.2rem;
+        margin-bottom: 1rem;
+      }
+
+      .rec-title em {
+        color: var(--gold);
+        font-style: italic;
+      }
+
+      .rec-text {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        max-width: 700px;
+        margin-bottom: 1.5rem;
+      }
+
+      .rec-reasons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+      }
+
+      .rec-reason {
+        background: rgba(201, 168, 76, 0.06);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.2rem;
+      }
+
+      .rec-reason-icon {
+        font-size: 1.4rem;
+        margin-bottom: 0.5rem;
+      }
+      .rec-reason-title {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--gold);
+        margin-bottom: 0.3rem;
+      }
+      .rec-reason-text {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+      }
+
+      /* ─── CHECKLIST SECTION ─── */
+      .checklist-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .checklist-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+      }
+
+      .checklist-card h3 {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 1.4rem;
+        margin-bottom: 1.2rem;
+        color: var(--gold);
+      }
+
+      .checklist-item {
+        display: flex;
+        gap: 0.8rem;
+        align-items: flex-start;
+        padding: 0.6rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 0.84rem;
+        line-height: 1.5;
+      }
+
+      .checklist-item:last-child {
+        border-bottom: none;
+      }
+
+      .ci-num {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 1px solid var(--gold);
+        color: var(--gold);
+        font-size: 0.65rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+      }
+
+      /* ─── FIRST MESSAGE ─── */
+      .message-box {
+        background: #111;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2.5rem;
+        position: relative;
+        font-size: 0.88rem;
+        line-height: 1.8;
+        color: var(--text-muted);
+        margin-top: 2rem;
+      }
+
+      .message-box::before {
+        content: '"';
+        position: absolute;
+        top: -1rem;
+        left: 2rem;
+        font-family: "Cormorant Garamond", serif;
+        font-size: 5rem;
+        color: var(--gold);
+        line-height: 1;
+      }
+
+      .message-box p {
+        margin-bottom: 1rem;
+      }
+      .message-box p:last-child {
+        margin-bottom: 0;
+      }
+
+      .message-box strong {
+        color: var(--text);
+      }
+
+      /* ─── QUESTIONNAIRE ─── */
+      .q-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+      }
+
+      .q-item {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+        font-size: 0.85rem;
+        transition: border-color 0.3s;
+      }
+
+      .q-item:hover {
+        border-color: var(--border-bright);
+      }
+
+      .q-num {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 1.4rem;
+        color: var(--gold);
+        line-height: 1;
+        flex-shrink: 0;
+        min-width: 30px;
+      }
+
+      .q-text {
+        color: var(--text-muted);
+        line-height: 1.55;
+      }
+
+      /* ─── SCOPE BOX ─── */
+      .scope-box {
+        background: linear-gradient(
+          135deg,
+          rgba(107, 123, 141, 0.06),
+          rgba(155, 127, 212, 0.06)
+        );
+        border: 1px solid rgba(155, 127, 212, 0.3);
+        border-radius: 20px;
+        padding: 2.5rem;
+        margin: 3rem 0;
+      }
+
+      .scope-box h3 {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+      }
+
+      .scope-box p {
+        color: var(--text-muted);
+        font-size: 0.88rem;
+        font-style: italic;
+      }
+
+      /* ─── FOOTER ─── */
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 3rem 2rem;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.1em;
+      }
+
+      /* ─── ANIMATIONS ─── */
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes scrollLine {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scaleY(1);
+          transform-origin: top;
+        }
+        50% {
+          opacity: 0.3;
+          transform: scaleY(0.5);
+          transform-origin: top;
+        }
+      }
+
+      /* ─── CALLOUT ─── */
+      .callout {
+        background: rgba(76, 175, 118, 0.06);
+        border: 1px solid rgba(76, 175, 118, 0.2);
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        font-size: 0.82rem;
+        color: #6fcf97;
+        margin: 1rem 0 2.5rem;
+        display: flex;
+        gap: 0.7rem;
+        align-items: flex-start;
+      }
+
+      .callout-icon {
+        flex-shrink: 0;
+        font-size: 1rem;
+      }
+
+      /* ─── TRANSACTION FEE BAR ─── */
+      .fee-bars {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin: 2rem 0;
+      }
+
+      .fee-bar-item {
+        text-align: center;
+      }
+
+      .fee-bar-label {
+        font-size: 0.7rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+      }
+
+      .fee-bar-track {
+        height: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+      }
+
+      .fee-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+      }
+
+      .fee-bar-val {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+
+      /* mobile */
+      @media (max-width: 768px) {
+        .feature-table thead {
+          display: none;
+        }
+        .feature-table,
+        .feature-table tbody,
+        .feature-table tr,
+        .feature-table td {
+          display: block;
+        }
+        .feature-table tr {
+          margin-bottom: 1.5rem;
+          background: var(--card);
+          border-radius: 12px;
+          overflow: hidden;
+          border: 1px solid var(--border);
+        }
+        .feature-table td {
+          text-align: left !important;
+          padding: 0.8rem 1rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        .td-feature {
+          background: rgba(255, 255, 255, 0.02);
+        }
+        .feature-table td[data-label]::before {
+          content: attr(data-label);
+          display: block;
+          font-size: 0.65rem;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: var(--text-muted);
+          margin-bottom: 0.2rem;
+        }
+        .fee-bars {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .pricing-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .pricing-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ═══ STAFF DEEP DIVE ═══ */
+      .staff-deepdive {
+        background: linear-gradient(
+          135deg,
+          rgba(201, 168, 76, 0.04),
+          rgba(107, 123, 141, 0.04)
+        );
+        border: 1px solid var(--border-bright);
+        border-radius: 20px;
+        padding: 2.5rem;
+        margin: 0.5rem 0;
+      }
+
+      .staff-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .staff-icon {
+        font-size: 2rem;
+        width: 56px;
+        height: 56px;
+        background: rgba(201, 168, 76, 0.1);
+        border: 1px solid var(--border-bright);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .staff-title {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 1.8rem;
+        font-weight: 400;
+        margin-bottom: 0.3rem;
+      }
+
+      .staff-subtitle {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+      }
+
+      .staff-analogy {
+        background: rgba(201, 168, 76, 0.07);
+        border: 1px solid var(--border-bright);
+        border-radius: 14px;
+        padding: 1.5rem;
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+      }
+
+      .analogy-icon {
+        font-size: 2rem;
+        flex-shrink: 0;
+      }
+      .analogy-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: var(--gold);
+        margin-bottom: 0.5rem;
+      }
+      .analogy-text {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      .staff-section-label {
+        font-size: 0.75rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin: 2rem 0 1rem;
+      }
+
+      .staff-explain-block {
+        font-size: 0.86rem;
+        color: var(--text-muted);
+        line-height: 1.7;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.2rem 1.5rem;
+      }
+
+      .staff-explain-block strong {
+        color: var(--text);
+      }
+
+      .permissions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.8rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .perm-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+        transition: border-color 0.2s;
+      }
+
+      .perm-card:hover {
+        border-color: var(--border-bright);
+      }
+      .perm-area {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--text);
+        margin-bottom: 0.4rem;
+      }
+      .perm-detail {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
+      .staff-roles-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+      }
+
+      .role-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1.4rem;
+        transition: all 0.3s;
+      }
+
+      .role-card:hover {
+        border-color: var(--border-bright);
+        transform: translateY(-2px);
+      }
+      .highlight-role {
+        border-color: rgba(201, 168, 76, 0.4) !important;
+        background: rgba(201, 168, 76, 0.04);
+      }
+
+      .role-emoji {
+        font-size: 1.8rem;
+        margin-bottom: 0.6rem;
+      }
+      .role-name {
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: var(--text);
+        margin-bottom: 0.5rem;
+      }
+      .role-desc {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+        margin-bottom: 0.8rem;
+      }
+      .role-perms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      .perm-tag {
+        font-size: 0.68rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 100px;
+        background: rgba(76, 175, 118, 0.12);
+        color: var(--green);
+        border: 1px solid rgba(76, 175, 118, 0.3);
+        font-weight: 500;
+      }
+
+      .cross-tag {
+        background: rgba(255, 255, 255, 0.04);
+        color: #555;
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+      .gold-tag {
+        background: rgba(201, 168, 76, 0.12);
+        color: var(--gold);
+        border-color: var(--border-bright);
+      }
+
+      .staff-warn-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+      }
+
+      .staff-warn-item {
+        background: rgba(207, 102, 121, 0.05);
+        border: 1px solid rgba(207, 102, 121, 0.2);
+        border-radius: 12px;
+        padding: 1.2rem;
+        display: flex;
+        gap: 0.8rem;
+        align-items: flex-start;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+      }
+
+      .warn-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+      }
+      .staff-warn-item strong {
+        color: var(--text);
+      }
+
+      .staff-plan-compare {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+      }
+
+      @media (max-width: 768px) {
+        .staff-plan-compare {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .spc-item {
+        border-radius: 14px;
+        padding: 1.5rem 1rem;
+        text-align: center;
+        border: 1px solid;
+      }
+
+      .spc-basic {
+        background: rgba(107, 123, 141, 0.07);
+        border-color: rgba(107, 123, 141, 0.3);
+      }
+      .spc-grow {
+        background: rgba(201, 168, 76, 0.08);
+        border-color: rgba(201, 168, 76, 0.4);
+      }
+      .spc-advanced {
+        background: rgba(155, 127, 212, 0.07);
+        border-color: rgba(155, 127, 212, 0.3);
+      }
+      .spc-plus {
+        background: rgba(207, 102, 121, 0.07);
+        border-color: rgba(207, 102, 121, 0.3);
+      }
+
+      .spc-plan {
+        font-size: 0.7rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+      }
+      .spc-basic .spc-plan {
+        color: var(--basic);
+      }
+      .spc-grow .spc-plan {
+        color: var(--grow);
+      }
+      .spc-advanced .spc-plan {
+        color: var(--advanced);
+      }
+      .spc-plus .spc-plan {
+        color: var(--plus);
+      }
+
+      .spc-count {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 3.5rem;
+        line-height: 1;
+        margin-bottom: 0.3rem;
+      }
+      .spc-basic .spc-count {
+        color: var(--basic);
+      }
+      .spc-grow .spc-count {
+        color: var(--grow);
+      }
+      .spc-advanced .spc-count {
+        color: var(--advanced);
+      }
+      .spc-plus .spc-count {
+        color: var(--plus);
+      }
+
+      .spc-label {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin-bottom: 0.8rem;
+      }
+      .spc-note {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
+      .staff-bottom-note {
+        margin-top: 2rem;
+        background: rgba(201, 168, 76, 0.06);
+        border: 1px solid var(--border-bright);
+        border-radius: 12px;
+        padding: 1.2rem 1.5rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      .staff-bottom-note strong {
+        color: var(--gold);
+      }
+
+      /* ═══ ASSET CARDS ═══ */
+      .asset-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+        transition: border-color 0.3s;
+      }
+
+      .asset-card:hover {
+        border-color: var(--border-bright);
+      }
+
+      .asset-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.5rem 2rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+
+      .asset-num {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 2rem;
+        color: var(--gold);
+        opacity: 0.5;
+        min-width: 40px;
+        line-height: 1;
+      }
+
+      .asset-icon {
+        font-size: 1.6rem;
+        width: 48px;
+        height: 48px;
+        background: rgba(201, 168, 76, 0.08);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .asset-title {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 1.4rem;
+        font-weight: 400;
+        margin-bottom: 0.2rem;
+      }
+
+      .asset-type {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .asset-status {
+        margin-left: auto;
+        font-size: 0.65rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-weight: 600;
+        padding: 0.3rem 0.9rem;
+        border-radius: 100px;
+        flex-shrink: 0;
+      }
+
+      .required {
+        background: rgba(207, 102, 121, 0.15);
+        color: var(--red);
+        border: 1px solid rgba(207, 102, 121, 0.3);
+      }
+      .important {
+        background: rgba(201, 168, 76, 0.12);
+        color: var(--gold);
+        border: 1px solid var(--border-bright);
+      }
+      .easy {
+        background: rgba(76, 175, 118, 0.12);
+        color: var(--green);
+        border: 1px solid rgba(76, 175, 118, 0.3);
+      }
+
+      .asset-body {
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .asset-why,
+      .asset-howto {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+
+      .why-label,
+      .howto-label {
+        font-size: 0.7rem;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        font-weight: 500;
+        margin-bottom: 0.8rem;
+      }
+
+      .why-label {
+        color: var(--advanced);
+      }
+      .howto-label {
+        color: var(--green);
+      }
+
+      .asset-why p,
+      .asset-howto p {
+        font-size: 0.86rem;
+        color: var(--text-muted);
+        line-height: 1.7;
+      }
+
+      .howto-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        margin-top: 0.5rem;
+      }
+
+      .howto-step {
+        display: flex;
+        gap: 0.8rem;
+        align-items: flex-start;
+        font-size: 0.84rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+      }
+
+      .hs-num {
+        width: 24px;
+        height: 24px;
+        background: rgba(76, 175, 118, 0.15);
+        border: 1px solid rgba(76, 175, 118, 0.3);
+        color: var(--green);
+        border-radius: 50%;
+        font-size: 0.7rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+      }
+
+      .howto-step strong {
+        color: var(--text);
+      }
+      .howto-step code {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        color: var(--gold);
+        font-family: monospace;
+      }
+
+      .asset-missing {
+        background: rgba(207, 102, 121, 0.05);
+        border: 1px solid rgba(207, 102, 121, 0.2);
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+      }
+
+      .missing-icon {
+        flex-shrink: 0;
+      }
+      .asset-missing strong {
+        color: #e57373;
+      }
+
+      .product-sheet-columns {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.7rem;
+        margin-top: 0.8rem;
+      }
+
+      .col-item {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.8rem 1rem;
+      }
+
+      .col-name {
+        font-size: 0.83rem;
+        font-weight: 500;
+        color: var(--text);
+        margin-bottom: 0.3rem;
+      }
+      .col-eg {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+      }
+
+      .mini-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 0.8rem;
+      }
+      .mini-item {
+        font-size: 0.84rem;
+        color: var(--text-muted);
+        padding: 0.5rem 0.8rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+
+      /* ═══ FOLDER STRUCTURE ═══ */
+      .folder-structure {
+        background: #0f0f0f;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        font-family: monospace;
+        margin-top: 1.5rem;
+      }
+
+      .folder-root {
+        font-size: 1rem;
+        color: var(--gold);
+        font-weight: 600;
+        margin-bottom: 1rem;
+        font-family: "Jost", sans-serif;
+      }
+
+      .folder-children {
+        padding-left: 1.5rem;
+        border-left: 1px dashed rgba(201, 168, 76, 0.3);
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+      }
+
+      .folder-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.8rem;
+        font-size: 0.82rem;
+        padding: 0.7rem 1rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        transition: border-color 0.2s;
+        font-family: "Jost", sans-serif;
+      }
+
+      .folder-item:hover {
+        border-color: var(--border);
+      }
+      .fi-icon {
+        font-size: 1rem;
+        flex-shrink: 0;
+      }
+      .fi-name {
+        color: var(--text);
+        font-weight: 500;
+        min-width: 220px;
+        flex-shrink: 0;
+      }
+      .fi-contents {
+        color: var(--text-muted);
+      }
+
+      @media (max-width: 600px) {
+        .fi-name {
+          min-width: unset;
+        }
+        .folder-item {
+          flex-wrap: wrap;
+        }
+        .asset-header {
+          flex-wrap: wrap;
+        }
+        .asset-num {
+          display: none;
+        }
+        .staff-roles-grid {
+          grid-template-columns: 1fr;
+        }
+        .permissions-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-eyebrow">Your Complete Shopify Blueprint</div>
+      <h1>
+        Choose the Right<br /><em>Foundation</em><br />for Your Perfume Brand
+      </h1>
+      <p class="hero-sub">
+        A plain-language, no-jargon guide to every Shopify plan — so you can
+        decide with confidence exactly where to invest your first rupee.
+      </p>
+      <div class="hero-ornament"></div>
+      <div class="scroll-hint">
+        <div class="scroll-line"></div>
+        Scroll to explore
+      </div>
+    </section>
+
+    <!-- NAV -->
+    <nav class="sticky-nav">
+      <a href="#pricing">Pricing</a>
+      <a href="#core">Core Features</a>
+      <a href="#operations">Operations</a>
+      <a href="#marketing">Marketing</a>
+      <a href="#international">International</a>
+      <a href="#recommendation">Recommendation</a>
+      <a href="#checklist">Checklist</a>
+      <a href="#questionnaire">Questionnaire</a>
+    </nav>
+
+    <!-- ═══════════════════════════════ PRICING ═══════════════════════════════ -->
+    <section class="section" id="pricing">
+      <div class="section-title">The Four <em>Chapters</em> of Shopify</div>
+      <div class="divider"></div>
+      <p class="section-sub">
+        Think of these four plans as four chapters in your brand's growth story.
+        Each unlocks more power — but also costs more. Your job is to start at
+        the right chapter for where you are today.
+      </p>
+
+      <div class="plan-legend">
+        <div class="plan-pill pill-basic">
+          <span class="dot dot-basic"></span>Basic — The Launchpad
+        </div>
+        <div class="plan-pill pill-grow">
+          <span class="dot dot-grow"></span>Grow — The Momentum
+        </div>
+        <div class="plan-pill pill-advanced">
+          <span class="dot dot-advanced"></span>Advanced — The Scale
+        </div>
+        <div class="plan-pill pill-plus">
+          <span class="dot dot-plus"></span>Plus — The Empire
+        </div>
+      </div>
+
+      <div class="pricing-grid">
+        <div class="price-card card-basic">
+          <div class="price-tag basic">Basic Plan</div>
+          <div class="price-name">The Launchpad</div>
+          <div class="price-amount">₹1,994 <span>/month</span></div>
+          <div class="price-yearly">Save 25% → ₹1,499/mo if paid yearly</div>
+          <div class="price-desc">
+            Everything you need to open your perfume store and start selling.
+            Perfect if you're just starting out and want to test the waters
+            without spending big.
+          </div>
+        </div>
+        <div class="price-card card-grow">
+          <div class="recommended-badge">⭐ Recommended</div>
+          <div class="price-tag grow">Grow Plan</div>
+          <div class="price-name">The Momentum</div>
+          <div class="price-amount">₹7,447 <span>/month</span></div>
+          <div class="price-yearly">Save 25% → ₹5,599/mo if paid yearly</div>
+          <div class="price-desc">
+            You've proven your idea, now you want to grow. Adds a team (5
+            staff), lower transaction fees, and full data access for custom
+            tools.
+          </div>
+        </div>
+        <div class="price-card card-advanced">
+          <div class="price-tag advanced">Advanced Plan</div>
+          <div class="price-name">The Scale</div>
+          <div class="price-amount">₹30,164 <span>/month</span></div>
+          <div class="price-yearly">Save 25% → ₹22,680/mo if paid yearly</div>
+          <div class="price-desc">
+            Serious volume, serious team (15 staff), the lowest standard
+            transaction fees, and smarter API speeds. For brands doing
+            significant revenue.
+          </div>
+        </div>
+        <div class="price-card card-plus">
+          <div class="price-tag plus">Plus Plan</div>
+          <div class="price-name">The Empire</div>
+          <div class="price-amount">₹1,75,000+ <span>/month</span></div>
+          <div class="price-yearly">3-year term pricing</div>
+          <div class="price-desc">
+            Enterprise-grade. Unlimited staff, 200 inventory locations, 25
+            storefronts, priority phone support. For established brands doing
+            crores in revenue.
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout-icon">💡</span>
+        <span
+          ><strong>For your perfume brand launching now:</strong> Start with
+          <strong>Basic</strong> or <strong>Grow</strong>. You already have your
+          domain and inventory ready — so you're not starting from zero. Basic
+          works if you're solo. Grow makes sense if you'll have a small team or
+          expect good traction quickly.</span
+        >
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ CORE FEATURES ═══════════════════════════════ -->
+    <section class="section" id="core">
+      <div class="section-title"><em>Core</em> Features Explained</div>
+      <div class="divider"></div>
+      <p class="section-sub">
+        Every feature below — explained in real words, not Shopify jargon. Plus
+        what it means specifically for your perfume brand.
+      </p>
+
+      <div class="feature-category">
+        <div class="category-header">
+          <div class="category-icon">🛒</div>
+          <div>
+            <div class="category-name">Your Store & Storefront</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted)">
+              The actual shop your customers see and buy from
+            </div>
+          </div>
+        </div>
+
+        <table class="feature-table">
+          <thead>
+            <tr>
+              <th class="th-feature">Feature</th>
+              <th class="th-basic">Basic</th>
+              <th class="th-grow">Grow</th>
+              <th class="th-advanced">Advanced</th>
+              <th class="th-plus">Plus</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🏪 Online Store</div>
+                <div class="feat-explain">
+                  This is your actual website — product pages, collections,
+                  blog, about page. Everything your customer sees when they
+                  visit your URL.
+                </div>
+                <div class="feat-perfume">
+                  For you: This IS your perfume website. Where customers browse
+                  "Oud Collection", "Fresh Citrus", add to cart, and checkout.
+                </div>
+              </td>
+              <td data-label="Basic">
+                <span class="val val-basic">Full-featured</span>
+              </td>
+              <td data-label="Grow">
+                <span class="val val-grow">Full-featured</span>
+              </td>
+              <td data-label="Advanced">
+                <span class="val val-advanced">Full-featured</span>
+              </td>
+              <td data-label="Plus">
+                <span class="val val-plus">Full-featured</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">♾️ Unlimited Products</div>
+                <div class="feat-explain">
+                  You can list as many products as you want. No cap. 10
+                  fragrances or 10,000 — same cost.
+                </div>
+                <div class="feat-perfume">
+                  For you: Add every SKU — 50ml, 100ml, gift sets, gift wrapping
+                  — no extra charge.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🎨 Templates & Themes</div>
+                <div class="feat-explain">
+                  Shopify gives you pre-built, beautiful store designs you can
+                  customize with your logo, colors, and fonts — no coding
+                  needed.
+                </div>
+                <div class="feat-perfume">
+                  For you: Pick a luxury/minimal theme, plug in your brand
+                  colors and perfume photos, and your store looks premium from
+                  day one.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature" colspan="5" style="padding: 0">
+                <!-- ═══ STAFF DEEP DIVE ═══ -->
+                <div class="staff-deepdive">
+                  <div class="staff-header">
+                    <div class="staff-icon">👥</div>
+                    <div>
+                      <div class="staff-title">Additional Staff Accounts</div>
+                      <div class="staff-subtitle">
+                        The most misunderstood feature — and one of the biggest
+                        reasons to upgrade from Basic
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- THE ANALOGY -->
+                  <div class="staff-analogy">
+                    <div class="analogy-icon">🔑</div>
+                    <div>
+                      <div class="analogy-title">
+                        Think of it like keys to your physical shop.
+                      </div>
+                      <div class="analogy-text">
+                        You own the master key (your Shopify owner login). But
+                        you can't be at the shop 24/7. So you make duplicate
+                        keys for your staff. Each duplicate key can be set to
+                        open only certain doors — the stockroom but not the
+                        safe, the counter but not the accounts. That's exactly
+                        what Shopify Staff Accounts do for your online store.
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- WHAT IT ACTUALLY IS -->
+                  <div class="staff-section-label">
+                    🤔 So what exactly IS a Staff Account?
+                  </div>
+                  <div class="staff-explain-block">
+                    <p>
+                      A Staff Account is a
+                      <strong>separate login (email + password)</strong> that
+                      you create inside your Shopify admin for another person.
+                      That person can log in to your store's backend on their
+                      own device, at any time, and do their job — without ever
+                      knowing your password, and without being able to access
+                      things you haven't allowed.
+                    </p>
+                    <p style="margin-top: 0.8rem">
+                      Your Shopify store has ONE owner (you). The owner account
+                      is permanent and cannot be deleted or restricted. Staff
+                      accounts are additions on top of that — they're helpers,
+                      not co-owners.
+                    </p>
+                  </div>
+
+                  <!-- PERMISSION SYSTEM -->
+                  <div class="staff-section-label">
+                    🔐 Can you control what each staff can see or do?
+                  </div>
+                  <div class="staff-explain-block">
+                    <p>
+                      <strong>Yes — completely.</strong> When you create a staff
+                      account, Shopify shows you a checklist of permissions. You
+                      tick what they're allowed to do. Nothing more, nothing
+                      less.
+                    </p>
+                  </div>
+
+                  <div class="permissions-grid">
+                    <div class="perm-card">
+                      <div class="perm-area">📦 Orders</div>
+                      <div class="perm-detail">
+                        View orders, process fulfillments, print packing slips,
+                        mark as shipped, issue refunds
+                      </div>
+                    </div>
+                    <div class="perm-card">
+                      <div class="perm-area">🏷️ Products</div>
+                      <div class="perm-detail">
+                        Add new products, edit descriptions, update prices,
+                        manage inventory stock numbers
+                      </div>
+                    </div>
+                    <div class="perm-card">
+                      <div class="perm-area">👤 Customers</div>
+                      <div class="perm-detail">
+                        View customer profiles, see order history, handle
+                        customer service queries
+                      </div>
+                    </div>
+                    <div class="perm-card">
+                      <div class="perm-area">📊 Reports</div>
+                      <div class="perm-detail">
+                        View sales reports, traffic data, product performance —
+                        so your marketing team can make data decisions
+                      </div>
+                    </div>
+                    <div class="perm-card">
+                      <div class="perm-area">🎨 Themes</div>
+                      <div class="perm-detail">
+                        Edit your store's design, update banners, change text —
+                        for your designer or content person
+                      </div>
+                    </div>
+                    <div class="perm-card">
+                      <div class="perm-area">⚙️ Settings</div>
+                      <div class="perm-detail">
+                        Access to billing, payment settings, shipping —
+                        typically kept <strong>only for the owner</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- WHO NEEDS WHAT -->
+                  <div class="staff-section-label">
+                    👤 Which type of person needs which account?
+                  </div>
+                  <div class="staff-roles-grid">
+                    <div class="role-card">
+                      <div class="role-emoji">📦</div>
+                      <div class="role-name">Packing / Dispatch Person</div>
+                      <div class="role-desc">
+                        The person who packs and ships orders. They need to see
+                        new orders, mark them as packed, print shipping labels.
+                        They do NOT need to see your revenue or change product
+                        prices.
+                      </div>
+                      <div class="role-perms">
+                        <span class="perm-tag">✓ Orders</span
+                        ><span class="perm-tag cross-tag">✗ Billing</span
+                        ><span class="perm-tag cross-tag">✗ Reports</span>
+                      </div>
+                    </div>
+                    <div class="role-card">
+                      <div class="role-emoji">📱</div>
+                      <div class="role-name">
+                        Social Media / Marketing Person
+                      </div>
+                      <div class="role-desc">
+                        Runs your Instagram, creates discount codes, monitors
+                        which products are trending, updates product
+                        descriptions after shoots. Needs product + discount
+                        access, not financial data.
+                      </div>
+                      <div class="role-perms">
+                        <span class="perm-tag">✓ Products</span
+                        ><span class="perm-tag">✓ Discounts</span
+                        ><span class="perm-tag cross-tag">✗ Orders</span>
+                      </div>
+                    </div>
+                    <div class="role-card">
+                      <div class="role-emoji">🖥️</div>
+                      <div class="role-name">Virtual Assistant (VA)</div>
+                      <div class="role-desc">
+                        Handles customer emails, processes returns, updates
+                        tracking info, responds to queries. Needs customers and
+                        orders. Doesn't need anything else.
+                      </div>
+                      <div class="role-perms">
+                        <span class="perm-tag">✓ Orders</span
+                        ><span class="perm-tag">✓ Customers</span
+                        ><span class="perm-tag cross-tag">✗ Products</span>
+                      </div>
+                    </div>
+                    <div class="role-card">
+                      <div class="role-emoji">📊</div>
+                      <div class="role-name">Accountant / Finance Person</div>
+                      <div class="role-desc">
+                        Needs to pull sales reports, revenue summaries, and
+                        order histories for GST filing or reconciliation.
+                        Read-only access to reports is all they need.
+                      </div>
+                      <div class="role-perms">
+                        <span class="perm-tag">✓ Reports</span
+                        ><span class="perm-tag cross-tag">✗ Products</span
+                        ><span class="perm-tag cross-tag">✗ Orders edit</span>
+                      </div>
+                    </div>
+                    <div class="role-card">
+                      <div class="role-emoji">🎨</div>
+                      <div class="role-name">Designer / Content Person</div>
+                      <div class="role-desc">
+                        Updates banners, changes homepage layout after a new
+                        collection shoot, edits product page copy. Only needs
+                        theme and product access.
+                      </div>
+                      <div class="role-perms">
+                        <span class="perm-tag">✓ Themes</span
+                        ><span class="perm-tag">✓ Products</span
+                        ><span class="perm-tag cross-tag">✗ Orders</span>
+                      </div>
+                    </div>
+                    <div class="role-card highlight-role">
+                      <div class="role-emoji">💻</div>
+                      <div class="role-name">Your Developer (Me)</div>
+                      <div class="role-desc">
+                        I use a <strong>Collaborator Account</strong> — a
+                        special type that doesn't eat into your staff count at
+                        all. I get access only to what I need for building, then
+                        I leave. No staff seat wasted.
+                      </div>
+                      <div class="role-perms">
+                        <span class="perm-tag gold-tag"
+                          >Collaborator — Free</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- WHY NOT SHARE PASSWORD -->
+                  <div class="staff-section-label">
+                    ⚠️ Why NOT just share your main password with everyone?
+                  </div>
+                  <div class="staff-warn-grid">
+                    <div class="staff-warn-item">
+                      <div class="warn-icon">🔓</div>
+                      <div>
+                        <strong>No control.</strong> If someone has your main
+                        password, they can do anything — delete products, change
+                        prices, see all revenue, even change the owner email.
+                      </div>
+                    </div>
+                    <div class="staff-warn-item">
+                      <div class="warn-icon">📝</div>
+                      <div>
+                        <strong>No audit trail.</strong> With staff accounts,
+                        Shopify logs who did what and when. "Who deleted this
+                        product?" — you'll know.
+                      </div>
+                    </div>
+                    <div class="staff-warn-item">
+                      <div class="warn-icon">🚪</div>
+                      <div>
+                        <strong>Can't fire someone from the store.</strong> If a
+                        staff member leaves, just delete their account. With a
+                        shared password, you'd have to change it everywhere and
+                        risk them still having access.
+                      </div>
+                    </div>
+                    <div class="staff-warn-item">
+                      <div class="warn-icon">🛡️</div>
+                      <div>
+                        <strong>Security risk.</strong> Each staff account has
+                        its own 2FA. One compromised device doesn't expose your
+                        entire store owner account.
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- PLAN COMPARISON -->
+                  <div class="staff-section-label">
+                    📊 How many staff does each plan allow?
+                  </div>
+                  <div class="staff-plan-compare">
+                    <div class="spc-item spc-basic">
+                      <div class="spc-plan">Basic</div>
+                      <div class="spc-count">0</div>
+                      <div class="spc-label">Staff Accounts</div>
+                      <div class="spc-note">
+                        Only YOU can log in. Fine if you're a solo founder doing
+                        everything yourself.
+                      </div>
+                    </div>
+                    <div class="spc-item spc-grow">
+                      <div class="spc-plan">Grow ⭐</div>
+                      <div class="spc-count">5</div>
+                      <div class="spc-label">Staff Accounts</div>
+                      <div class="spc-note">
+                        Packing + VA + Social Media + Accountant + 1 spare.
+                        Perfect for a small lean team.
+                      </div>
+                    </div>
+                    <div class="spc-item spc-advanced">
+                      <div class="spc-plan">Advanced</div>
+                      <div class="spc-count">15</div>
+                      <div class="spc-label">Staff Accounts</div>
+                      <div class="spc-note">
+                        Full operations team. Multiple warehouse staff, full
+                        marketing team, managers.
+                      </div>
+                    </div>
+                    <div class="spc-item spc-plus">
+                      <div class="spc-plan">Plus</div>
+                      <div class="spc-count">∞</div>
+                      <div class="spc-label">Staff Accounts</div>
+                      <div class="spc-note">
+                        Unlimited. For large teams across departments —
+                        enterprise scale.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="staff-bottom-note">
+                    💡 <strong>Bottom line for your perfume brand:</strong> If
+                    you're starting solo and doing everything yourself —
+                    packing, posting, replying — Basic's zero staff is fine for
+                    now. The moment you hire even one person, you want Grow. And
+                    since Grow also gives you lower transaction fees, it often
+                    makes financial sense to start there anyway.
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🤝 Collaborator Accounts</div>
+                <div class="feat-explain">
+                  Special accounts for designers, developers, or agencies you
+                  hire. They get access to work on your store but don't count
+                  against your staff limit.
+                </div>
+                <div class="feat-perfume">
+                  For you: When you hire me (your developer) to set up the
+                  store, I'll use a Collaborator account — so it doesn't use up
+                  any of your staff seats.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🤖 Agentic Commerce</div>
+                <div class="feat-explain">
+                  Shopify automatically syncs your products to AI assistants and
+                  chat platforms — so customers can discover and even buy your
+                  products through AI chats and conversations.
+                </div>
+                <div class="feat-perfume">
+                  For you: Imagine someone asking ChatGPT "find me a good oud
+                  perfume" and your brand shows up. This is that.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">📣 Sales Channels</div>
+                <div class="feat-explain">
+                  Sell on Instagram, Facebook, WhatsApp, Google Shopping,
+                  Amazon, and more — all managed from one Shopify dashboard. One
+                  order comes in regardless of where they bought from.
+                </div>
+                <div class="feat-perfume">
+                  For you: Run Instagram ads for your fragrances, customers
+                  click and checkout right in Instagram — Shopify tracks it all.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">💳 World's Best Checkout</div>
+                <div class="feat-explain">
+                  Shopify's checkout is proven to convert more visitors into
+                  buyers than anyone else's. Fast, clean, one-click for
+                  returning customers.
+                </div>
+                <div class="feat-perfume">
+                  For you: Every customer who adds "Rose Oud 100ml" to their
+                  cart has the best possible chance of actually completing the
+                  purchase.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">💰 0.5% Cashback on Sales</div>
+                <div class="feat-explain">
+                  Shopify gives you back 0.5% of your total sales as credits on
+                  your Shopify bill — up to a cap — for the first 6 months.
+                </div>
+                <div class="feat-perfume">
+                  For you: If you sell ₹5,00,000 worth of perfume in 6 months,
+                  you get ₹2,500 back on your Shopify subscription.
+                </div>
+              </td>
+              <td><span class="val val-basic">Up to ₹1.1L</span></td>
+              <td><span class="val val-grow">Up to ₹1.7L</span></td>
+              <td><span class="val val-advanced">Up to ₹2.3L</span></td>
+              <td><span class="val val-plus">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ OPERATIONS ═══════════════════════════════ -->
+    <section class="section" id="operations">
+      <div class="section-title">Operations & <em>Backend</em></div>
+      <div class="divider"></div>
+      <p class="section-sub">
+        The behind-the-scenes engine — payments, inventory, fees, hosting, and
+        domain.
+      </p>
+
+      <div class="feature-category">
+        <div class="category-header">
+          <div class="category-icon">💸</div>
+          <div>
+            <div class="category-name">
+              Transaction Fees — The Most Important Difference
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted)">
+              This is the money Shopify keeps from every sale if you don't use
+              Shopify Payments
+            </div>
+          </div>
+        </div>
+
+        <div class="fee-bars">
+          <div class="fee-bar-item">
+            <div class="fee-bar-label" style="color: var(--basic)">Basic</div>
+            <div class="fee-bar-track">
+              <div
+                class="fee-bar-fill"
+                style="width: 100%; background: var(--basic)"
+              ></div>
+            </div>
+            <div class="fee-bar-val" style="color: var(--basic)">2%</div>
+            <div
+              style="
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                margin-top: 0.3rem;
+              "
+            >
+              Per order
+            </div>
+          </div>
+          <div class="fee-bar-item">
+            <div class="fee-bar-label" style="color: var(--grow)">Grow</div>
+            <div class="fee-bar-track">
+              <div
+                class="fee-bar-fill"
+                style="width: 50%; background: var(--grow)"
+              ></div>
+            </div>
+            <div class="fee-bar-val" style="color: var(--grow)">1%</div>
+            <div
+              style="
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                margin-top: 0.3rem;
+              "
+            >
+              Per order
+            </div>
+          </div>
+          <div class="fee-bar-item">
+            <div class="fee-bar-label" style="color: var(--advanced)">
+              Advanced
+            </div>
+            <div class="fee-bar-track">
+              <div
+                class="fee-bar-fill"
+                style="width: 30%; background: var(--advanced)"
+              ></div>
+            </div>
+            <div class="fee-bar-val" style="color: var(--advanced)">0.6%</div>
+            <div
+              style="
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                margin-top: 0.3rem;
+              "
+            >
+              Per order
+            </div>
+          </div>
+          <div class="fee-bar-item">
+            <div class="fee-bar-label" style="color: var(--plus)">Plus</div>
+            <div class="fee-bar-track">
+              <div
+                class="fee-bar-fill"
+                style="width: 10%; background: var(--plus)"
+              ></div>
+            </div>
+            <div class="fee-bar-val" style="color: var(--plus)">0.2%</div>
+            <div
+              style="
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                margin-top: 0.3rem;
+              "
+            >
+              Per order
+            </div>
+          </div>
+        </div>
+
+        <div class="callout">
+          <span class="callout-icon">🧮</span>
+          <span
+            ><strong>Real example for your perfume brand:</strong> If you sell
+            ₹1,00,000 worth of perfume in a month using Razorpay (not Shopify
+            Payments), Basic costs you ₹2,000 extra in fees. Grow costs ₹1,000.
+            Advanced costs ₹600. At higher volumes, upgrading plans pays for
+            itself.</span
+          >
+        </div>
+
+        <table class="feature-table">
+          <thead>
+            <tr>
+              <th class="th-feature">Feature</th>
+              <th class="th-basic">Basic</th>
+              <th class="th-grow">Grow</th>
+              <th class="th-advanced">Advanced</th>
+              <th class="th-plus">Plus</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">📦 Inventory Locations</div>
+                <div class="feat-explain">
+                  How many physical places Shopify can track your stock from —
+                  your home, a warehouse, a store, a pop-up stall. Each location
+                  has its own inventory count.
+                </div>
+                <div class="feat-perfume">
+                  For you: If you store perfumes at home + one warehouse, that's
+                  2 locations. Basic and Grow both allow up to 10 — plenty to
+                  start.
+                </div>
+              </td>
+              <td><span class="val val-basic">10</span></td>
+              <td><span class="val val-grow">10</span></td>
+              <td><span class="val val-advanced">10</span></td>
+              <td><span class="val val-plus">200</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🌐 Custom Domain</div>
+                <div class="feat-explain">
+                  Connect your own domain (yourbrand.com) to Shopify so
+                  customers see your brand URL, not a generic shopify URL. You
+                  already own a domain — this connects it.
+                </div>
+                <div class="feat-perfume">
+                  For you: Since you already purchased your domain, we just
+                  update DNS settings and it connects. All plans support this.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🔒 Free SSL Certificate</div>
+                <div class="feat-explain">
+                  The padlock icon in your browser (https://). This encrypts
+                  your customer's data — especially important at checkout.
+                  Shopify provides this free on all plans.
+                </div>
+                <div class="feat-perfume">
+                  For you: Customers won't get a "not secure" warning when
+                  entering payment details. Trust is everything in luxury
+                  fragrance.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🖥️ Unlimited Web Hosting</div>
+                <div class="feat-explain">
+                  Shopify hosts your website on their servers — no need to pay
+                  GoDaddy or AWS separately. Fast loading, 99.9% uptime,
+                  unlimited bandwidth even if you go viral.
+                </div>
+                <div class="feat-perfume">
+                  For you: If your Instagram ad suddenly drives 10,000 visitors,
+                  your site won't crash. Shopify handles the load.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">📊 Analytics</div>
+                <div class="feat-explain">
+                  60+ built-in reports — which products sell most, where
+                  customers come from, which pages they bounce from, revenue
+                  over time, customer behavior. Your store's intelligence
+                  dashboard.
+                </div>
+                <div class="feat-perfume">
+                  For you: See which fragrance is most viewed but least
+                  purchased (maybe price it down or add better photos). Data
+                  that drives decisions.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🏢 B2B (Wholesale) Selling</div>
+                <div class="feat-explain">
+                  Sell to retailers or bulk buyers with a separate wholesale
+                  catalog and pricing — different prices for different types of
+                  buyers, all from the same Shopify store.
+                </div>
+                <div class="feat-perfume">
+                  For you: If a perfume shop wants to stock your brand at
+                  wholesale price, you can offer them a private catalog with
+                  bulk rates — without showing it to retail customers.
+                </div>
+              </td>
+              <td><span class="val val-basic">Up to 3 catalogs</span></td>
+              <td><span class="val val-grow">Up to 3 catalogs</span></td>
+              <td><span class="val val-advanced">Up to 3 catalogs</span></td>
+              <td><span class="val val-plus">Unlimited</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🎧 24/7 Support</div>
+                <div class="feat-explain">
+                  How you can contact Shopify when something breaks or you're
+                  confused. Higher plans get faster, more personal support
+                  channels.
+                </div>
+                <div class="feat-perfume">
+                  For you: Basic gives live chat — honestly sufficient for most
+                  issues when you're starting.
+                </div>
+              </td>
+              <td><span class="val val-basic">Live chat</span></td>
+              <td><span class="val val-grow">Live chat</span></td>
+              <td><span class="val val-advanced">Enhanced live chat</span></td>
+              <td><span class="val val-plus">Priority phone/chat</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ MARKETING ═══════════════════════════════ -->
+    <section class="section" id="marketing">
+      <div class="section-title">Marketing & <em>Growth</em> Tools</div>
+      <div class="divider"></div>
+      <p class="section-sub">
+        Everything Shopify gives you to find new customers, bring back old ones,
+        and turn visitors into buyers — all built in.
+      </p>
+
+      <div class="feature-category">
+        <div class="category-header">
+          <div class="category-icon">📬</div>
+          <div>
+            <div class="category-name">Marketing Suite</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted)">
+              Tools to reach, engage, and convert customers
+            </div>
+          </div>
+        </div>
+
+        <table class="feature-table">
+          <thead>
+            <tr>
+              <th class="th-feature">Feature</th>
+              <th class="th-basic">Basic</th>
+              <th class="th-grow">Grow</th>
+              <th class="th-advanced">Advanced</th>
+              <th class="th-plus">Plus</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">📧 Shopify Email</div>
+                <div class="feat-explain">
+                  A built-in email marketing tool — design campaign emails, send
+                  newsletters, automate "welcome" or "thank you" emails, and
+                  track open rates. First 10,000 emails/month are free.
+                </div>
+                <div class="feat-perfume">
+                  For you: Launch a new fragrance → send a beautiful email
+                  campaign to your customer list. No Mailchimp needed. It's
+                  already inside Shopify.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🛒 Abandoned Checkout Recovery</div>
+                <div class="feat-explain">
+                  When someone adds your perfume to cart and disappears without
+                  paying, Shopify automatically sends them a reminder email.
+                  This recovers a LOT of lost sales.
+                </div>
+                <div class="feat-perfume">
+                  For you: "Hey! You left Rose Oud 100ml in your cart — it's
+                  still waiting for you." These emails convert at 10–15%. This
+                  alone can pay for your Shopify plan.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🎁 Discount Codes</div>
+                <div class="feat-explain">
+                  Create coupon codes for percentage off, flat amount off, or
+                  free shipping. Set expiry dates, usage limits, and which
+                  products they apply to.
+                </div>
+                <div class="feat-perfume">
+                  For you: Give influencers a code "FRAGRANCE20" for 20% off so
+                  you can track exactly how many sales they drove.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🎟️ Gift Cards</div>
+                <div class="feat-explain">
+                  Let customers buy a digital gift card for your store — a
+                  perfect gifting option. The recipient can shop anytime and use
+                  the card value.
+                </div>
+                <div class="feat-perfume">
+                  For you: "Gift a fragrance" is one of the best upsells in the
+                  perfume world. Gift cards are perfect for birthdays,
+                  anniversaries, festivals.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">💬 Shopify Inbox</div>
+                <div class="feat-explain">
+                  A live chat widget on your website where customers can ask
+                  questions. You reply from your phone. Includes automated
+                  answers for common questions.
+                </div>
+                <div class="feat-perfume">
+                  For you: Customer asks "Does this smell similar to Tom Ford
+                  Oud Wood?" — you can answer in real time and convert the sale.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">⚙️ Marketing Automation</div>
+                <div class="feat-explain">
+                  Set up automatic email/message flows triggered by customer
+                  actions — "welcome" on first purchase, "re-engagement" if
+                  inactive 90 days, "upsell" after buying a small bottle.
+                </div>
+                <div class="feat-perfume">
+                  For you: Customer buys a 30ml travel size → 2 weeks later they
+                  auto-receive an email: "Ready to upgrade to the full 100ml?" —
+                  all automatic, while you sleep.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🎯 Customer Segmentation</div>
+                <div class="feat-explain">
+                  Group your customers by behavior — "bought more than 3 times",
+                  "from Mumbai", "spent over ₹5,000", "never bought again" — so
+                  you can target them differently.
+                </div>
+                <div class="feat-perfume">
+                  For you: Send a loyalty offer only to customers who've ordered
+                  3+ times. Send a "win back" offer to those who bought once and
+                  disappeared.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">📋 Shopify Forms</div>
+                <div class="feat-explain">
+                  Pop-up and embedded forms to capture email addresses and phone
+                  numbers from visitors who haven't bought yet. Grow your list
+                  before they buy.
+                </div>
+                <div class="feat-perfume">
+                  For you: "Sign up and get 10% off your first order." Capture
+                  emails from day one — your email list is your most valuable
+                  long-term asset.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ INTERNATIONAL ═══════════════════════════════ -->
+    <section class="section" id="international">
+      <div class="section-title">International & <em>Customization</em></div>
+      <div class="divider"></div>
+      <p class="section-sub">
+        For when you want to sell globally or build truly custom functionality.
+      </p>
+
+      <div class="feature-category">
+        <div class="category-header">
+          <div class="category-icon">🌍</div>
+          <div>
+            <div class="category-name">Going Global</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted)">
+              Selling to customers in different countries and currencies
+            </div>
+          </div>
+        </div>
+
+        <table class="feature-table">
+          <thead>
+            <tr>
+              <th class="th-feature">Feature</th>
+              <th class="th-basic">Basic</th>
+              <th class="th-grow">Grow</th>
+              <th class="th-advanced">Advanced</th>
+              <th class="th-plus">Plus</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🌐 Language Translation</div>
+                <div class="feat-explain">
+                  Show your store in multiple languages — 2 free automatic
+                  translations included. Customers from UAE, UK, or Germany see
+                  your store in their language.
+                </div>
+                <div class="feat-perfume">
+                  For you: If you plan to sell to Gulf/Middle East markets (huge
+                  perfume market!), Arabic or French translations can massively
+                  increase trust and conversions.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">
+                  🗺️ Localized Selling with Custom Markets
+                </div>
+                <div class="feat-explain">
+                  Sell with different currency, language, pricing, and even
+                  domain for each country — all from one Shopify store. A
+                  customer in Dubai sees AED prices; UK customer sees GBP.
+                </div>
+                <div class="feat-perfume">
+                  For you: One store, global reach. India in INR, UAE in AED, UK
+                  in GBP — automatically.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🏷️ Product Pricing by Market</div>
+                <div class="feat-explain">
+                  Set a different price for the same product in different
+                  countries — not just currency conversion, but actual pricing
+                  strategy per region.
+                </div>
+                <div class="feat-perfume">
+                  For you: Your oud perfume is ₹3,500 in India, but $65 (roughly
+                  ₹5,400) in the US market, because purchasing power is
+                  different.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🏠 Local Storefronts</div>
+                <div class="feat-explain">
+                  Customize your entire storefront design, imagery, and
+                  messaging for different markets — not just language, but the
+                  whole visual feel and product emphasis.
+                </div>
+                <div class="feat-perfume">
+                  For you: Show heavy oud, musk fragrances prominently for
+                  Middle East market; fresh citrus and florals for the European
+                  market. Same store, different experience.
+                </div>
+              </td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">🧩 Custom Apps & API Access</div>
+                <div class="feat-explain">
+                  Build or connect custom software to Shopify — inventory
+                  management, loyalty programs, custom reports. Basic gets
+                  limited access; higher plans get full customer data access.
+                </div>
+                <div class="feat-perfume">
+                  For you: Not needed on day one. But if you want a custom
+                  loyalty program or connect your own warehouse software later,
+                  this matters.
+                </div>
+              </td>
+              <td>
+                <span class="val val-basic">Limited (no customer data)</span>
+              </td>
+              <td><span class="val val-grow">Full data access</span></td>
+              <td><span class="val val-advanced">Full data access</span></td>
+              <td><span class="val val-plus">Full data access</span></td>
+            </tr>
+            <tr>
+              <td class="td-feature">
+                <div class="feat-name">
+                  🛍️ Shopify Collective (Dropshipping)
+                </div>
+                <div class="feat-explain">
+                  Source and sell products from other Shopify brands without
+                  holding inventory. Or let other Shopify stores sell your
+                  products on their stores.
+                </div>
+                <div class="feat-perfume">
+                  For you: Complementary products — sell premium fragrance
+                  accessories or candles from another brand on your store
+                  without buying stock upfront.
+                </div>
+              </td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ RECOMMENDATION ═══════════════════════════════ -->
+    <section class="section" id="recommendation">
+      <div class="recommendation">
+        <div class="rec-label">My Recommendation For You</div>
+        <div class="rec-title">Start with <em>Grow</em> — Here's Why</div>
+        <p class="rec-text">
+          You already have your domain and your inventory. You're not testing
+          whether this works — you're launching properly. Here's my honest
+          recommendation based on your situation as a perfume brand founder:
+        </p>
+
+        <div class="rec-reasons">
+          <div class="rec-reason">
+            <div class="rec-reason-icon">💰</div>
+            <div class="rec-reason-title">Transaction Fees Matter</div>
+            <div class="rec-reason-text">
+              At ₹2L/month in sales (achievable with perfume), Basic costs
+              ₹4,000 in extra fees. Grow costs ₹2,000. That ₹2,000 saving almost
+              covers the plan upgrade.
+            </div>
+          </div>
+          <div class="rec-reason">
+            <div class="rec-reason-icon">👥</div>
+            <div class="rec-reason-title">You'll Need Staff</div>
+            <div class="rec-reason-text">
+              Even a part-time packing person, VA, or marketing freelancer needs
+              a staff account. Basic gives zero. Grow gives 5 seats.
+            </div>
+          </div>
+          <div class="rec-reason">
+            <div class="rec-reason-icon">🔑</div>
+            <div class="rec-reason-title">Full Data Access</div>
+            <div class="rec-reason-text">
+              Basic blocks customer PII (names, addresses, emails) from custom
+              apps. Grow unlocks it — needed for advanced loyalty programs or
+              CRMs later.
+            </div>
+          </div>
+          <div class="rec-reason">
+            <div class="rec-reason-icon">✨</div>
+            <div class="rec-reason-title">If Budget is Tight</div>
+            <div class="rec-reason-text">
+              Start with Basic (₹1,499/mo yearly). Validate your first ₹50,000
+              in sales. Then upgrade to Grow. Shopify makes it instant — no
+              downtime.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ CHECKLIST ═══════════════════════════════ -->
+    <section class="section" id="checklist">
+      <div class="section-title">Your Launch <em>Checklist</em></div>
+      <div class="divider"></div>
+      <p class="section-sub">
+        A safe, step-by-step order of operations for setting up your Shopify
+        store correctly the first time. Think of it as a recipe — follow the
+        sequence and nothing burns.
+      </p>
+
+      <div class="checklist-grid">
+        <div class="checklist-card">
+          <h3>Phase 1 — Foundation</h3>
+          <div class="checklist-item">
+            <div class="ci-num">1</div>
+            <div class="q-text">
+              Create or access your Shopify store and confirm your plan or free
+              trial
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">2</div>
+            <div class="q-text">
+              Fill core settings: store name, currency (INR), address, tax
+              basics, and notification email
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">3</div>
+            <div class="q-text">
+              Prepare your product CSV — clean fields: handle, title, SKU,
+              price, inventory, images, and variants
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">4</div>
+            <div class="q-text">
+              Import products in bulk and manually verify 5–10 sample products
+              after import
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-card">
+          <h3>Phase 2 — Structure</h3>
+          <div class="checklist-item">
+            <div class="ci-num">5</div>
+            <div class="q-text">
+              Create collections: by category (Oud, Floral, Fresh), by mood,
+              seasonal (Festive), featured (Bestsellers)
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">6</div>
+            <div class="q-text">
+              Build navigation menus and homepage layout around those
+              collections
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">7</div>
+            <div class="q-text">
+              Set inventory locations — home, warehouse, or single location —
+              and assign correct stock
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">8</div>
+            <div class="q-text">
+              Customize your theme: homepage hero, collection page, product
+              page, cart, mobile header and footer
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-card">
+          <h3>Phase 3 — Trust & Operations</h3>
+          <div class="checklist-item">
+            <div class="ci-num">9</div>
+            <div class="q-text">
+              Add all trust pages: Contact, About, FAQ, Privacy Policy, Refund
+              Policy, Shipping Policy, Terms
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">10</div>
+            <div class="q-text">
+              Configure payment gateway (Razorpay, PayU, or Shopify Payments if
+              available)
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">11</div>
+            <div class="q-text">
+              Set shipping zones and rates (free shipping threshold, flat rate,
+              weight-based, local delivery)
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">12</div>
+            <div class="q-text">
+              Configure order confirmation, shipping, and review email templates
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-card">
+          <h3>Phase 4 — Domain & Launch</h3>
+          <div class="checklist-item">
+            <div class="ci-num">13</div>
+            <div class="q-text">
+              Add your existing domain in Shopify admin and update A record /
+              CNAME at your registrar (GoDaddy, Namecheap, etc.)
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">14</div>
+            <div class="q-text">
+              Set your domain as the primary domain and remove the
+              .myshopify.com from primary
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">15</div>
+            <div class="q-text">
+              Full QA: mobile + desktop, all links, product filters, variant
+              selection, checkout flow, SSL padlock, and place a test order
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="ci-num">16</div>
+            <div class="q-text">
+              Go live — remove password protection and announce your launch
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ PROPOSAL CHECKLIST ═══════════════════════════════ -->
+    <section class="section" id="questionnaire">
+      <div class="section-title">What I Need From <em>You</em></div>
+      <div class="divider"></div>
+      <p class="section-sub">
+        This is not a questionnaire. This is your
+        <strong>complete asset handover guide</strong> — every single thing I
+        need from you to build your store, explained like a recipe. For each
+        item: what it is, why I need it, how to get it, and what happens if it's
+        missing.
+      </p>
+
+      <div class="callout" style="margin-bottom: 3rem">
+        <span class="callout-icon">📌</span>
+        <span
+          ><strong>How to use this:</strong> Read each card fully. Then create
+          one shared Google Drive folder named
+          <em>"[Your Brand] — Shopify Assets"</em> and put everything in it.
+          Once the folder is complete, share it with me and we begin. Simple as
+          that.</span
+        >
+      </div>
+
+      <!-- ════ ASSET 1 — LOGO ════ -->
+      <div class="asset-card" id="asset-logo">
+        <div class="asset-header">
+          <div class="asset-num">01</div>
+          <div class="asset-icon">🎨</div>
+          <div>
+            <div class="asset-title">Your Logo</div>
+            <div class="asset-type">
+              File format: PNG (transparent background) or SVG
+            </div>
+          </div>
+          <div class="asset-status required">Required</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              Your logo is the first thing every customer sees on your website —
+              it sits in the top-left corner of every single page. It also
+              appears on order confirmation emails, packing slip PDFs, browser
+              tabs, and even Google search results. A missing or low-quality
+              logo makes your perfume brand look unfinished. A sharp,
+              high-resolution logo makes it look premium instantly.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">HOW to get it / what to send</div>
+            <div class="howto-steps">
+              <div class="howto-step">
+                <span class="hs-num">A</span>
+                <div>
+                  <strong>If your designer made your logo:</strong> Ask them for
+                  the original file in PNG with transparent background (not
+                  white background) and SVG format. Both if possible.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">B</span>
+                <div>
+                  <strong
+                    >If you only have a JPEG or PNG with white
+                    background:</strong
+                  >
+                  That works too — but tell me. I may ask your designer to
+                  re-export it properly.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">C</span>
+                <div>
+                  <strong>If you don't have a logo yet:</strong> Tell me. We can
+                  use a text-based logo (your brand name in a nice font) as a
+                  placeholder while you get one designed — this should NOT delay
+                  your launch.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If missing:</strong> Your store will show a placeholder text
+            logo. It works, but it looks unfinished. Priority item — get this
+            sorted first.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 2 — BRAND COLORS & FONTS ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">02</div>
+          <div class="asset-icon">🎨</div>
+          <div>
+            <div class="asset-title">Brand Colors & Font Preference</div>
+            <div class="asset-type">
+              Hex color codes + font name or vibe description
+            </div>
+          </div>
+          <div class="asset-status required">Required</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              Colors and fonts ARE your brand identity online. Every button,
+              heading, background, and link color on your store needs to match
+              your brand — not Shopify's default blue. If you sell a premium oud
+              perfume, your store should feel rich (deep blacks, golds,
+              burgundy). If it's a fresh citrus range, it should feel light and
+              airy. I can't decide this for you — it must come from your brand
+              vision.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">HOW to give me this</div>
+            <div class="howto-steps">
+              <div class="howto-step">
+                <span class="hs-num">A</span>
+                <div>
+                  <strong>Ideal:</strong> Hex color codes. Example: Primary =
+                  <code>#1A1A1A</code>, Accent = <code>#C9A84C</code>, Text =
+                  <code>#F5F0E8</code>. Your designer will have these if they
+                  made a brand kit.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">B</span>
+                <div>
+                  <strong>No hex codes?</strong> Tell me in plain words: "Dark
+                  black background, gold accents, cream text" — I'll match it.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">C</span>
+                <div>
+                  <strong>Fonts:</strong> Tell me the font name if you know it
+                  (e.g., "we use Playfair Display for headings"). Or describe
+                  the vibe: "elegant serif" / "clean modern" / "handwritten
+                  feel".
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">D</span>
+                <div>
+                  <strong>Easiest option:</strong> Screenshot your packaging,
+                  business card, or Instagram profile and send it. I'll extract
+                  the colors from there.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If missing:</strong> I'll pick colors based on your product
+            photos and reference websites. But you may want to change it later —
+            which takes extra time.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 3 — PRODUCT PHOTOS ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">03</div>
+          <div class="asset-icon">📸</div>
+          <div>
+            <div class="asset-title">Product Photos</div>
+            <div class="asset-type">
+              High-resolution JPG or PNG, named by product SKU or name
+            </div>
+          </div>
+          <div class="asset-status required">Required</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              In a perfume store, customers cannot smell your product. The only
+              thing they can do is <em>see</em> it. Your product photo is your
+              entire sales pitch. A great photo = more trust = more purchases.
+              Shopify needs at least one image per product to display it
+              properly. Multiple angles (front, side, cap off, on a table) =
+              better experience.
+            </p>
+            <p style="margin-top: 0.7rem">
+              I also need these photos for: collection page thumbnails, homepage
+              hero banners, social media card previews, and email campaigns.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">HOW to organize and send them</div>
+            <div class="howto-steps">
+              <div class="howto-step">
+                <span class="hs-num">A</span>
+                <div>
+                  <strong>Naming convention — CRITICAL:</strong> Name every file
+                  by the product name or SKU. Example:
+                  <code>oud-royale-100ml-front.jpg</code>,
+                  <code>rose-musk-50ml-side.jpg</code>. NOT
+                  <code>IMG_3847.jpg</code> — I'll have no idea which photo goes
+                  with which product.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">B</span>
+                <div>
+                  <strong>Minimum:</strong> 1 clean product-on-white-background
+                  photo per product. Ideal: 3–5 photos per product (front, side,
+                  lifestyle, detail shot, packaging).
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">C</span>
+                <div>
+                  <strong>Resolution:</strong> At least 1000×1000 pixels.
+                  Shopify zooms in on product pages — a blurry image will look
+                  terrible.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">D</span>
+                <div>
+                  <strong>Banner/lifestyle photos:</strong> If you have any
+                  wide-format photos (perfume on a marble table, moody
+                  atmospheric shots), include these separately labeled as
+                  "banners" — they go on your homepage.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If missing:</strong> I cannot build your product pages
+            without photos. This is the single most common reason Shopify
+            projects are delayed. Get your photography done before anything
+            else.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 4 — PRODUCT SHEET ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">04</div>
+          <div class="asset-icon">📋</div>
+          <div>
+            <div class="asset-title">Product Sheet (The Master Catalog)</div>
+            <div class="asset-type">Excel spreadsheet or Google Sheet</div>
+          </div>
+          <div class="asset-status required">Required</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              Think of this as the "recipe card" for every product in your
+              store. Shopify needs a structured list to know: what to name the
+              product, what price to show, how much stock is available, and what
+              variants to create (50ml vs 100ml). Without this, I'd have to
+              enter every product manually one by one — which takes 10x longer
+              and introduces errors.
+            </p>
+            <p style="margin-top: 0.7rem">
+              With a clean product sheet, I can import your entire catalog in
+              minutes.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">
+              EXACTLY what columns the sheet must have
+            </div>
+            <div class="product-sheet-columns">
+              <div class="col-item">
+                <div class="col-name">Product Name</div>
+                <div class="col-eg">e.g., "Royal Oud Intense"</div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Category</div>
+                <div class="col-eg">
+                  e.g., "Oud Collection", "Florals", "Fresh"
+                </div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Description</div>
+                <div class="col-eg">
+                  2–4 lines describing the fragrance notes, mood, occasion
+                </div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Price (₹)</div>
+                <div class="col-eg">
+                  e.g., 3500 — just the number, no ₹ symbol
+                </div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Compared-at Price</div>
+                <div class="col-eg">
+                  Original price if on sale — shows strikethrough on the site
+                </div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">SKU</div>
+                <div class="col-eg">
+                  Your internal product code: e.g., "OUD-100-BLK"
+                </div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Stock Quantity</div>
+                <div class="col-eg">How many units you currently have</div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Variants</div>
+                <div class="col-eg">
+                  If one product comes in 30ml / 50ml / 100ml — list each as a
+                  separate row with its own price and SKU
+                </div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Weight (grams)</div>
+                <div class="col-eg">Needed for weight-based shipping rates</div>
+              </div>
+              <div class="col-item">
+                <div class="col-name">Tags</div>
+                <div class="col-eg">
+                  Words to describe it: "oud, woody, unisex, gifting, festive" —
+                  helps with search and filters
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If missing or incomplete:</strong> I'll send you a template
+            to fill out. But I cannot import products without this — it's the
+            foundation of your entire store.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 5 — POLICY CONTENT ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">05</div>
+          <div class="asset-icon">📜</div>
+          <div>
+            <div class="asset-title">Your Business Policies</div>
+            <div class="asset-type">
+              Written decisions about returns, refunds, shipping, and privacy
+            </div>
+          </div>
+          <div class="asset-status important">Important</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              Every store legally needs policy pages — Refund Policy, Privacy
+              Policy, Shipping Policy, and Terms of Service. These are not just
+              legal protection for you — they're
+              <strong>trust signals</strong> for your customers. When a customer
+              wonders "what if I don't like it?" and finds a clear, fair refund
+              policy, they buy. When they can't find one, they leave.
+            </p>
+            <p style="margin-top: 0.7rem">
+              These policies also affect how Razorpay and payment gateways treat
+              your account. "No stated policy" = higher dispute risk.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">HOW to handle this — 3 options</div>
+            <div class="howto-steps">
+              <div class="howto-step">
+                <span class="hs-num">A</span>
+                <div>
+                  <strong>You tell me your rules, I write the policies:</strong>
+                  Just answer these questions in a WhatsApp voice note or
+                  message — I'll draft professional policies from your answers.
+                  (Most common approach.)
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">B</span>
+                <div>
+                  <strong>You already have written policies:</strong> Send the
+                  text file or Google Doc. I'll clean it up and add it to the
+                  store.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">C</span>
+                <div>
+                  <strong>Use Shopify's templates:</strong> Shopify has built-in
+                  policy templates. I'll use those as a base and customize with
+                  your specifics.
+                </div>
+              </div>
+            </div>
+            <div
+              style="
+                margin-top: 1.2rem;
+                padding: 1rem;
+                background: rgba(201, 168, 76, 0.06);
+                border-radius: 10px;
+                border: 1px solid var(--border);
+              "
+            >
+              <div
+                style="
+                  font-size: 0.8rem;
+                  font-weight: 500;
+                  color: var(--gold);
+                  margin-bottom: 0.8rem;
+                "
+              >
+                Decisions you need to make (just answer these):
+              </div>
+              <div
+                style="
+                  font-size: 0.82rem;
+                  color: var(--text-muted);
+                  display: flex;
+                  flex-direction: column;
+                  gap: 0.5rem;
+                "
+              >
+                <div>
+                  • Do you accept returns? Within how many days? (7 days? 14
+                  days? No returns?)
+                </div>
+                <div>• Do you offer refunds or only store credit?</div>
+                <div>• Who pays return shipping — you or the customer?</div>
+                <div>
+                  • Are opened/used perfumes eligible for return? (Usually no.)
+                </div>
+                <div>
+                  • What are your shipping timelines? (e.g., dispatch in 1–2
+                  days, delivery in 3–7 days)
+                </div>
+                <div>
+                  • Do you ship internationally? If yes, to which countries?
+                </div>
+                <div>• Is COD (Cash on Delivery) available?</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If missing:</strong> Your store will go live without policy
+            pages. It's not illegal — but it increases customer disputes and
+            payment gateway scrutiny. Easy to add later, but better to do it
+            right the first time.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 6 — SHIPPING & PAYMENT RULES ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">06</div>
+          <div class="asset-icon">🚚</div>
+          <div>
+            <div class="asset-title">Shipping Rules & Payment Setup</div>
+            <div class="asset-type">
+              Your delivery decisions + payment gateway account
+            </div>
+          </div>
+          <div class="asset-status required">Required</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              Shipping rules control what your customer sees at checkout: "₹99
+              delivery" or "Free shipping" or "Free above ₹999". If this is
+              wrong, customers either abandon cart (if shipping feels too
+              expensive) or you lose money (if you offer free shipping on small
+              orders). Payment setup is what enables your store to actually
+              collect money — without this, the store exists but cannot
+              transact.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">
+              HOW to give me this — answer these questions
+            </div>
+            <div
+              style="
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+                margin-top: 0.8rem;
+              "
+            >
+              <div
+                style="
+                  background: rgba(255, 255, 255, 0.03);
+                  border: 1px solid var(--border);
+                  border-radius: 12px;
+                  padding: 1.2rem;
+                "
+              >
+                <div
+                  style="
+                    font-size: 0.75rem;
+                    letter-spacing: 0.2em;
+                    text-transform: uppercase;
+                    color: var(--gold);
+                    margin-bottom: 0.8rem;
+                  "
+                >
+                  Shipping Decisions
+                </div>
+                <div
+                  style="
+                    font-size: 0.82rem;
+                    color: var(--text-muted);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                  "
+                >
+                  <div>• Free shipping above what order value?</div>
+                  <div>• Flat rate below that (₹49? ₹99? ₹149?)?</div>
+                  <div>• Do you ship to all India pincodes?</div>
+                  <div>
+                    • Which courier partner? (Shiprocket, Delhivery, Bluedart,
+                    self-courier?)
+                  </div>
+                  <div>• Do you offer express/same-day for certain cities?</div>
+                  <div>• International shipping — yes or no?</div>
+                </div>
+              </div>
+              <div
+                style="
+                  background: rgba(255, 255, 255, 0.03);
+                  border: 1px solid var(--border);
+                  border-radius: 12px;
+                  padding: 1.2rem;
+                "
+              >
+                <div
+                  style="
+                    font-size: 0.75rem;
+                    letter-spacing: 0.2em;
+                    text-transform: uppercase;
+                    color: var(--gold);
+                    margin-bottom: 0.8rem;
+                  "
+                >
+                  Payment Setup
+                </div>
+                <div
+                  style="
+                    font-size: 0.82rem;
+                    color: var(--text-muted);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                  "
+                >
+                  <div>
+                    • Do you have a Razorpay or PayU account? (If not, create
+                    one — free to sign up)
+                  </div>
+                  <div>• Do you want Cash on Delivery enabled?</div>
+                  <div>
+                    • UPI, Cards, Net Banking, Wallets — all on or specific
+                    ones?
+                  </div>
+                  <div>• Any international payment needs (Stripe, PayPal)?</div>
+                  <div>
+                    • Share your Razorpay API Key + Secret (I'll guide you on
+                    where to find these)
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If payment gateway missing:</strong> Your store looks ready
+            but clicking "Pay" will fail. Customers cannot buy anything. This
+            must be set up before going live.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 7 — DOMAIN ACCESS ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">07</div>
+          <div class="asset-icon">🌐</div>
+          <div>
+            <div class="asset-title">Domain Access (DNS Settings)</div>
+            <div class="asset-type">
+              Login to your domain registrar where you bought the domain
+            </div>
+          </div>
+          <div class="asset-status required">Required</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              You already own your domain (e.g., yourperfumebrand.com). But
+              right now it either points to nothing, or to a parking page. I
+              need to "redirect" it to your new Shopify store. This is done by
+              updating two DNS records — think of it like updating the address
+              in your GPS from "old location" to "Shopify's servers". Without
+              this, customers who type your domain will see an error page
+              instead of your store.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">HOW to handle this</div>
+            <div class="howto-steps">
+              <div class="howto-step">
+                <span class="hs-num">A</span>
+                <div>
+                  <strong>Tell me where you bought your domain.</strong> Common
+                  registrars: GoDaddy, Namecheap, BigRock, Google Domains,
+                  Hostinger. I'll tell you exactly where to click.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">B</span>
+                <div>
+                  <strong>Share login access temporarily</strong> — or I'll give
+                  you a screenshot-by-screenshot guide to do it yourself in 5
+                  minutes. Your choice.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">C</span>
+                <div>
+                  <strong>What I'll actually change:</strong> Only 2 things —
+                  the "A Record" (points to Shopify's IP) and a "CNAME" record
+                  for www. Nothing else. I won't touch your email settings or
+                  anything else.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">D</span>
+                <div>
+                  <strong>Timing:</strong> DNS changes take 24–48 hours to
+                  propagate worldwide. Plan your launch date around this.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If not shared:</strong> Your store will be live at a
+            myshopify.com URL, not your own domain. Fine for testing — NOT for a
+            real launch.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 8 — REFERENCE WEBSITES ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">08</div>
+          <div class="asset-icon">🔍</div>
+          <div>
+            <div class="asset-title">Reference & Competitor Websites</div>
+            <div class="asset-type">
+              2–3 website URLs you like (doesn't have to be perfume)
+            </div>
+          </div>
+          <div class="asset-status important">Important</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              Words like "I want it to look premium" or "make it elegant" mean
+              different things to different people. One person's "elegant" is
+              another's "boring". The fastest way to align on design is to show
+              me 2–3 websites that give you the feeling you want your customers
+              to have. I don't need to copy them — I just need to understand the
+              vibe, the energy, the tone.
+            </p>
+            <p style="margin-top: 0.7rem">
+              This saves 2–3 rounds of design revisions.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">HOW to pick references</div>
+            <div class="howto-steps">
+              <div class="howto-step">
+                <span class="hs-num">A</span>
+                <div>
+                  <strong
+                    >Think of websites you've visited and thought "wow, this
+                    feels right"</strong
+                  >
+                  — luxury brands, fashion brands, skincare brands, lifestyle
+                  brands. Doesn't have to be a competitor.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">B</span>
+                <div>
+                  <strong>Also note what you like specifically.</strong> "I like
+                  the dark homepage of [website]. I like the product grid layout
+                  of [another website]. I like the fonts on [third website]." —
+                  specific feedback helps enormously.
+                </div>
+              </div>
+              <div class="howto-step">
+                <span class="hs-num">C</span>
+                <div>
+                  <strong>Examples for perfume brands:</strong> Creed Boutique,
+                  Byredo, Maison Margiela REPLICA, Forest Essentials, Juicy
+                  Chemistry — these are all premium product stores with great
+                  Shopify-like aesthetics.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If missing:</strong> I'll design based on your photos and
+            brand colors. But you might want changes later that could have been
+            avoided.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ASSET 9 — SOCIAL & CONTACT ════ -->
+      <div class="asset-card">
+        <div class="asset-header">
+          <div class="asset-num">09</div>
+          <div class="asset-icon">📱</div>
+          <div>
+            <div class="asset-title">Social Media Links & Contact Details</div>
+            <div class="asset-type">
+              Instagram, WhatsApp, email, phone — all your brand's contact
+              points
+            </div>
+          </div>
+          <div class="asset-status easy">Easy — 5 minutes</div>
+        </div>
+
+        <div class="asset-body">
+          <div class="asset-why">
+            <div class="why-label">WHY do I need this?</div>
+            <p>
+              Your website's footer and Contact page need real contact
+              information — phone, email, city. Social media icons in the footer
+              link customers to your Instagram, which is often where they follow
+              your brand story. These also go in your email templates so every
+              order confirmation has your contact info at the bottom.
+            </p>
+          </div>
+
+          <div class="asset-howto">
+            <div class="howto-label">
+              Just share these in a WhatsApp message:
+            </div>
+            <div class="mini-list">
+              <div class="mini-item">
+                📷 Instagram handle (e.g., @yourbrand)
+              </div>
+              <div class="mini-item">📘 Facebook page URL (if any)</div>
+              <div class="mini-item">🐦 Twitter/X handle (if any)</div>
+              <div class="mini-item">▶️ YouTube channel (if any)</div>
+              <div class="mini-item">
+                📧 Customer service email (e.g., hello@yourbrand.com)
+              </div>
+              <div class="mini-item">
+                📞 Customer service phone / WhatsApp number
+              </div>
+              <div class="mini-item">
+                🏢 City / State (for the footer address — exact address
+                optional)
+              </div>
+              <div class="mini-item">
+                🕐 Business hours (if you want to display them)
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-missing">
+            <span class="missing-icon">⚠️</span>
+            <strong>If missing:</strong> Footer looks empty, Contact page has
+            placeholder text, and email templates look generic. Quick fix but
+            looks unprofessional.
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ FOLDER SUMMARY ════ -->
+      <div style="margin-top: 4rem">
+        <div class="section-title" style="font-size: 1.8rem">
+          The Handover <em>Folder</em>
+        </div>
+        <div class="divider"></div>
+        <p class="section-sub">
+          Create one Google Drive folder. Name it
+          <strong>"[Your Brand] — Shopify Assets"</strong>. Organise it exactly
+          like this:
+        </p>
+
+        <div class="folder-structure">
+          <div class="folder-root">📁 YourBrand — Shopify Assets</div>
+          <div class="folder-children">
+            <div class="folder-item">
+              <span class="fi-icon">📁</span
+              ><span class="fi-name">01 — Logo</span
+              ><span class="fi-contents"
+                >Logo PNG (transparent), Logo SVG, Logo on dark background</span
+              >
+            </div>
+            <div class="folder-item">
+              <span class="fi-icon">📁</span
+              ><span class="fi-name">02 — Brand Colors & Fonts</span
+              ><span class="fi-contents"
+                >A text file or screenshot with hex codes and font names</span
+              >
+            </div>
+            <div class="folder-item">
+              <span class="fi-icon">📁</span
+              ><span class="fi-name">03 — Product Photos</span
+              ><span class="fi-contents"
+                >Subfolders per product, photos named properly</span
+              >
+            </div>
+            <div class="folder-item">
+              <span class="fi-icon">📁</span
+              ><span class="fi-name">04 — Product Sheet</span
+              ><span class="fi-contents"
+                >Excel or Google Sheet link with all columns filled</span
+              >
+            </div>
+            <div class="folder-item">
+              <span class="fi-icon">📁</span
+              ><span class="fi-name">05 — Policies & Rules</span
+              ><span class="fi-contents"
+                >Your answers to the policy questions, or written policies</span
+              >
+            </div>
+            <div class="folder-item">
+              <span class="fi-icon">📁</span
+              ><span class="fi-name">06 — Banners & Lifestyle Photos</span
+              ><span class="fi-contents"
+                >Wide hero images for homepage, collection headers</span
+              >
+            </div>
+            <div class="folder-item">
+              <span class="fi-icon">📄</span
+              ><span class="fi-name">07 — Info Sheet.txt</span
+              ><span class="fi-contents"
+                >Shipping rules, payment choice, social links, contact info,
+                domain registrar name — all in one text file</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FIRST MESSAGE -->
+      <div style="margin-top: 4rem">
+        <div class="section-title" style="font-size: 1.8rem">
+          My First Message <em>To You</em>
+        </div>
+        <div class="divider"></div>
+        <p class="section-sub">
+          Once you share the folder above, here's exactly what I'll send back to
+          confirm we're ready to build:
+        </p>
+
+        <div class="message-box">
+          <p>
+            Hi! I've received your assets folder — thank you for organizing
+            everything so cleanly.
+          </p>
+          <p>
+            I've reviewed everything and here's what I have: ✅ Logo, ✅ Brand
+            colors, ✅ Product sheet (X products), ✅ Product photos, ✅ Policy
+            decisions, ✅ Shipping rules, ✅ Domain registrar confirmed.
+          </p>
+          <p>
+            Here's what's still needed before I begin:
+            <strong>[list anything missing]</strong>. Please send these by
+            [date] so I can stay on timeline.
+          </p>
+          <p>
+            Once complete, here's exactly what I'll build and deliver to you:
+          </p>
+          <p>
+            → Your Shopify store fully set up on your domain<br />
+            → All [X] products imported with photos, variants, and inventory<br />
+            → Collections organized by category + smart collections<br />
+            → Theme customized to your brand identity<br />
+            → Payments (Razorpay) + Shipping configured<br />
+            → All policy pages live<br />
+            → Domain connected with SSL<br />
+            → Full QA done — mobile + desktop tested<br />
+            → Test order placed to verify end-to-end checkout
+          </p>
+          <p>
+            You'll receive a preview link for review before I remove the
+            password and go live. 🖤
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div
+        style="
+          font-family: &quot;Cormorant Garamond&quot;, serif;
+          font-size: 1.2rem;
+          color: var(--gold);
+          margin-bottom: 0.5rem;
+        "
+      >
+        Your Shopify Blueprint
+      </div>
+      Crafted for your perfume brand's digital launch — every feature explained,
+      every decision simplified.
+    </footer>
+  </body>
+</html>

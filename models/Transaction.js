@@ -52,6 +52,15 @@ const TransactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // For Payment transactions: how much of amount cleared interest vs principal
+    interestCleared: {
+      type: Number,
+      default: 0,
+    },
+    principalCleared: {
+      type: Number,
+      default: 0,
+    },
     balanceAfterTransaction: {
       type: Number,
       required: true,
@@ -68,10 +77,23 @@ const TransactionSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    notes: { type: String, trim: true },
+    // Payment breakdown for transparency (interestCleared, principalCleared, advanceCredit)
+    paymentBreakdown: {
+      interestCleared: { type: Number, default: 0 },
+      principalCleared: { type: Number, default: 0 },
+      advanceCredit: { type: Number, default: 0 },
+    },
     paymentMode: {
       type: String,
       enum: ["Cash", "Cheque", "Online", "UPI", "NEFT", "RTGS", "System"],
     },
+    // Top-level payment fields (used by record route)
+    chequeNo: { type: String },
+    bankName: { type: String },
+    upiId: { type: String },
+    transactionRef: { type: String },
+    // Also keep nested for backwards compat
     paymentDetails: {
       chequeNo: String,
       bankName: String,
@@ -97,7 +119,7 @@ const TransactionSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 TransactionSchema.index({ societyId: 1, memberId: 1, date: -1 });

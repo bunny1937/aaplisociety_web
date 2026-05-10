@@ -6,7 +6,7 @@ import styles from "@/styles/Auth.module.css";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [formData, setFormData] = useState({ username: "", password: "" });
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -22,7 +22,8 @@ export default function LoginPage() {
     e.preventDefault();
 
     const newErrors = {};
-    if (!formData.email.trim()) newErrors.email = "Email is required";
+    if (!formData.username.trim())
+      newErrors.username = "Username or email is required";
     if (!formData.password) newErrors.password = "Password is required";
     if (Object.keys(newErrors).length) {
       setErrors(newErrors);
@@ -37,7 +38,10 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", // ← IMPORTANT for cookies
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          username: formData.username,
+          password: formData.password,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -47,18 +51,31 @@ export default function LoginPage() {
         throw new Error(data.error || `Login failed (${res.status})`);
       }
 
-      // CHANGED: Don't check for token in response, only user
-      if (!data.user) {
-        throw new Error("Invalid login response: user data missing");
+      // Multi-profile: show society selector (no user field in this response)
+      if (data.requiresProfileSelect) {
+        // Store profiles in sessionStorage for selector screen
+        sessionStorage.setItem("pendingUserId", data.userId);
+        sessionStorage.setItem(
+          "pendingProfiles",
+          JSON.stringify(data.profiles),
+        );
+        sessionStorage.setItem("pendingName", data.name);
+        router.replace("/auth/select-society");
+        return;
       }
 
-      // Store minimal user info for UI (NOT the token)
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user", JSON.stringify(data.user));
+      const role = data.user?.role;
+      if (role === "SuperAdmin") {
+        router.replace("/superadmin/dashboard");
+      } else if (
+        role === "Secretary" ||
+        role === "Admin" ||
+        role === "Accountant"
+      ) {
+        router.replace("/admin/dashboard");
+      } else {
+        router.replace("/member/dashboard");
       }
-
-      // Token is already in HttpOnly cookie, just redirect
-      router.push("/dashboard");
     } catch (err) {
       console.error("LOGIN ERROR:", err);
       setApiError(err.message || "Something went wrong");
@@ -75,7 +92,7 @@ export default function LoginPage() {
           <p className={styles.authSubtitle}>Sign in to your society account</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           {apiError && (
             <div
               style={{
@@ -93,19 +110,21 @@ export default function LoginPage() {
           )}
 
           <div className={styles.formGroup}>
-            <label className="label" htmlFor="email">
-              Email Address
+            <label className="label" htmlFor="username">
+              Username / Email
             </label>
             <input
-              id="email"
-              name="email"
-              type="email"
-              className={`input ${errors.email ? "input-error" : ""}`}
-              value={formData.email}
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="off"
+              placeholder="e.g. gh_tanvib_1001_27"
+              className={`input ${errors.username ? "input-error" : ""}`}
+              value={formData.username}
               onChange={handleChange}
               disabled={isLoading}
             />
-            {errors.email && <p className="error-text">{errors.email}</p>}
+            {errors.username && <p className="error-text">{errors.username}</p>}
           </div>
 
           <div className={styles.formGroup}>

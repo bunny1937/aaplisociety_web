@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Transaction from "@/models/Transaction";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import cache from "@/lib/cache";
 
 export async function GET(request) {
   try {
@@ -41,6 +42,10 @@ export async function GET(request) {
       query.paymentMode = paymentMode;
     }
 
+    const cacheKey = `payments:list:${decoded.societyId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
     const payments = await Transaction.find(query)
       .populate("memberId", "roomNo wing ownerName contact")
       .populate("createdBy", "name email")
@@ -58,11 +63,13 @@ export async function GET(request) {
       count: payments.length,
       totalAmount: totalAmount[0]?.total || 0,
     });
+    await cache.set(cacheKey, responseData, 60);
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Fetch payments error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

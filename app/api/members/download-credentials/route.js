@@ -25,8 +25,10 @@ export async function POST(request) {
       { header: 'Flat No', key: 'flatNo', width: 12 },
       { header: 'Wing', key: 'wing', width: 10 },
       { header: 'Owner Name', key: 'ownerName', width: 30 },
+      { header: 'Username', key: 'username', width: 25 },
       { header: 'Email', key: 'email', width: 35 },
-      { header: 'Password', key: 'password', width: 15 }
+      { header: 'Password', key: 'password', width: 20 },
+      { header: 'Status', key: 'status', width: 20 },
     ];
 
     // Style header row
@@ -43,19 +45,23 @@ export async function POST(request) {
         flatNo: cred.flatNo,
         wing: cred.wing || '',
         ownerName: cred.ownerName,
+        username: cred.username || '',
         email: cred.email,
-        password: cred.password
+        password: cred.password,
+        status: cred.isNewUser ? 'New Account' : 'Existing Account',
       });
     });
 
     // Add instructions at the bottom
     worksheet.addRow([]);
-    const instructionRow = worksheet.addRow(['INSTRUCTIONS:', '', '', '', '']);
+    const instructionRow = worksheet.addRow(['INSTRUCTIONS:', '', '', '', '', '', '']);
     instructionRow.font = { bold: true, color: { argb: 'FFDC2626' } };
-    
-    worksheet.addRow(['1. Share these credentials with respective members via email/WhatsApp']);
-    worksheet.addRow(['2. Advise members to change their password after first login']);
-    worksheet.addRow(['3. Keep this file secure and do not share publicly']);
+
+    worksheet.addRow(['1. Members login with Username (or email) + Password']);
+    worksheet.addRow(['2. "Existing Account" rows — password unchanged, use their original password']);
+    worksheet.addRow(['3. Share new account credentials with members via email/WhatsApp']);
+    worksheet.addRow(['4. Advise members to change their password after first login']);
+    worksheet.addRow(['5. Keep this file secure and do not share publicly']);
 
     // Generate buffer
     const buffer = await workbook.xlsx.writeBuffer();

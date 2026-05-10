@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import { verifyToken, getTokenFromRequest } from '@/lib/jwt';
-import Member from '@/models/Member';
-import User from '@/models/User';
-import ExcelJS from 'exceljs';
-import bcrypt from 'bcryptjs';
-import AuditLog from '@/models/AuditLog';
-import { readFile, unlink } from 'fs/promises';
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
+import Member from "@/models/Member";
+import User from "@/models/User";
+import ExcelJS from "exceljs";
+import bcrypt from "bcryptjs";
+import AuditLog from "@/models/AuditLog";
+import { readFile, unlink } from "fs/promises";
+import cache from "@/lib/cache";
 
 function generatePassword() {
   return Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -15,21 +16,29 @@ function generatePassword() {
 export async function POST(request) {
   try {
     await connectDB();
-    
+
     const token = getTokenFromRequest(request);
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    
+    if (!token)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const decoded = verifyToken(token);
-    if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    
-    if (decoded.role === 'Accountant') {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    if (!decoded)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+
+    if (decoded.role === "Accountant") {
+      return NextResponse.json(
+        { error: "Insufficient permissions" },
+        { status: 403 },
+      );
     }
 
     const { tempFilePath } = await request.json();
 
     if (!tempFilePath) {
-      return NextResponse.json({ error: 'No temp file specified' }, { status: 400 });
+      return NextResponse.json(
+        { error: "No temp file specified" },
+        { status: 400 },
+      );
     }
 
     // Read temp file
@@ -38,7 +47,7 @@ export async function POST(request) {
     await workbook.xlsx.load(buffer);
 
     const firstSheet = workbook.worksheets[0];
-    const isEnhancedTemplate = firstSheet.name.includes('Basic Info');
+    const isEnhancedTemplate = firstSheet.name.includes("Basic Info");
 
     let result;
     if (isEnhancedTemplate) {
@@ -54,25 +63,28 @@ export async function POST(request) {
     await AuditLog.create({
       userId: decoded.userId,
       societyId: decoded.societyId,
-      action: 'IMPORT_MEMBERS',
+      action: "IMPORT_MEMBERS",
       newData: {
         importedCount: result.createdMembers.length,
-        importType: isEnhancedTemplate ? 'enhanced' : 'simple'
+        importType: isEnhancedTemplate ? "enhanced" : "simple",
       },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
-
+    await cache.delPattern(`members:list:${decoded.societyId}:*`);
+    await cache.del(`admin:stats:global`);
     return NextResponse.json({
       success: true,
-      ...result
+      ...result,
     });
-
   } catch (error) {
-    console.error('Confirm import error:', error);
-    return NextResponse.json({ 
-      error: 'Import failed', 
-      details: error.message 
-    }, { status: 500 });
+    console.error("Confirm import error:", error);
+    return NextResponse.json(
+      {
+        error: "Import failed",
+        details: error.message,
+      },
+      { status: 500 },
+    );
   }
 }
 

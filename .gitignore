@@ -9,3 +9,8 @@ out/
 build/
 dist/
 .vercel
+
+all-changes.txt
+REPO_CONTEXT.txt
+changes.txt
+project-structure.txt

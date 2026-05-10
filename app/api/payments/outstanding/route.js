@@ -1,9 +1,16 @@
+// FILE: app/api/payments/outstanding/route.js
+// CHANGE 10 — Full rewrite
+// FROM: uses ledger balance as source of truth, calculates interest live
+// TO:   uses unpaid bill balances (principalBalance + interestBalance), detects payment block
+
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import Transaction from "@/models/Transaction";
 import Member from "@/models/Member";
 import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import cache from "@/lib/cache";
+import Bill from "@/models/Bill";
+import { getBillPayFinalDate } from "../../../../utils/interestUtils";
 
 export async function GET(request) {
   try {
@@ -25,119 +32,159 @@ export async function GET(request) {
     if (!memberId) {
       return NextResponse.json(
         { error: "Member ID required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const member = await Member.findOne({
-      _id: memberId,
-      societyId: decoded.societyId,
-    }).lean();
+    // Fetch member (for advanceCredit)
+    const member = await cache.getOrSet(
+      `member:single:${memberId}`,
+      () =>
+        Member.findOne({ _id: memberId, societyId: decoded.societyId }).lean(),
+      300,
+    );
 
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    // Get current balance
-    const lastTransaction = await Transaction.findOne({
+    // Fetch society config
+    const society = await cache.getOrSet(
+      `society:config:${decoded.societyId}`,
+      () => Society.findById(decoded.societyId).lean(),
+      900,
+    );
+
+    const config = society?.config || {};
+    const billPayFinalDay = config.billPayFinalDay || 0;
+    const interestRate = config.interestRate || 0;
+    const memberPaymentBreakdownVisible =
+      config.memberPaymentBreakdownVisible !== false;
+
+    // ✅ SOURCE OF TRUTH: unpaid bills (not ledger balance)
+    const unpaidBills = await Bill.find({
       memberId,
       societyId: decoded.societyId,
-      isReversed: false,
+      status: { $in: ["Unpaid", "Partial", "Overdue", "Scheduled"] },
+      isDeleted: false,
     })
-      .sort({ date: -1, createdAt: -1 })
+      .sort({ billYear: 1, billMonth: 1 })
       .lean();
 
-    const principalAmount =
-      lastTransaction?.balanceAfterTransaction ?? member.openingBalance ?? 0;
-
-    if (principalAmount <= 0) {
+    // No outstanding bills — check if member has opening balances not yet billed
+    if (unpaidBills.length === 0) {
+      const openingPrin = member.openingPrincipal || 0;
+      const openingInt = member.openingInterest || 0;
+      const openingTotal = parseFloat((openingPrin + openingInt).toFixed(2));
       return NextResponse.json({
-        principalAmount: 0,
-        interestAmount: 0,
-        totalOutstanding: 0,
-        daysOverdue: 0,
-        message: "No outstanding balance",
+        principalOutstanding: openingPrin,
+        interestOutstanding: openingInt,
+        totalOutstanding: openingTotal,
+        principalAmount: openingPrin,
+        interestAmount: openingInt,
+        isPaymentBlocked: false,
+        blockMessage: null,
+        unpaidBillCount: 0,
+        memberAdvanceCredit: member.advanceCredit || 0,
+        interestRate: society?.config?.interestRate || 0,
+        openingPrincipal: openingPrin,
+        openingInterest: openingInt,
+        message:
+          openingTotal > 0
+            ? `Outstanding: ₹${openingInt.toFixed(2)} interest + ₹${openingPrin.toFixed(2)} principal (opening balance)`
+            : "No outstanding balance",
       });
     }
 
-    // Calculate interest
-    const society = await Society.findById(decoded.societyId).lean();
-    const {
-      interestRate,
-      gracePeriodDays,
-      billDueDay,
-      interestCalculationMethod,
-      interestCompoundingFrequency,
-    } = society.config;
+    // ✅ Sum from bill components (set at generation + updated at payment)
+    const totalPrincipalOutstanding = unpaidBills.reduce(
+      (s, b) => s + (b.principalBalance || 0),
+      0,
+    );
+    const totalInterestOutstanding = unpaidBills.reduce(
+      (s, b) => s + (b.interestBalance || 0),
+      0,
+    );
+    const totalOutstanding = parseFloat(
+      (totalPrincipalOutstanding + totalInterestOutstanding).toFixed(2),
+    );
 
-    let interestAmount = 0;
-    let daysOverdue = 0;
-    let dueDate = null;
-    let graceEndDate = null;
+    // ✅ Check billPayFinalDate against OLDEST unpaid bill
+    let isPaymentBlocked = false;
+    let blockMessage = null;
+    let billPayFinalDate = null;
 
-    const oldestUnpaidBill = await Transaction.findOne({
-      memberId,
-      societyId: decoded.societyId,
-      type: "Debit",
-      category: "Maintenance",
-      isReversed: false,
-    })
-      .sort({ date: 1 })
-      .lean();
-
-    if (oldestUnpaidBill) {
-      const billDate = new Date(oldestUnpaidBill.date);
-      dueDate = new Date(
-        billDate.getFullYear(),
-        billDate.getMonth(),
-        billDueDay || 10
+    if (billPayFinalDay > 0) {
+      const oldest = unpaidBills[0];
+      // billMonth is stored 0-indexed (May=4); getBillPayFinalDate expects 1-indexed
+      billPayFinalDate = getBillPayFinalDate(
+        oldest.billYear,
+        oldest.billMonth + 1,
+        billPayFinalDay,
       );
-      graceEndDate = new Date(dueDate);
-      graceEndDate.setDate(graceEndDate.getDate() + (gracePeriodDays || 0));
 
-      const now = new Date();
-      if (now > graceEndDate) {
-        daysOverdue = Math.floor((now - graceEndDate) / (1000 * 60 * 60 * 24));
-
-        if (interestCalculationMethod === "SIMPLE") {
-          const monthsOverdue = daysOverdue / 30;
-          interestAmount =
-            principalAmount * (interestRate / 100) * monthsOverdue;
-        } else {
-          const n = interestCompoundingFrequency === "DAILY" ? 30 : 1;
-          const t = daysOverdue / 30;
-          if (t > 0) {
-            const r = interestRate / 100;
-            const amount = principalAmount * Math.pow(1 + r / n, n * t);
-            interestAmount = amount - principalAmount;
-          }
+      if (billPayFinalDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (today > billPayFinalDate) {
+          isPaymentBlocked = true;
+          blockMessage = `Payment window closed for period ${oldest.billPeriodId}. Interest frozen as of ${billPayFinalDate.toLocaleDateString("en-IN")}. Contact admin.`;
         }
-
-        interestAmount = Math.round(interestAmount * 100) / 100;
       }
     }
 
+    // ✅ Per-bill breakdown for transparent UI
+    const billBreakdown = unpaidBills.map((b) => ({
+      billPeriodId: b.billPeriodId,
+      billYear: b.billYear,
+      billMonth: b.billMonth,
+      dueDate: b.dueDate,
+      status: b.status,
+      totalAmount: b.totalAmount,
+      amountPaid: b.amountPaid,
+      principalBalance: b.principalBalance || 0,
+      interestBalance: b.interestBalance || 0,
+      balanceAmount: b.balanceAmount,
+      currInt: b.currInt || 0,
+      monthInterest: b.monthInterest || 0,
+    }));
+
     return NextResponse.json({
-      principalAmount,
-      interestAmount,
-      totalOutstanding: principalAmount + interestAmount,
-      daysOverdue,
-      dueDate,
-      graceEndDate,
-      interestRate,
-      interestCalculationMethod,
-      message:
-        daysOverdue > 0
-          ? `${daysOverdue} days overdue. Interest: ₹${interestAmount.toFixed(
-              2
-            )}`
-          : "Within grace period",
+      principalOutstanding: parseFloat(totalPrincipalOutstanding.toFixed(2)),
+      interestOutstanding: parseFloat(totalInterestOutstanding.toFixed(2)),
+      totalOutstanding,
+      openingPrincipal: member.openingPrincipal || 0,
+      openingInterest: member.openingInterest || 0,
+      unpaidBillCount: unpaidBills.length,
+      isPaymentBlocked,
+      interestRate: society?.config?.interestRate || 0,
+      blockMessage,
+      billPayFinalDate,
+      unpaidBillCount: unpaidBills.length,
+      memberAdvanceCredit: member.advanceCredit || 0,
+
+      // ✅ Per-bill breakdown (only if society allows transparency)
+      ...(memberPaymentBreakdownVisible ? { billBreakdown } : {}),
+
+      // Legacy fields — keeps existing UI callers working
+      principalAmount: parseFloat(totalPrincipalOutstanding.toFixed(2)),
+      interestAmount: parseFloat(totalInterestOutstanding.toFixed(2)),
+      daysOverdue: 0, // removed — not meaningful with monthly model
+      dueDate: unpaidBills[0]?.dueDate || null,
+      graceEndDate: null,
+      interestCalculationMethod: "MONTHLY",
+
+      message: isPaymentBlocked
+        ? blockMessage
+        : totalOutstanding > 0
+          ? `Outstanding: ₹${totalInterestOutstanding.toFixed(2)} interest + ₹${totalPrincipalOutstanding.toFixed(2)} principal`
+          : "No outstanding balance",
     });
   } catch (error) {
     console.error("Outstanding calculation error:", error);
     return NextResponse.json(
       { error: "Internal server error", details: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

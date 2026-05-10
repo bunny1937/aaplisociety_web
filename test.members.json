@@ -1,0 +1,5198 @@
+[{
+  "_id": {
+    "$oid": "69fde5408aeef3731c4f086e"
+  },
+  "flatNo": "1001",
+  "wing": "B",
+  "floor": 18,
+  "carpetAreaSqft": 2112,
+  "builtUpAreaSqft": 2321,
+  "flatType": "4BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-B-112",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f086f"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2020-04-07T00:00:00.000Z"
+  },
+  "ownerName": "Tanvi Bansal",
+  "contactNumber": "9484122592",
+  "alternateContact": "9147619615",
+  "whatsappNumber": "9676248289",
+  "emailPrimary": "tanvi.bansal770@example.com",
+  "emailSecondary": "tanvi.alt23@example.com",
+  "panCard": "LMNOP5304B",
+  "aadhaar": "1855 6293 5174",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Neha Sharma",
+      "relation": "Spouse",
+      "age": 34,
+      "contactNumber": "9876000001",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0870"
+      }
+    },
+    {
+      "name": "Aarav Sharma",
+      "relation": "Son",
+      "age": 10,
+      "contactNumber": "9876000002",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0871"
+      }
+    },
+    {
+      "name": "Rajesh Sharma",
+      "relation": "Father",
+      "age": 62,
+      "contactNumber": "9876000003",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0872"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 1040,
+  "openingPrincipal": 1000,
+  "openingInterest": 40,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0001",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:36.150Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:36.150Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5408aeef3731c4f0876"
+  },
+  "flatNo": "1002",
+  "wing": "C",
+  "floor": 19,
+  "carpetAreaSqft": 4255,
+  "builtUpAreaSqft": 4413,
+  "flatType": "Penthouse",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-D-128",
+      "type": "Stilt",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": false,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0877"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-02-22T00:00:00.000Z"
+  },
+  "ownerName": "Megha Iyer",
+  "contactNumber": "9191897461",
+  "alternateContact": "9631986424",
+  "whatsappNumber": "9195500882",
+  "emailPrimary": "megha.iyer44@example.com",
+  "emailSecondary": "megha.alt99@example.com",
+  "panCard": "XYZAB4765E",
+  "aadhaar": "5008 2619 5337",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Pooja Mehta",
+      "relation": "Spouse",
+      "age": 30,
+      "contactNumber": "9876000004",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0878"
+      }
+    },
+    {
+      "name": "Riya Mehta",
+      "relation": "Daughter",
+      "age": 6,
+      "contactNumber": "9876000005",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0879"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Current Tenant 1002",
+      "panCard": "TEN1002A",
+      "contactNumber": "9999000001",
+      "email": "tenant1002@mail.com",
+      "startDate": {
+        "$date": "2023-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 50000,
+      "rentPerMonth": 18000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f087a"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:36.386Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:36.386Z"
+      }
+    }
+  ],
+  "openingBalance": 510,
+  "openingPrincipal": 500,
+  "openingInterest": 10,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0002",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:36.387Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:36.387Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5408aeef3731c4f087e"
+  },
+  "flatNo": "1003",
+  "wing": "C",
+  "floor": 3,
+  "carpetAreaSqft": 1592,
+  "builtUpAreaSqft": 1812,
+  "flatType": "3BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-A-101",
+      "type": "Covered",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f087f"
+      }
+    },
+    {
+      "slotNumber": "P-A-102",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0880"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2021-04-23T00:00:00.000Z"
+  },
+  "ownerName": "Kriti Gupta",
+  "contactNumber": "9926915124",
+  "alternateContact": "9688095533",
+  "whatsappNumber": "9139080762",
+  "emailPrimary": "kriti.gupta541@example.com",
+  "emailSecondary": "kriti.alt5@example.com",
+  "panCard": "LMNOP3799E",
+  "aadhaar": "7052 2868 7544",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Rajesh Mehta",
+      "relation": "Father",
+      "age": 62,
+      "contactNumber": "9876000006",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0881"
+      }
+    },
+    {
+      "name": "Sunita Mehta",
+      "relation": "Mother",
+      "age": 58,
+      "contactNumber": "9876000007",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0882"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1003",
+      "panCard": "PAN1003A",
+      "contactNumber": "9123000001",
+      "emailPrimary": "old1003@mail.com",
+      "ownershipStartDate": {
+        "$date": "2012-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2018-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 73,
+      "purchaseAmount": 1800000,
+      "saleAmount": 2500000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0883"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:36.581Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:36.581Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 1253,
+  "openingPrincipal": 1200,
+  "openingInterest": 53,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0003",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:36.582Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:36.582Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5408aeef3731c4f0887"
+  },
+  "flatNo": "1004",
+  "wing": "D",
+  "floor": 14,
+  "carpetAreaSqft": 2245,
+  "builtUpAreaSqft": 2443,
+  "flatType": "4BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-C-119",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0888"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-12-22T00:00:00.000Z"
+  },
+  "ownerName": "Megha Kaur",
+  "contactNumber": "9822322727",
+  "alternateContact": "9703895311",
+  "whatsappNumber": "9856302808",
+  "emailPrimary": "megha.kaur244@example.com",
+  "emailSecondary": "megha.alt47@example.com",
+  "panCard": "LMNOP9158A",
+  "aadhaar": "1193 1609 9330",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Priya Shah",
+      "relation": "Spouse",
+      "age": 30,
+      "contactNumber": "9876000008",
+      "occupation": "Teacher",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0889"
+      }
+    },
+    {
+      "name": "Kabir Shah",
+      "relation": "Son",
+      "age": 5,
+      "contactNumber": "9876000009",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f088a"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Past Tenant 1004",
+      "panCard": "TEN1004A",
+      "contactNumber": "9999000002",
+      "email": "tenant1004@mail.com",
+      "startDate": {
+        "$date": "2020-01-01T00:00:00.000Z"
+      },
+      "endDate": {
+        "$date": "2022-12-31T00:00:00.000Z"
+      },
+      "duration": null,
+      "depositAmount": 45000,
+      "rentPerMonth": 17000,
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f088b"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:36.778Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:36.778Z"
+      }
+    },
+    {
+      "name": "Current Tenant 1004",
+      "panCard": "TEN1004B",
+      "contactNumber": "9999000003",
+      "email": "tenant1004c@mail.com",
+      "startDate": {
+        "$date": "2023-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 55000,
+      "rentPerMonth": 20000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f088c"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:36.778Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:36.778Z"
+      }
+    }
+  ],
+  "openingBalance": 18,
+  "openingPrincipal": 0,
+  "openingInterest": 18,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0004",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:36.778Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:36.778Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5408aeef3731c4f0890"
+  },
+  "flatNo": "1005",
+  "wing": "D",
+  "floor": 1,
+  "carpetAreaSqft": 920,
+  "builtUpAreaSqft": 1124,
+  "flatType": "2BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2022-02-16T00:00:00.000Z"
+  },
+  "ownerName": "Harsh Gowda",
+  "contactNumber": "9781918401",
+  "alternateContact": "9897397172",
+  "whatsappNumber": "9465602293",
+  "emailPrimary": "harsh.gowda286@example.com",
+  "emailSecondary": "harsh.alt22@example.com",
+  "panCard": "PQRST2645E",
+  "aadhaar": "2208 9741 6340",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Ankit Patel",
+      "relation": "Brother",
+      "age": 28,
+      "contactNumber": "9876000010",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5408aeef3731c4f0891"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 2620,
+  "openingPrincipal": 2500,
+  "openingInterest": 120,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0005",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:36.964Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:36.964Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5418aeef3731c4f0895"
+  },
+  "flatNo": "1006",
+  "wing": "D",
+  "floor": 5,
+  "carpetAreaSqft": 2942,
+  "builtUpAreaSqft": 3174,
+  "flatType": "5BHK+",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-B-116",
+      "type": "Covered",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f0896"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Vacant",
+  "possessionDate": {
+    "$date": "2020-07-25T00:00:00.000Z"
+  },
+  "ownerName": "Vishal Dubey",
+  "contactNumber": "9480140326",
+  "alternateContact": "9929298693",
+  "whatsappNumber": "9580822210",
+  "emailPrimary": "vishal.dubey143@example.com",
+  "emailSecondary": "vishal.alt71@example.com",
+  "panCard": "XYZAB4779D",
+  "aadhaar": "5652 2242 4098",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Ananya Patel",
+      "relation": "Daughter",
+      "age": 8,
+      "contactNumber": "9876000011",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f0897"
+      }
+    },
+    {
+      "name": "Ramesh Patel",
+      "relation": "Father",
+      "age": 60,
+      "contactNumber": "9876000012",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f0898"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Current Tenant 1006",
+      "panCard": "TEN1006A",
+      "contactNumber": "9999000004",
+      "email": "tenant1006@mail.com",
+      "startDate": {
+        "$date": "2022-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 40000,
+      "rentPerMonth": 15000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f0899"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:37.150Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:37.150Z"
+      }
+    }
+  ],
+  "openingBalance": 805,
+  "openingPrincipal": 800,
+  "openingInterest": 5,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0006",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:37.150Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:37.150Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5418aeef3731c4f089d"
+  },
+  "flatNo": "1007",
+  "wing": "C",
+  "floor": 4,
+  "carpetAreaSqft": 1743,
+  "builtUpAreaSqft": 1990,
+  "flatType": "3BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2021-01-25T00:00:00.000Z"
+  },
+  "ownerName": "Isha Pillai",
+  "contactNumber": "9821909591",
+  "alternateContact": "9566270318",
+  "whatsappNumber": "9617789147",
+  "emailPrimary": "isha.pillai387@example.com",
+  "emailSecondary": "isha.alt8@example.com",
+  "panCard": "XYZAB9969B",
+  "aadhaar": "1879 9725 7151",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Kiran Jain",
+      "relation": "Spouse",
+      "age": 33,
+      "contactNumber": "9876000013",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f089e"
+      }
+    },
+    {
+      "name": "Diya Jain",
+      "relation": "Daughter",
+      "age": 7,
+      "contactNumber": "9876000014",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f089f"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1007",
+      "panCard": "PAN1007A",
+      "contactNumber": "9123000002",
+      "emailPrimary": "old1007@mail.com",
+      "ownershipStartDate": {
+        "$date": "2010-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2016-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 73,
+      "purchaseAmount": 1500000,
+      "saleAmount": 2200000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08a0"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:37.411Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:37.411Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 2200,
+  "openingPrincipal": 2200,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0007",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:37.411Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:37.411Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5418aeef3731c4f08a4"
+  },
+  "flatNo": "1008",
+  "wing": "A",
+  "floor": 3,
+  "carpetAreaSqft": 2688,
+  "builtUpAreaSqft": 2931,
+  "flatType": "5BHK+",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-A-103",
+      "type": "Stilt",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": false,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08a5"
+      }
+    },
+    {
+      "slotNumber": "P-A-104",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08a6"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2020-12-03T00:00:00.000Z"
+  },
+  "ownerName": "Tara Reddy",
+  "contactNumber": "9970280675",
+  "alternateContact": "9172453723",
+  "whatsappNumber": "9675979807",
+  "emailPrimary": "tara.reddy79@example.com",
+  "emailSecondary": "tara.alt7@example.com",
+  "panCard": "XYZAB5867D",
+  "aadhaar": "8124 9513 1655",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Sunita Verma",
+      "relation": "Mother",
+      "age": 58,
+      "contactNumber": "9876000015",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08a7"
+      }
+    },
+    {
+      "name": "Rohan Verma",
+      "relation": "Son",
+      "age": 14,
+      "contactNumber": "9876000016",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08a8"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Past Tenant 1008",
+      "panCard": "TEN1008A",
+      "contactNumber": "9999000005",
+      "email": "tenant1008@mail.com",
+      "startDate": {
+        "$date": "2019-01-01T00:00:00.000Z"
+      },
+      "endDate": {
+        "$date": "2021-12-31T00:00:00.000Z"
+      },
+      "duration": null,
+      "depositAmount": 35000,
+      "rentPerMonth": 14000,
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08a9"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:37.692Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:37.692Z"
+      }
+    },
+    {
+      "name": "Current Tenant 1008",
+      "panCard": "TEN1008B",
+      "contactNumber": "9999000006",
+      "email": "tenant1008c@mail.com",
+      "startDate": {
+        "$date": "2022-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 45000,
+      "rentPerMonth": 17000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08aa"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:37.693Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:37.693Z"
+      }
+    }
+  ],
+  "openingBalance": 4700,
+  "openingPrincipal": 4500,
+  "openingInterest": 200,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0008",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:37.693Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:37.693Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5418aeef3731c4f08ae"
+  },
+  "flatNo": "1009",
+  "wing": "D",
+  "floor": 1,
+  "carpetAreaSqft": 1491,
+  "builtUpAreaSqft": 1644,
+  "flatType": "3BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-D-123",
+      "type": "Covered",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08af"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-09-02T00:00:00.000Z"
+  },
+  "ownerName": "Arjun Shah",
+  "contactNumber": "9257892325",
+  "alternateContact": "9353854024",
+  "whatsappNumber": "9591972008",
+  "emailPrimary": "arjun.shah82@example.com",
+  "emailSecondary": "arjun.alt8@example.com",
+  "panCard": "ABCDE7295A",
+  "aadhaar": "2255 1255 4889",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Rohan Singh",
+      "relation": "Son",
+      "age": 14,
+      "contactNumber": "9876000017",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08b0"
+      }
+    },
+    {
+      "name": "Meena Singh",
+      "relation": "Mother",
+      "age": 55,
+      "contactNumber": "9876000018",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5418aeef3731c4f08b1"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 300,
+  "openingPrincipal": 300,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0009",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:37.933Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:37.933Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5428aeef3731c4f08b5"
+  },
+  "flatNo": "1010",
+  "wing": "C",
+  "floor": 19,
+  "carpetAreaSqft": 1968,
+  "builtUpAreaSqft": 2199,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2021-03-18T00:00:00.000Z"
+  },
+  "ownerName": "Ravi Tiwari",
+  "contactNumber": "9974285721",
+  "alternateContact": "9444925091",
+  "whatsappNumber": "9581599833",
+  "emailPrimary": "ravi.tiwari835@example.com",
+  "emailSecondary": "ravi.alt38@example.com",
+  "panCard": "LMNOP5403B",
+  "aadhaar": "6711 5516 5237",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Vikram Nair",
+      "relation": "Brother",
+      "age": 35,
+      "contactNumber": "9876000019",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08b6"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 82,
+  "openingPrincipal": 0,
+  "openingInterest": 82,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0010",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:38.149Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:38.149Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5428aeef3731c4f08ba"
+  },
+  "flatNo": "1011",
+  "wing": "C",
+  "floor": 7,
+  "carpetAreaSqft": 641,
+  "builtUpAreaSqft": 877,
+  "flatType": "1BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-B-109",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08bb"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-04-30T00:00:00.000Z"
+  },
+  "ownerName": "Tara Naidu",
+  "contactNumber": "9636759861",
+  "alternateContact": "9219741286",
+  "whatsappNumber": "9524251277",
+  "emailPrimary": "tara.naidu807@example.com",
+  "emailSecondary": "tara.alt85@example.com",
+  "panCard": "PQRST8919B",
+  "aadhaar": "7162 3116 8625",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Kavya Nair",
+      "relation": "Daughter",
+      "age": 11,
+      "contactNumber": "9876000020",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08bc"
+      }
+    },
+    {
+      "name": "Suresh Nair",
+      "relation": "Father",
+      "age": 63,
+      "contactNumber": "9876000021",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08bd"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Current Tenant 1011",
+      "panCard": "TEN1011A",
+      "contactNumber": "9999000007",
+      "email": "tenant1011@mail.com",
+      "startDate": {
+        "$date": "2023-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 60000,
+      "rentPerMonth": 22000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08be"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:38.357Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:38.357Z"
+      }
+    }
+  ],
+  "openingBalance": 2050,
+  "openingPrincipal": 2000,
+  "openingInterest": 50,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0011",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:38.358Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:38.358Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5428aeef3731c4f08c2"
+  },
+  "flatNo": "1012",
+  "wing": "A",
+  "floor": 11,
+  "carpetAreaSqft": 842,
+  "builtUpAreaSqft": 1101,
+  "flatType": "2BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-05-19T00:00:00.000Z"
+  },
+  "ownerName": "Vishal Saxena",
+  "contactNumber": "9380358572",
+  "alternateContact": "9543550179",
+  "whatsappNumber": "9828286312",
+  "emailPrimary": "vishal.saxena61@example.com",
+  "emailSecondary": "vishal.alt50@example.com",
+  "panCard": "PQRST2952B",
+  "aadhaar": "8730 3328 7435",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Ritika Iyer",
+      "relation": "Spouse",
+      "age": 29,
+      "contactNumber": "9876000022",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08c3"
+      }
+    },
+    {
+      "name": "Aryan Iyer",
+      "relation": "Son",
+      "age": 4,
+      "contactNumber": "9876000023",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08c4"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1012",
+      "panCard": "PAN1012A",
+      "contactNumber": "9123000003",
+      "emailPrimary": "old1012@mail.com",
+      "ownershipStartDate": {
+        "$date": "2015-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2020-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 60,
+      "purchaseAmount": 2000000,
+      "saleAmount": 3000000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08c5"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:38.546Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:38.546Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 146,
+  "openingPrincipal": 100,
+  "openingInterest": 46,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0012",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:38.546Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:38.546Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5428aeef3731c4f08c9"
+  },
+  "flatNo": "1013",
+  "wing": "A",
+  "floor": 13,
+  "carpetAreaSqft": 544,
+  "builtUpAreaSqft": 725,
+  "flatType": "1BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-D-124",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08ca"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-04-03T00:00:00.000Z"
+  },
+  "ownerName": "Ritika Shetty",
+  "contactNumber": "9259977345",
+  "alternateContact": "9814823555",
+  "whatsappNumber": "9234572672",
+  "emailPrimary": "ritika.shetty600@example.com",
+  "emailSecondary": "ritika.alt33@example.com",
+  "panCard": "ABCDE2075B",
+  "aadhaar": "3238 9458 4028",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Amit Reddy",
+      "relation": "Father",
+      "age": 65,
+      "contactNumber": "9876000024",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08cb"
+      }
+    },
+    {
+      "name": "Savita Reddy",
+      "relation": "Mother",
+      "age": 60,
+      "contactNumber": "9876000025",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08cc"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 690,
+  "openingPrincipal": 690,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0013",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:38.749Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:38.749Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5428aeef3731c4f08d0"
+  },
+  "flatNo": "1014",
+  "wing": "A",
+  "floor": 12,
+  "carpetAreaSqft": 1384,
+  "builtUpAreaSqft": 1523,
+  "flatType": "3BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-07-16T00:00:00.000Z"
+  },
+  "ownerName": "Akash Khanna",
+  "contactNumber": "9365722931",
+  "alternateContact": "9307913339",
+  "whatsappNumber": "9484863726",
+  "emailPrimary": "akash.khanna281@example.com",
+  "emailSecondary": "akash.alt77@example.com",
+  "panCard": "PQRST4128B",
+  "aadhaar": "8208 3171 5112",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Kunal Gupta",
+      "relation": "Brother",
+      "age": 27,
+      "contactNumber": "9876000026",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5428aeef3731c4f08d1"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 6350,
+  "openingPrincipal": 6000,
+  "openingInterest": 350,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0014",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:38.933Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:38.933Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5438aeef3731c4f08d5"
+  },
+  "flatNo": "1015",
+  "wing": "B",
+  "floor": 12,
+  "carpetAreaSqft": 3149,
+  "builtUpAreaSqft": 3419,
+  "flatType": "5BHK+",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-11-26T00:00:00.000Z"
+  },
+  "ownerName": "Naveen Das",
+  "contactNumber": "9878789689",
+  "alternateContact": "9541522983",
+  "whatsappNumber": "9410118143",
+  "emailPrimary": "naveen.das742@example.com",
+  "emailSecondary": "naveen.alt7@example.com",
+  "panCard": "XYZAB3727B",
+  "aadhaar": "9423 2305 5957",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Pooja Gupta",
+      "relation": "Spouse",
+      "age": 32,
+      "contactNumber": "9876000027",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08d6"
+      }
+    },
+    {
+      "name": "Ishaan Gupta",
+      "relation": "Son",
+      "age": 6,
+      "contactNumber": "9876000028",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08d7"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Past Tenant 1015",
+      "panCard": "TEN1015A",
+      "contactNumber": "9999000008",
+      "email": "tenant1015@mail.com",
+      "startDate": {
+        "$date": "2020-01-01T00:00:00.000Z"
+      },
+      "endDate": {
+        "$date": "2022-12-31T00:00:00.000Z"
+      },
+      "duration": null,
+      "depositAmount": 50000,
+      "rentPerMonth": 20000,
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08d8"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:39.121Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:39.121Z"
+      }
+    },
+    {
+      "name": "Current Tenant 1015",
+      "panCard": "TEN1015B",
+      "contactNumber": "9999000009",
+      "email": "tenant1015c@mail.com",
+      "startDate": {
+        "$date": "2023-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 60000,
+      "rentPerMonth": 23000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08d9"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:39.121Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:39.121Z"
+      }
+    }
+  ],
+  "openingBalance": 767,
+  "openingPrincipal": 750,
+  "openingInterest": 17,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0015",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:39.121Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:39.121Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5438aeef3731c4f08dd"
+  },
+  "flatNo": "1016",
+  "wing": "C",
+  "floor": 6,
+  "carpetAreaSqft": 2001,
+  "builtUpAreaSqft": 2187,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2020-09-10T00:00:00.000Z"
+  },
+  "ownerName": "Ajay Sethi",
+  "contactNumber": "9251058461",
+  "alternateContact": "9458701798",
+  "whatsappNumber": "9818173737",
+  "emailPrimary": "ajay.sethi338@example.com",
+  "emailSecondary": "ajay.alt15@example.com",
+  "panCard": "XYZAB6249E",
+  "aadhaar": "5245 5734 9813",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Nikita Shah",
+      "relation": "Sister",
+      "age": 25,
+      "contactNumber": "9876000029",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08de"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 96,
+  "openingPrincipal": 0,
+  "openingInterest": 96,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0016",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:39.315Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:39.315Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5438aeef3731c4f08e2"
+  },
+  "flatNo": "1017",
+  "wing": "D",
+  "floor": 3,
+  "carpetAreaSqft": 2115,
+  "builtUpAreaSqft": 2228,
+  "flatType": "4BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-A-105",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08e3"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2023-07-27T00:00:00.000Z"
+  },
+  "ownerName": "Siddharth Reddy",
+  "contactNumber": "9128857511",
+  "alternateContact": "9460965426",
+  "whatsappNumber": "9307369254",
+  "emailPrimary": "siddharth.reddy825@example.com",
+  "emailSecondary": "siddharth.alt77@example.com",
+  "panCard": "PQRST7385A",
+  "aadhaar": "5463 8095 1413",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Alok Das",
+      "relation": "Father",
+      "age": 61,
+      "contactNumber": "9876000030",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08e4"
+      }
+    },
+    {
+      "name": "Rekha Das",
+      "relation": "Mother",
+      "age": 56,
+      "contactNumber": "9876000031",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08e5"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 1830,
+  "openingPrincipal": 1800,
+  "openingInterest": 30,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0017",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:39.506Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:39.506Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5438aeef3731c4f08e9"
+  },
+  "flatNo": "1018",
+  "wing": "A",
+  "floor": 11,
+  "carpetAreaSqft": 600,
+  "builtUpAreaSqft": 890,
+  "flatType": "1BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2021-10-06T00:00:00.000Z"
+  },
+  "ownerName": "Pooja Bhatt",
+  "contactNumber": "9459892453",
+  "alternateContact": "9172683120",
+  "whatsappNumber": "9275299934",
+  "emailPrimary": "pooja.bhatt535@example.com",
+  "emailSecondary": "pooja.alt71@example.com",
+  "panCard": "LMNOP5191A",
+  "aadhaar": "8957 1892 4615",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Riya Jain",
+      "relation": "Daughter",
+      "age": 9,
+      "contactNumber": "9876000032",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08ea"
+      }
+    },
+    {
+      "name": "Mohit Jain",
+      "relation": "Father",
+      "age": 45,
+      "contactNumber": "9876000033",
+      "occupation": "Business",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08eb"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1018",
+      "panCard": "PAN1018A",
+      "contactNumber": "9123000004",
+      "emailPrimary": "old1018@mail.com",
+      "ownershipStartDate": {
+        "$date": "2011-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2017-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 73,
+      "purchaseAmount": 1700000,
+      "saleAmount": 2400000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08ec"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:39.703Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:39.703Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 2290,
+  "openingPrincipal": 2200,
+  "openingInterest": 90,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0018",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:39.703Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:39.703Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5438aeef3731c4f08f0"
+  },
+  "flatNo": "1019",
+  "wing": "B",
+  "floor": 14,
+  "carpetAreaSqft": 1019,
+  "builtUpAreaSqft": 1254,
+  "flatType": "2BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-C-117",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08f1"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-12-19T00:00:00.000Z"
+  },
+  "ownerName": "Ravi Krishnan",
+  "contactNumber": "9844350021",
+  "alternateContact": "9997261292",
+  "whatsappNumber": "9598475851",
+  "emailPrimary": "ravi.krishnan326@example.com",
+  "emailSecondary": "ravi.alt71@example.com",
+  "panCard": "LMNOP2533A",
+  "aadhaar": "7996 3293 7637",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Deepak Arora",
+      "relation": "Brother",
+      "age": 30,
+      "contactNumber": "9876000034",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5438aeef3731c4f08f2"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 409,
+  "openingPrincipal": 400,
+  "openingInterest": 9,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0019",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:39.877Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:39.877Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5448aeef3731c4f08f6"
+  },
+  "flatNo": "1020",
+  "wing": "C",
+  "floor": 12,
+  "carpetAreaSqft": 1438,
+  "builtUpAreaSqft": 1616,
+  "flatType": "3BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2021-07-12T00:00:00.000Z"
+  },
+  "ownerName": "Divya Patel",
+  "contactNumber": "9619845408",
+  "alternateContact": "9845628352",
+  "whatsappNumber": "9328466975",
+  "emailPrimary": "divya.patel60@example.com",
+  "emailSecondary": "divya.alt72@example.com",
+  "panCard": "PQRST3123D",
+  "aadhaar": "8754 9085 1164",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Sanjay Patil",
+      "relation": "Father",
+      "age": 64,
+      "contactNumber": "9876000035",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f08f7"
+      }
+    },
+    {
+      "name": "Anita Patil",
+      "relation": "Mother",
+      "age": 59,
+      "contactNumber": "9876000036",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f08f8"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Current Tenant 1020",
+      "panCard": "TEN1020A",
+      "contactNumber": "9999000010",
+      "email": "tenant1020@mail.com",
+      "startDate": {
+        "$date": "2021-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 45000,
+      "rentPerMonth": 18000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f08f9"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:40.067Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:40.067Z"
+      }
+    }
+  ],
+  "openingBalance": 4280,
+  "openingPrincipal": 4000,
+  "openingInterest": 280,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0020",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:40.068Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:40.068Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5448aeef3731c4f08fd"
+  },
+  "flatNo": "1021",
+  "wing": "B",
+  "floor": 12,
+  "carpetAreaSqft": 1321,
+  "builtUpAreaSqft": 1616,
+  "flatType": "3BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2023-11-17T00:00:00.000Z"
+  },
+  "ownerName": "Gaurav Sethi",
+  "contactNumber": "9324276268",
+  "alternateContact": "9140029737",
+  "whatsappNumber": "9652586425",
+  "emailPrimary": "gaurav.sethi829@example.com",
+  "emailSecondary": "gaurav.alt65@example.com",
+  "panCard": "ABCDE9482H",
+  "aadhaar": "8334 8583 6638",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Manoj Das",
+      "relation": "Father",
+      "age": 60,
+      "contactNumber": "9876000037",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f08fe"
+      }
+    },
+    {
+      "name": "Seema Das",
+      "relation": "Mother",
+      "age": 55,
+      "contactNumber": "9876000038",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f08ff"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 3340,
+  "openingPrincipal": 3200,
+  "openingInterest": 140,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0021",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:40.258Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:40.258Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5448aeef3731c4f0903"
+  },
+  "flatNo": "1022",
+  "wing": "B",
+  "floor": 3,
+  "carpetAreaSqft": 929,
+  "builtUpAreaSqft": 1122,
+  "flatType": "2BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-B-113",
+      "type": "Stilt",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": false,
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f0904"
+      }
+    },
+    {
+      "slotNumber": "P-B-114",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f0905"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-05-22T00:00:00.000Z"
+  },
+  "ownerName": "Neha Sinha",
+  "contactNumber": "9903705892",
+  "alternateContact": "9616792403",
+  "whatsappNumber": "9135191259",
+  "emailPrimary": "neha.sinha491@example.com",
+  "emailSecondary": "neha.alt22@example.com",
+  "panCard": "XYZAB5033B",
+  "aadhaar": "4930 4525 9750",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Aakash Singh",
+      "relation": "Brother",
+      "age": 26,
+      "contactNumber": "9876000039",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f0906"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 155,
+  "openingPrincipal": 150,
+  "openingInterest": 5,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0022",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:40.463Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:40.463Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5448aeef3731c4f090a"
+  },
+  "flatNo": "1023",
+  "wing": "C",
+  "floor": 15,
+  "carpetAreaSqft": 3915,
+  "builtUpAreaSqft": 4200,
+  "flatType": "Penthouse",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-06-22T00:00:00.000Z"
+  },
+  "ownerName": "Sneha Mehta",
+  "contactNumber": "9657511983",
+  "alternateContact": "9445343424",
+  "whatsappNumber": "9311156626",
+  "emailPrimary": "sneha.mehta362@example.com",
+  "emailSecondary": "sneha.alt2@example.com",
+  "panCard": "XYZAB5105G",
+  "aadhaar": "4921 2680 8085",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Simran Kaur",
+      "relation": "Spouse",
+      "age": 29,
+      "contactNumber": "9876000040",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f090b"
+      }
+    },
+    {
+      "name": "Gurpreet Kaur",
+      "relation": "Mother",
+      "age": 57,
+      "contactNumber": "9876000041",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f090c"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 2760,
+  "openingPrincipal": 2700,
+  "openingInterest": 60,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0023",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:40.682Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:40.682Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5448aeef3731c4f0910"
+  },
+  "flatNo": "1024",
+  "wing": "D",
+  "floor": 10,
+  "carpetAreaSqft": 1526,
+  "builtUpAreaSqft": 1659,
+  "flatType": "3BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-D-129",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f0911"
+      }
+    },
+    {
+      "slotNumber": "P-D-130",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f0912"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2021-09-22T00:00:00.000Z"
+  },
+  "ownerName": "Aarti Gowda",
+  "contactNumber": "9282004481",
+  "alternateContact": "9949879228",
+  "whatsappNumber": "9404824843",
+  "emailPrimary": "aarti.gowda648@example.com",
+  "emailSecondary": "aarti.alt15@example.com",
+  "panCard": "XYZAB8913H",
+  "aadhaar": "2907 5192 6342",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Rahul Joshi",
+      "relation": "Brother",
+      "age": 31,
+      "contactNumber": "9876000042",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f0913"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1024",
+      "panCard": "PAN1024A",
+      "contactNumber": "9123000005",
+      "emailPrimary": "old1024@mail.com",
+      "ownershipStartDate": {
+        "$date": "2013-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2019-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 73,
+      "purchaseAmount": 1900000,
+      "saleAmount": 2600000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5448aeef3731c4f0914"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:40.875Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:40.875Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 0,
+  "openingPrincipal": 0,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0024",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:40.876Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:40.876Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5458aeef3731c4f0918"
+  },
+  "flatNo": "1025",
+  "wing": "B",
+  "floor": 19,
+  "carpetAreaSqft": 2494,
+  "builtUpAreaSqft": 2604,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-08-15T00:00:00.000Z"
+  },
+  "ownerName": "Ishita Bhatt",
+  "contactNumber": "9366613149",
+  "alternateContact": "9510716451",
+  "whatsappNumber": "9203710653",
+  "emailPrimary": "ishita.bhatt564@example.com",
+  "emailSecondary": "ishita.alt9@example.com",
+  "panCard": "LMNOP5141B",
+  "aadhaar": "4025 7126 5162",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Mehul Shah",
+      "relation": "Father",
+      "age": 63,
+      "contactNumber": "9876000043",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0919"
+      }
+    },
+    {
+      "name": "Kokila Shah",
+      "relation": "Mother",
+      "age": 58,
+      "contactNumber": "9876000044",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f091a"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 900,
+  "openingPrincipal": 900,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0025",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:41.066Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:41.066Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5458aeef3731c4f091e"
+  },
+  "flatNo": "1026",
+  "wing": "B",
+  "floor": 5,
+  "carpetAreaSqft": 913,
+  "builtUpAreaSqft": 1076,
+  "flatType": "2BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-A-106",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f091f"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-03-08T00:00:00.000Z"
+  },
+  "ownerName": "Vishal Shukla",
+  "contactNumber": "9100180798",
+  "alternateContact": "9167292837",
+  "whatsappNumber": "9814029563",
+  "emailPrimary": "vishal.shukla628@example.com",
+  "emailSecondary": "vishal.alt32@example.com",
+  "panCard": "ABCDE6078A",
+  "aadhaar": "1406 7730 4629",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Vedant Bhatt",
+      "relation": "Son",
+      "age": 12,
+      "contactNumber": "9876000045",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0920"
+      }
+    },
+    {
+      "name": "Alok Bhatt",
+      "relation": "Father",
+      "age": 42,
+      "contactNumber": "9876000046",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0921"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Current Tenant 1026",
+      "panCard": "TEN1026A",
+      "contactNumber": "9999000011",
+      "email": "tenant1026@mail.com",
+      "startDate": {
+        "$date": "2022-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 50000,
+      "rentPerMonth": 20000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0922"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:41.253Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:41.253Z"
+      }
+    }
+  ],
+  "openingBalance": 5250,
+  "openingPrincipal": 5000,
+  "openingInterest": 250,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0026",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:41.253Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:41.253Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5458aeef3731c4f0926"
+  },
+  "flatNo": "1027",
+  "wing": "A",
+  "floor": 14,
+  "carpetAreaSqft": 2894,
+  "builtUpAreaSqft": 3058,
+  "flatType": "5BHK+",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2021-09-23T00:00:00.000Z"
+  },
+  "ownerName": "Karan Desai",
+  "contactNumber": "9267660005",
+  "alternateContact": "9156853138",
+  "whatsappNumber": "9551219578",
+  "emailPrimary": "karan.desai55@example.com",
+  "emailSecondary": "karan.alt66@example.com",
+  "panCard": "LMNOP9299G",
+  "aadhaar": "9724 4599 3796",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Ritesh Mehta",
+      "relation": "Brother",
+      "age": 29,
+      "contactNumber": "9876000047",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0927"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 310,
+  "openingPrincipal": 300,
+  "openingInterest": 10,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0027",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:41.435Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:41.435Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5458aeef3731c4f092b"
+  },
+  "flatNo": "1028",
+  "wing": "B",
+  "floor": 10,
+  "carpetAreaSqft": 1560,
+  "builtUpAreaSqft": 1819,
+  "flatType": "3BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-C-122",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f092c"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-01-03T00:00:00.000Z"
+  },
+  "ownerName": "Anjali Pandey",
+  "contactNumber": "9140563201",
+  "alternateContact": "9674623770",
+  "whatsappNumber": "9126821182",
+  "emailPrimary": "anjali.pandey192@example.com",
+  "emailSecondary": "anjali.alt85@example.com",
+  "panCard": "LMNOP8665G",
+  "aadhaar": "3793 4899 9319",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Sneha Sinha",
+      "relation": "Sister",
+      "age": 24,
+      "contactNumber": "9876000048",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f092d"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 1436,
+  "openingPrincipal": 1358,
+  "openingInterest": 78,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0028",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:41.624Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:41.624Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5458aeef3731c4f0931"
+  },
+  "flatNo": "1029",
+  "wing": "B",
+  "floor": 17,
+  "carpetAreaSqft": 1309,
+  "builtUpAreaSqft": 1554,
+  "flatType": "3BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-04-24T00:00:00.000Z"
+  },
+  "ownerName": "Abhishek Shetty",
+  "contactNumber": "9169512372",
+  "alternateContact": "9581365270",
+  "whatsappNumber": "9844144173",
+  "emailPrimary": "abhishek.shetty914@example.com",
+  "emailSecondary": "abhishek.alt48@example.com",
+  "panCard": "LMNOP4715F",
+  "aadhaar": "1406 2908 1381",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Neha Sinha",
+      "relation": "Mother",
+      "age": 55,
+      "contactNumber": "9876000049",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0932"
+      }
+    },
+    {
+      "name": "Rahul Sinha",
+      "relation": "Son",
+      "age": 18,
+      "contactNumber": "9876000050",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0933"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1029",
+      "panCard": "PAN1029A",
+      "contactNumber": "9123000006",
+      "emailPrimary": "old1029@mail.com",
+      "ownershipStartDate": {
+        "$date": "2014-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2020-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 73,
+      "purchaseAmount": 2100000,
+      "saleAmount": 3100000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0934"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:41.809Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:41.809Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 1420,
+  "openingPrincipal": 1400,
+  "openingInterest": 20,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0029",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:41.809Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:41.809Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5458aeef3731c4f0938"
+  },
+  "flatNo": "1030",
+  "wing": "A",
+  "floor": 19,
+  "carpetAreaSqft": 1760,
+  "builtUpAreaSqft": 1973,
+  "flatType": "3BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-11-16T00:00:00.000Z"
+  },
+  "ownerName": "Simran Ghosh",
+  "contactNumber": "9445481853",
+  "alternateContact": "9692236602",
+  "whatsappNumber": "9977584308",
+  "emailPrimary": "simran.ghosh539@example.com",
+  "emailSecondary": "simran.alt71@example.com",
+  "panCard": "ABCDE1896F",
+  "aadhaar": "5863 4790 2784",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Karan Malhotra",
+      "relation": "Brother",
+      "age": 32,
+      "contactNumber": "9876000051",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5458aeef3731c4f0939"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 0,
+  "openingPrincipal": 0,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0030",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:41.992Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:41.992Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5468aeef3731c4f093d"
+  },
+  "flatNo": "1031",
+  "wing": "B",
+  "floor": 18,
+  "carpetAreaSqft": 4921,
+  "builtUpAreaSqft": 5095,
+  "flatType": "Penthouse",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-C-118",
+      "type": "Covered",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f093e"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Vacant",
+  "possessionDate": {
+    "$date": "2021-10-15T00:00:00.000Z"
+  },
+  "ownerName": "Tara Chopra",
+  "contactNumber": "9854534865",
+  "alternateContact": "9884975530",
+  "whatsappNumber": "9988539158",
+  "emailPrimary": "tara.chopra535@example.com",
+  "emailSecondary": "tara.alt37@example.com",
+  "panCard": "PQRST5022E",
+  "aadhaar": "6348 6523 2696",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Priyanka Kapoor",
+      "relation": "Spouse",
+      "age": 31,
+      "contactNumber": "9876000052",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f093f"
+      }
+    },
+    {
+      "name": "Aanya Kapoor",
+      "relation": "Daughter",
+      "age": 5,
+      "contactNumber": "9876000053",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0940"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 2175,
+  "openingPrincipal": 2100,
+  "openingInterest": 75,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0031",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:42.189Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:42.189Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5468aeef3731c4f0944"
+  },
+  "flatNo": "1032",
+  "wing": "A",
+  "floor": 9,
+  "carpetAreaSqft": 4218,
+  "builtUpAreaSqft": 4358,
+  "flatType": "Penthouse",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-12-21T00:00:00.000Z"
+  },
+  "ownerName": "Ananya Chopra",
+  "contactNumber": "9998807190",
+  "alternateContact": "9379436695",
+  "whatsappNumber": "9750439054",
+  "emailPrimary": "ananya.chopra708@example.com",
+  "emailSecondary": "ananya.alt33@example.com",
+  "panCard": "LMNOP1403A",
+  "aadhaar": "5934 4283 8327",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Ankit Yadav",
+      "relation": "Son",
+      "age": 15,
+      "contactNumber": "9876000054",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0945"
+      }
+    },
+    {
+      "name": "Ramesh Yadav",
+      "relation": "Father",
+      "age": 50,
+      "contactNumber": "9876000055",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0946"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Past Tenant 1032",
+      "panCard": "TEN1032A",
+      "contactNumber": "9999000012",
+      "email": "tenant1032@mail.com",
+      "startDate": {
+        "$date": "2019-01-01T00:00:00.000Z"
+      },
+      "endDate": {
+        "$date": "2021-12-31T00:00:00.000Z"
+      },
+      "duration": null,
+      "depositAmount": 40000,
+      "rentPerMonth": 16000,
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0947"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:42.396Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:42.396Z"
+      }
+    },
+    {
+      "name": "Current Tenant 1032",
+      "panCard": "TEN1032B",
+      "contactNumber": "9999000013",
+      "email": "tenant1032c@mail.com",
+      "startDate": {
+        "$date": "2022-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 50000,
+      "rentPerMonth": 19000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0948"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:42.396Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:42.396Z"
+      }
+    }
+  ],
+  "openingBalance": 1000,
+  "openingPrincipal": 1000,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0032",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:42.396Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:42.396Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5468aeef3731c4f094c"
+  },
+  "flatNo": "1033",
+  "wing": "C",
+  "floor": 15,
+  "carpetAreaSqft": 4571,
+  "builtUpAreaSqft": 4779,
+  "flatType": "Penthouse",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2022-02-06T00:00:00.000Z"
+  },
+  "ownerName": "Gaurav Reddy",
+  "contactNumber": "9695253896",
+  "alternateContact": "9665287757",
+  "whatsappNumber": "9355448442",
+  "emailPrimary": "gaurav.reddy905@example.com",
+  "emailSecondary": "gaurav.alt12@example.com",
+  "panCard": "LMNOP3037G",
+  "aadhaar": "7179 6433 4526",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Sonal Verma",
+      "relation": "Sister",
+      "age": 27,
+      "contactNumber": "9876000056",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f094d"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 578,
+  "openingPrincipal": 550,
+  "openingInterest": 28,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0033",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:42.578Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:42.578Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5468aeef3731c4f0951"
+  },
+  "flatNo": "1034",
+  "wing": "B",
+  "floor": 15,
+  "carpetAreaSqft": 2238,
+  "builtUpAreaSqft": 2494,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-02-18T00:00:00.000Z"
+  },
+  "ownerName": "Vandana Tiwari",
+  "contactNumber": "9413664463",
+  "alternateContact": "9621010454",
+  "whatsappNumber": "9683099079",
+  "emailPrimary": "vandana.tiwari566@example.com",
+  "emailSecondary": "vandana.alt37@example.com",
+  "panCard": "LMNOP3538G",
+  "aadhaar": "5389 7548 2676",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Amit Shah",
+      "relation": "Father",
+      "age": 62,
+      "contactNumber": "9876000057",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0952"
+      }
+    },
+    {
+      "name": "Hema Shah",
+      "relation": "Mother",
+      "age": 58,
+      "contactNumber": "9876000058",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0953"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 7500,
+  "openingPrincipal": 7000,
+  "openingInterest": 500,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0034",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:42.760Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:42.760Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5468aeef3731c4f0957"
+  },
+  "flatNo": "1035",
+  "wing": "D",
+  "floor": 14,
+  "carpetAreaSqft": 1055,
+  "builtUpAreaSqft": 1299,
+  "flatType": "2BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-B-110",
+      "type": "Covered",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0958"
+      }
+    },
+    {
+      "slotNumber": "P-B-111",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f0959"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-03-30T00:00:00.000Z"
+  },
+  "ownerName": "Divya Choudhury",
+  "contactNumber": "9605708342",
+  "alternateContact": "9735109698",
+  "whatsappNumber": "9777491707",
+  "emailPrimary": "divya.choudhury446@example.com",
+  "emailSecondary": "divya.alt17@example.com",
+  "panCard": "ABCDE8833F",
+  "aadhaar": "1490 2937 7781",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Rohit Jain",
+      "relation": "Brother",
+      "age": 33,
+      "contactNumber": "9876000059",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f095a"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1035",
+      "panCard": "PAN1035A",
+      "contactNumber": "9123000007",
+      "emailPrimary": "old1035@mail.com",
+      "ownershipStartDate": {
+        "$date": "2010-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2015-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 60,
+      "purchaseAmount": 1400000,
+      "saleAmount": 2000000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5468aeef3731c4f095b"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:42.957Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:42.957Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 887,
+  "openingPrincipal": 850,
+  "openingInterest": 37,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0035",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:42.957Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:42.957Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5478aeef3731c4f095f"
+  },
+  "flatNo": "1036",
+  "wing": "C",
+  "floor": 1,
+  "carpetAreaSqft": 626,
+  "builtUpAreaSqft": 826,
+  "flatType": "1BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-11-18T00:00:00.000Z"
+  },
+  "ownerName": "Abhishek Menon",
+  "contactNumber": "9713415991",
+  "alternateContact": "9101643994",
+  "whatsappNumber": "9376404909",
+  "emailPrimary": "abhishek.menon711@example.com",
+  "emailSecondary": "abhishek.alt41@example.com",
+  "panCard": "XYZAB4165C",
+  "aadhaar": "1798 3368 2108",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Shruti Patil",
+      "relation": "Daughter",
+      "age": 10,
+      "contactNumber": "9876000060",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f0960"
+      }
+    },
+    {
+      "name": "Vinay Patil",
+      "relation": "Father",
+      "age": 44,
+      "contactNumber": "9876000061",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f0961"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 0,
+  "openingPrincipal": 0,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0036",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:43.156Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:43.156Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5478aeef3731c4f0965"
+  },
+  "flatNo": "1037",
+  "wing": "B",
+  "floor": 2,
+  "carpetAreaSqft": 3016,
+  "builtUpAreaSqft": 3264,
+  "flatType": "5BHK+",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-07-14T00:00:00.000Z"
+  },
+  "ownerName": "Tanvi Naidu",
+  "contactNumber": "9829193783",
+  "alternateContact": "9747081443",
+  "whatsappNumber": "9481302533",
+  "emailPrimary": "tanvi.naidu259@example.com",
+  "emailSecondary": "tanvi.alt2@example.com",
+  "panCard": "XYZAB6624C",
+  "aadhaar": "6979 7478 3489",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Kiran Gupta",
+      "relation": "Spouse",
+      "age": 36,
+      "contactNumber": "9876000062",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f0966"
+      }
+    },
+    {
+      "name": "Tanvi Gupta",
+      "relation": "Daughter",
+      "age": 8,
+      "contactNumber": "9876000063",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f0967"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 1625,
+  "openingPrincipal": 1600,
+  "openingInterest": 25,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0037",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:43.343Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:43.343Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5478aeef3731c4f096b"
+  },
+  "flatNo": "1038",
+  "wing": "C",
+  "floor": 1,
+  "carpetAreaSqft": 975,
+  "builtUpAreaSqft": 1167,
+  "flatType": "2BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-D-125",
+      "type": "Covered",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f096c"
+      }
+    },
+    {
+      "slotNumber": "P-D-126",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f096d"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-10-10T00:00:00.000Z"
+  },
+  "ownerName": "Nikhil Malhotra",
+  "contactNumber": "9201201842",
+  "alternateContact": "9355462074",
+  "whatsappNumber": "9225511605",
+  "emailPrimary": "nikhil.malhotra534@example.com",
+  "emailSecondary": "nikhil.alt15@example.com",
+  "panCard": "LMNOP5317A",
+  "aadhaar": "7462 3401 6701",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Arjun Singh",
+      "relation": "Brother",
+      "age": 30,
+      "contactNumber": "9876000064",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f096e"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Current Tenant 1038",
+      "panCard": "TEN1038A",
+      "contactNumber": "9999000014",
+      "email": "tenant1038@mail.com",
+      "startDate": {
+        "$date": "2023-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 55000,
+      "rentPerMonth": 21000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f096f"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:43.536Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:43.536Z"
+      }
+    }
+  ],
+  "openingBalance": 2510,
+  "openingPrincipal": 2400,
+  "openingInterest": 110,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0038",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:43.536Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:43.536Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5478aeef3731c4f0973"
+  },
+  "flatNo": "1039",
+  "wing": "C",
+  "floor": 18,
+  "carpetAreaSqft": 3196,
+  "builtUpAreaSqft": 3324,
+  "flatType": "5BHK+",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2021-02-15T00:00:00.000Z"
+  },
+  "ownerName": "Sandeep Rao",
+  "contactNumber": "9511868644",
+  "alternateContact": "9796960715",
+  "whatsappNumber": "9919930698",
+  "emailPrimary": "sandeep.rao95@example.com",
+  "emailSecondary": "sandeep.alt93@example.com",
+  "panCard": "PQRST6247G",
+  "aadhaar": "1953 9565 8772",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Suman Das",
+      "relation": "Mother",
+      "age": 57,
+      "contactNumber": "9876000065",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f0974"
+      }
+    },
+    {
+      "name": "Raj Das",
+      "relation": "Father",
+      "age": 60,
+      "contactNumber": "9876000066",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f0975"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 555,
+  "openingPrincipal": 450,
+  "openingInterest": 105,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0039",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:43.727Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:43.727Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5478aeef3731c4f0979"
+  },
+  "flatNo": "1040",
+  "wing": "B",
+  "floor": 17,
+  "carpetAreaSqft": 677,
+  "builtUpAreaSqft": 808,
+  "flatType": "1BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-C-120",
+      "type": "Stilt",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": false,
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f097a"
+      }
+    },
+    {
+      "slotNumber": "P-C-121",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f097b"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2020-11-22T00:00:00.000Z"
+  },
+  "ownerName": "Suresh Rao",
+  "contactNumber": "9569082168",
+  "alternateContact": "9488424297",
+  "whatsappNumber": "9859701931",
+  "emailPrimary": "suresh.rao340@example.com",
+  "emailSecondary": "suresh.alt97@example.com",
+  "panCard": "PQRST6084F",
+  "aadhaar": "3281 9114 4723",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Rahul Arora",
+      "relation": "Father",
+      "age": 63,
+      "contactNumber": "9876000067",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f097c"
+      }
+    },
+    {
+      "name": "Meena Arora",
+      "relation": "Mother",
+      "age": 58,
+      "contactNumber": "9876000068",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f097d"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1040",
+      "panCard": "PAN1040A",
+      "contactNumber": "9123000008",
+      "emailPrimary": "old1040@mail.com",
+      "ownershipStartDate": {
+        "$date": "2012-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2018-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 73,
+      "purchaseAmount": 1800000,
+      "saleAmount": 2600000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5478aeef3731c4f097e"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:43.958Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:43.958Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 863,
+  "openingPrincipal": 800,
+  "openingInterest": 63,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0040",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:43.958Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:43.958Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5488aeef3731c4f0982"
+  },
+  "flatNo": "1041",
+  "wing": "A",
+  "floor": 9,
+  "carpetAreaSqft": 2373,
+  "builtUpAreaSqft": 2644,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-06-25T00:00:00.000Z"
+  },
+  "ownerName": "Meera Tiwari",
+  "contactNumber": "9131747162",
+  "alternateContact": "9787610391",
+  "whatsappNumber": "9362343458",
+  "emailPrimary": "meera.tiwari393@example.com",
+  "emailSecondary": "meera.alt14@example.com",
+  "panCard": "ABCDE4252D",
+  "aadhaar": "8016 9673 1781",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Anita Nair",
+      "relation": "Spouse",
+      "age": 34,
+      "contactNumber": "9876000069",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f0983"
+      }
+    },
+    {
+      "name": "Dev Nair",
+      "relation": "Son",
+      "age": 7,
+      "contactNumber": "9876000070",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f0984"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 3680,
+  "openingPrincipal": 3500,
+  "openingInterest": 180,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0041",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:44.154Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:44.154Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5488aeef3731c4f0988"
+  },
+  "flatNo": "1042",
+  "wing": "A",
+  "floor": 16,
+  "carpetAreaSqft": 982,
+  "builtUpAreaSqft": 1281,
+  "flatType": "2BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-A-107",
+      "type": "Covered",
+      "vehicleType": "Four-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f0989"
+      }
+    },
+    {
+      "slotNumber": "P-B-108",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f098a"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Rented",
+  "possessionDate": {
+    "$date": "2020-04-08T00:00:00.000Z"
+  },
+  "ownerName": "Vishal Gupta",
+  "contactNumber": "9556950293",
+  "alternateContact": "9642983801",
+  "whatsappNumber": "9862460737",
+  "emailPrimary": "vishal.gupta865@example.com",
+  "emailSecondary": "vishal.alt73@example.com",
+  "panCard": "LMNOP4313F",
+  "aadhaar": "4341 9326 5563",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Kishore Reddy",
+      "relation": "Father",
+      "age": 66,
+      "contactNumber": "9876000071",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f098b"
+      }
+    },
+    {
+      "name": "Lakshmi Reddy",
+      "relation": "Mother",
+      "age": 60,
+      "contactNumber": "9876000072",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f098c"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 285,
+  "openingPrincipal": 200,
+  "openingInterest": 85,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0042",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:44.346Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:44.346Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5488aeef3731c4f0990"
+  },
+  "flatNo": "1043",
+  "wing": "B",
+  "floor": 5,
+  "carpetAreaSqft": 2174,
+  "builtUpAreaSqft": 2469,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-12-15T00:00:00.000Z"
+  },
+  "ownerName": "Kriti Rao",
+  "contactNumber": "9196995942",
+  "alternateContact": "9716236104",
+  "whatsappNumber": "9528439863",
+  "emailPrimary": "kriti.rao258@example.com",
+  "emailSecondary": "kriti.alt18@example.com",
+  "panCard": "PQRST8539F",
+  "aadhaar": "3945 9600 8358",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Sahil Khan",
+      "relation": "Brother",
+      "age": 28,
+      "contactNumber": "9876000073",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f0991"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Current Tenant 1043",
+      "panCard": "TEN1043A",
+      "contactNumber": "9999000015",
+      "email": "tenant1043@mail.com",
+      "startDate": {
+        "$date": "2022-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 48000,
+      "rentPerMonth": 19000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f0992"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:44.548Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:44.548Z"
+      }
+    }
+  ],
+  "openingBalance": 2895,
+  "openingPrincipal": 2800,
+  "openingInterest": 95,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0043",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:44.548Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:44.548Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5488aeef3731c4f0996"
+  },
+  "flatNo": "1044",
+  "wing": "D",
+  "floor": 13,
+  "carpetAreaSqft": 2676,
+  "builtUpAreaSqft": 2896,
+  "flatType": "5BHK+",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-03-07T00:00:00.000Z"
+  },
+  "ownerName": "Swati Saxena",
+  "contactNumber": "9357427886",
+  "alternateContact": "9141310630",
+  "whatsappNumber": "9804408467",
+  "emailPrimary": "swati.saxena11@example.com",
+  "emailSecondary": "swati.alt11@example.com",
+  "panCard": "PQRST8764H",
+  "aadhaar": "1838 2106 4969",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Ritu Sharma",
+      "relation": "Sister",
+      "age": 26,
+      "contactNumber": "9876000074",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f0997"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 0,
+  "openingPrincipal": 0,
+  "openingInterest": 0,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0044",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:44.749Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:44.749Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5488aeef3731c4f099b"
+  },
+  "flatNo": "1045",
+  "wing": "C",
+  "floor": 11,
+  "carpetAreaSqft": 2013,
+  "builtUpAreaSqft": 2197,
+  "flatType": "4BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-D-127",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f099c"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-10-02T00:00:00.000Z"
+  },
+  "ownerName": "Harsh Desai",
+  "contactNumber": "9978706707",
+  "alternateContact": "9862303767",
+  "whatsappNumber": "9835727868",
+  "emailPrimary": "harsh.desai194@example.com",
+  "emailSecondary": "harsh.alt23@example.com",
+  "panCard": "PQRST9219B",
+  "aadhaar": "5134 5984 2513",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Aditi Menon",
+      "relation": "Spouse",
+      "age": 31,
+      "contactNumber": "9876000075",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f099d"
+      }
+    },
+    {
+      "name": "Arjun Menon",
+      "relation": "Son",
+      "age": 5,
+      "contactNumber": "9876000076",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5488aeef3731c4f099e"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 1060,
+  "openingPrincipal": 950,
+  "openingInterest": 110,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0045",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:44.929Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:44.929Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5498aeef3731c4f09a2"
+  },
+  "flatNo": "1046",
+  "wing": "C",
+  "floor": 2,
+  "carpetAreaSqft": 2052,
+  "builtUpAreaSqft": 2347,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-05-01T00:00:00.000Z"
+  },
+  "ownerName": "Simran Ghosh",
+  "contactNumber": "9621071798",
+  "alternateContact": "9158778714",
+  "whatsappNumber": "9598634386",
+  "emailPrimary": "simran.ghosh523@example.com",
+  "emailSecondary": "simran.alt49@example.com",
+  "panCard": "XYZAB4066C",
+  "aadhaar": "9201 8456 7811",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Prakash Iyer",
+      "relation": "Father",
+      "age": 67,
+      "contactNumber": "9876000077",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09a3"
+      }
+    },
+    {
+      "name": "Geeta Iyer",
+      "relation": "Mother",
+      "age": 62,
+      "contactNumber": "9876000078",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09a4"
+      }
+    }
+  ],
+  "ownerHistory": [
+    {
+      "ownerName": "Old Owner 1046",
+      "panCard": "PAN1046A",
+      "contactNumber": "9123000009",
+      "emailPrimary": "old1046@mail.com",
+      "ownershipStartDate": {
+        "$date": "2013-01-01T00:00:00.000Z"
+      },
+      "ownershipEndDate": {
+        "$date": "2019-01-01T00:00:00.000Z"
+      },
+      "durationMonths": 73,
+      "purchaseAmount": 2000000,
+      "saleAmount": 2800000,
+      "transferType": "Purchase",
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09a5"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:45.121Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:45.121Z"
+      }
+    }
+  ],
+  "tenantHistory": [],
+  "openingBalance": 5500,
+  "openingPrincipal": 5200,
+  "openingInterest": 300,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0046",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:45.121Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:45.121Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5498aeef3731c4f09a9"
+  },
+  "flatNo": "1047",
+  "wing": "A",
+  "floor": 17,
+  "carpetAreaSqft": 863,
+  "builtUpAreaSqft": 1030,
+  "flatType": "2BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-09-05T00:00:00.000Z"
+  },
+  "ownerName": "Nikhil Bose",
+  "contactNumber": "9216080592",
+  "alternateContact": "9665624465",
+  "whatsappNumber": "9550754279",
+  "emailPrimary": "nikhil.bose545@example.com",
+  "emailSecondary": "nikhil.alt51@example.com",
+  "panCard": "LMNOP9988B",
+  "aadhaar": "2074 9106 8061",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Rohit Kapoor",
+      "relation": "Brother",
+      "age": 34,
+      "contactNumber": "9876000079",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09aa"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 615,
+  "openingPrincipal": 600,
+  "openingInterest": 15,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0047",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:45.328Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:45.328Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5498aeef3731c4f09ae"
+  },
+  "flatNo": "1048",
+  "wing": "D",
+  "floor": 19,
+  "carpetAreaSqft": 808,
+  "builtUpAreaSqft": 1037,
+  "flatType": "2BHK",
+  "parkingSlots": [
+    {
+      "slotNumber": "P-B-115",
+      "type": "Open",
+      "vehicleType": "Two-Wheeler",
+      "monthlyBilling": true,
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09af"
+      }
+    }
+  ],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2022-04-18T00:00:00.000Z"
+  },
+  "ownerName": "Megha Sharma",
+  "contactNumber": "9813262559",
+  "alternateContact": "9226691083",
+  "whatsappNumber": "9701314560",
+  "emailPrimary": "megha.sharma249@example.com",
+  "emailSecondary": "megha.alt77@example.com",
+  "panCard": "LMNOP9835F",
+  "aadhaar": "9581 2869 7195",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Sunil Gupta",
+      "relation": "Father",
+      "age": 65,
+      "contactNumber": "9876000080",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09b0"
+      }
+    },
+    {
+      "name": "Neeta Gupta",
+      "relation": "Mother",
+      "age": 60,
+      "contactNumber": "9876000081",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09b1"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [
+    {
+      "name": "Past Tenant 1048",
+      "panCard": "TEN1048A",
+      "contactNumber": "9999000016",
+      "email": "tenant1048@mail.com",
+      "startDate": {
+        "$date": "2020-01-01T00:00:00.000Z"
+      },
+      "endDate": {
+        "$date": "2022-12-31T00:00:00.000Z"
+      },
+      "duration": null,
+      "depositAmount": 42000,
+      "rentPerMonth": 17000,
+      "isCurrent": false,
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09b2"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:45.512Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:45.512Z"
+      }
+    },
+    {
+      "name": "Current Tenant 1048",
+      "panCard": "TEN1048B",
+      "contactNumber": "9999000017",
+      "email": "tenant1048c@mail.com",
+      "startDate": {
+        "$date": "2023-01-01T00:00:00.000Z"
+      },
+      "endDate": null,
+      "duration": null,
+      "depositAmount": 52000,
+      "rentPerMonth": 20000,
+      "isCurrent": true,
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09b3"
+      },
+      "createdAt": {
+        "$date": "2026-05-08T13:29:45.513Z"
+      },
+      "updatedAt": {
+        "$date": "2026-05-08T13:29:45.513Z"
+      }
+    }
+  ],
+  "openingBalance": 2864,
+  "openingPrincipal": 2800,
+  "openingInterest": 64,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0048",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:45.513Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:45.513Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5498aeef3731c4f09b7"
+  },
+  "flatNo": "1049",
+  "wing": "A",
+  "floor": 1,
+  "carpetAreaSqft": 1939,
+  "builtUpAreaSqft": 2131,
+  "flatType": "4BHK",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2023-07-02T00:00:00.000Z"
+  },
+  "ownerName": "Abhishek Shukla",
+  "contactNumber": "9512608118",
+  "alternateContact": "9631060505",
+  "whatsappNumber": "9547837314",
+  "emailPrimary": "abhishek.shukla387@example.com",
+  "emailSecondary": "abhishek.alt33@example.com",
+  "panCard": "ABCDE7462B",
+  "aadhaar": "9204 5971 3352",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Pooja Singh",
+      "relation": "Spouse",
+      "age": 30,
+      "contactNumber": "9876000082",
+      "occupation": "Working",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09b8"
+      }
+    },
+    {
+      "name": "Aarav Singh",
+      "relation": "Son",
+      "age": 6,
+      "contactNumber": "9876000083",
+      "occupation": "Student",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09b9"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 1740,
+  "openingPrincipal": 1700,
+  "openingInterest": 40,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0049",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:45.697Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:45.697Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fde5498aeef3731c4f09bd"
+  },
+  "flatNo": "1050",
+  "wing": "B",
+  "floor": 17,
+  "carpetAreaSqft": 4354,
+  "builtUpAreaSqft": 4517,
+  "flatType": "Penthouse",
+  "parkingSlots": [],
+  "isActive": true,
+  "ownershipType": "Owner-Occupied",
+  "possessionDate": {
+    "$date": "2020-04-22T00:00:00.000Z"
+  },
+  "ownerName": "Meera Murthy",
+  "contactNumber": "9413789685",
+  "alternateContact": "9802766782",
+  "whatsappNumber": "9446672529",
+  "emailPrimary": "meera.murthy373@example.com",
+  "emailSecondary": "meera.alt85@example.com",
+  "panCard": "ABCDE3801D",
+  "aadhaar": "9355 6174 2986",
+  "permanentAddress": {
+    "country": "India"
+  },
+  "familyMembers": [
+    {
+      "name": "Manish Jain",
+      "relation": "Father",
+      "age": 68,
+      "contactNumber": "9876000084",
+      "occupation": "Retired",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09be"
+      }
+    },
+    {
+      "name": "Sarla Jain",
+      "relation": "Mother",
+      "age": 64,
+      "contactNumber": "9876000085",
+      "occupation": "Housewife",
+      "_id": {
+        "$oid": "69fde5498aeef3731c4f09bf"
+      }
+    }
+  ],
+  "ownerHistory": [],
+  "tenantHistory": [],
+  "openingBalance": 87,
+  "openingPrincipal": 0,
+  "openingInterest": 87,
+  "advanceCredit": 0,
+  "securityDeposit": {
+    "amount": 0,
+    "status": "Pending"
+  },
+  "specialDiscount": {
+    "percentage": 0
+  },
+  "membershipStatus": "Active",
+  "membershipNumber": "MEM-0050",
+  "hasVotingRights": true,
+  "billingPreferences": {
+    "emailBill": true,
+    "whatsappBill": false,
+    "printedBill": false
+  },
+  "customMaintenanceConfig": {
+    "isCustom": false
+  },
+  "societyId": {
+    "$oid": "69e8f2f0e0a8ac677e2cdf1e"
+  },
+  "createdBy": {
+    "$oid": "69e8f2f1e0a8ac677e2cdf28"
+  },
+  "isDeleted": false,
+  "createdAt": {
+    "$date": "2026-05-08T13:29:45.877Z"
+  },
+  "updatedAt": {
+    "$date": "2026-05-08T13:29:45.877Z"
+  },
+  "__v": 0
+}]

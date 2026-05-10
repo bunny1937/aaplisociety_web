@@ -11,7 +11,7 @@ const BillSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
-      max: 11,
+      max: 12,
     },
     billYear: {
       type: Number,
@@ -30,12 +30,41 @@ const BillSchema = new mongoose.Schema(
       index: true,
     },
 
-     // Interest fields
-  previousBalance: { type: Number, default: 0 },
-  interestAmount: { type: Number, default: 0 },
-  subtotal: Number,
-  serviceTax: { type: Number, default: 0 },
-  currentBillTotal: Number,
+    // ── Immutable bill-state fields (set at generation, never mutated) ──────
+    // openingPrincipal = previous month's closingPrincipal
+    openingPrincipal: { type: Number, default: 0 },
+    // openingInterest = previous month's closingInterest
+    openingInterest: { type: Number, default: 0 },
+    // currentCharges = sum of this month's maintenance + fixed + custom heads
+    currentCharges: { type: Number, default: 0 },
+    // currentInterest = openingPrincipal × annualRate / 1200 (simple, non-compounding)
+    currentInterest: { type: Number, default: 0 },
+    // billPrincipalBalance = openingPrincipal + currentCharges (immutable)
+    billPrincipalBalance: { type: Number, default: 0 },
+    // billInterestBalance = openingInterest + currentInterest (immutable)
+    billInterestBalance: { type: Number, default: 0 },
+    // totalBillDue = billPrincipalBalance + billInterestBalance (immutable)
+    totalBillDue: { type: Number, default: 0 },
+
+    // ── Closing-state fields (set after payment, separate from bill state) ──
+    closingPrincipal: { type: Number, default: null },
+    closingInterest: { type: Number, default: null },
+    closingTotal: { type: Number, default: null },
+    paymentUploadedAt: { type: Date, default: null },
+    paymentImportId: { type: mongoose.Schema.Types.ObjectId, ref: "PaymentImport", default: null },
+
+    // ── Legacy / compat fields (kept for existing generate route + reports) ─
+    previousBalance: { type: Number, default: 0 },
+    previousPrincipal: { type: Number, default: 0 },
+    previousInterest: { type: Number, default: 0 },
+    currInt: { type: Number, default: 0 },
+    monthInterest: { type: Number, default: 0 },
+    interestAmount: { type: Number, default: 0 },
+    principalBalance: { type: Number, default: 0 },
+    interestBalance: { type: Number, default: 0 },
+    subtotal: Number,
+    serviceTax: { type: Number, default: 0 },
+    currentBillTotal: Number,
 
     charges: {
       type: Map,
@@ -54,8 +83,7 @@ const BillSchema = new mongoose.Schema(
     },
     balanceAmount: {
       type: Number,
-        required: true
-
+      required: true,
     },
     dueDate: {
       type: Date,
@@ -64,10 +92,13 @@ const BillSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["Unpaid", "Partial", "Paid", "Overdue"],
+      // Scheduled: generated but not yet visible to member (pushDate not reached)
+      enum: ["Scheduled", "Unpaid", "Partial", "Paid", "Overdue"],
       default: "Unpaid",
       index: true,
     },
+    // Set when bill is generated before billPushDay. Cron flips to 'Unpaid' on this date.
+    scheduledPushDate: { type: Date, default: null },
 
     importedFrom: {
       type: String,
@@ -116,8 +147,11 @@ const BillSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-  billPdfUrl: String, // Generated PDF URL
-
+    interestOverrideReason: { type: String, trim: true, default: null },
+    interestOverridden: { type: Boolean, default: false },
+    billPdfUrl: String,
+    billHtml: String, // Stored HTML for preview and print
+    renderedHtml: { type: String, select: false }, // stored but not returned by default
     // Soft delete - NO INDEX HERE
     isDeleted: { type: Boolean, default: false }, // ❌ REMOVED: index: true
     deletedAt: { type: Date },
@@ -125,21 +159,31 @@ const BillSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // ✅ ALL INDEXES DEFINED HERE (single place)
 BillSchema.index(
   { societyId: 1, billPeriodId: 1, memberId: 1 },
-  { unique: true }
+  { unique: true },
 );
 BillSchema.index({ societyId: 1, status: 1, dueDate: 1 });
+BillSchema.index({ status: 1, scheduledPushDate: 1 }); // for cron job query
 BillSchema.index({ importBatchId: 1 }); // ✅ Defined here only
 BillSchema.index({ "importMetadata.validationStatus": 1 });
 BillSchema.index({ isDeleted: 1 }); // ✅ Defined here only
 
 BillSchema.pre("save", function (next) {
-  this.balanceAmount = this.totalAmount - this.amountPaid;
+  // balanceAmount = only this bill's own outstanding (principal + interest).
+  // previousBalance is a DISPLAY-ONLY snapshot of the ledger at generation time
+  // and must NOT be added here — doing so double-counts prior bills' balances.
+  const computedBalance = parseFloat(
+    ((this.principalBalance || 0) + (this.interestBalance || 0)).toFixed(2),
+  );
+  if (computedBalance >= 0 || this.isNew) {
+    this.balanceAmount = computedBalance;
+  }
+  this.interestAmount = this.monthInterest || this.interestAmount || 0;
   next();
 });
 

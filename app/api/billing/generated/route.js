@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import Bill from "@/models/Bill";  
-import Member from "@/models/Member";  
+import Bill from "@/models/Bill";
+import Member from "@/models/Member";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
+import cache from "@/lib/cache";
 
 export async function GET(request) {
   try {
@@ -19,24 +20,47 @@ export async function GET(request) {
     }
 
     // Query Bill model - no filter, show ALL bills
+    const cacheKey = `billing:generated:${decoded.societyId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
     const bills = await Bill.find({
-      societyId: decoded.societyId
+      societyId: decoded.societyId,
+      isDeleted: { $ne: true },
     })
-      .populate("memberId", "flatNo wing ownerName areaSqFt contact")
+      .select(
+        "billPeriodId billMonth billYear memberId societyId previousBalance interestAmount charges totalAmount balanceAmount amountPaid dueDate status billHtml generatedAt createdAt",
+      )
+      .populate(
+        "memberId",
+        "flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary",
+      )
       .sort({ billYear: -1, billMonth: -1, createdAt: -1 })
       .lean();
 
-    console.log('📋 Found bills in /api/billing/generated:', bills.length);
+    console.log("📋 Found bills in /api/billing/generated:", bills.length);
 
-    return NextResponse.json({
-      success: true,
-      bills,
-    });
+    // Serialize _id explicitly to avoid ObjectId serialization issues
+    const serializedBills = bills.map((b) => ({
+      ...b,
+      _id: b._id?.toString(),
+      memberId: b.memberId
+        ? {
+            ...b.memberId,
+            _id: b.memberId._id?.toString(),
+          }
+        : null,
+      societyId: b.societyId?.toString?.() || b.societyId,
+    }));
+
+    const responseData = { success: true, bills: serializedBills };
+    await cache.set(cacheKey, responseData, 120);
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Generated bills fetch error:", error);
     return NextResponse.json(
       { error: "Failed to fetch bills" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

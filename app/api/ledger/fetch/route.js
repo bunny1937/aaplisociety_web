@@ -3,7 +3,7 @@ import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Transaction from "@/models/Transaction";
 import Member from "@/models/Member";
-import User from "@/models/User";
+import cache from "@/lib/cache";
 
 export async function GET(request) {
   try {
@@ -155,7 +155,7 @@ export async function GET(request) {
         } else if (roomNoPattern.includes("*")) {
           // Starts with: 13*
           memberFilter.roomNo = new RegExp(
-            `^${roomNoPattern.replace("*", "")}`
+            `^${roomNoPattern.replace("*", "")}`,
           );
         } else {
           memberFilter.roomNo = roomNoPattern;
@@ -193,8 +193,25 @@ export async function GET(request) {
       sortBy === "amount"
         ? "amount"
         : sortBy === "member"
-        ? "memberId"
-        : "date";
+          ? "memberId"
+          : "date";
+    // Only cache simple single-member full ledger fetches
+    const isSimpleFetch =
+      memberId &&
+      memberId !== "all" &&
+      !startDate &&
+      !endDate &&
+      !filterMonth &&
+      page === 1;
+    const cacheKey = isSimpleFetch
+      ? `ledger:fetch:${decoded.societyId}:${memberId}`
+      : null;
+
+    if (cacheKey) {
+      const cached = await cache.get(cacheKey);
+      if (cached) return NextResponse.json(cached);
+    }
+
     const transactions = await Transaction.find(query)
       .populate("memberId", "roomNo wing ownerName areaSqFt")
       .populate("createdBy", "name email role")
@@ -262,7 +279,7 @@ export async function GET(request) {
           const d = new Date(t.date);
           key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
             2,
-            "0"
+            "0",
           )}`;
         }
 
@@ -279,7 +296,7 @@ export async function GET(request) {
       });
     }
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       transactions: finalTransactions,
       summary: {
@@ -304,7 +321,9 @@ export async function GET(request) {
         paymentMode,
         financialYear,
       },
-    });
+    };
+    if (cacheKey) await cache.set(cacheKey, responseData, 60);
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Ledger fetch error:", error);
     return NextResponse.json(
@@ -312,7 +331,7 @@ export async function GET(request) {
         error: "Failed to fetch ledger",
         details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

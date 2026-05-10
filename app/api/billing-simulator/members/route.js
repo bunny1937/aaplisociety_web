@@ -1,0 +1,68 @@
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import Member from "@/models/Member";
+import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+
+/**
+ * GET /api/billing-simulator/members
+ * Returns members for the society with billing-relevant fields only.
+ * Supports ?search=<query> for name/flat filtering.
+ */
+export async function GET(request) {
+  try {
+    await connectDB();
+
+    const token = getTokenFromRequest(request);
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    const { societyId } = decoded;
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search")?.trim();
+
+    const query = { societyId };
+    if (search) {
+      query.$or = [
+        { ownerName: { $regex: search, $options: "i" } },
+        { flatNo: { $regex: search, $options: "i" } },
+        { wing: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const members = await Member.find(query)
+      .select(
+        "_id flatNo wing ownerName openingBalance openingPrincipal openingInterest advanceCredit carpetAreaSqft parkingSlots contactNumber",
+      )
+      .sort({ wing: 1, flatNo: 1 })
+      .lean();
+
+    const formatted = members.map((m) => ({
+      id: m._id.toString(),
+      flat: m.wing ? `${m.wing}-${m.flatNo}` : m.flatNo,
+      flatNo: m.flatNo,
+      wing: m.wing,
+      name: m.ownerName,
+      openingBalance: m.openingBalance || 0,
+      openingPrincipal: m.openingPrincipal || 0,
+      openingInterest: m.openingInterest || 0,
+      advanceCredit: m.advanceCredit || 0,
+      carpetAreaSqft: m.carpetAreaSqft || 0,
+      parkingSlots: m.parkingSlots || 0,
+      contactNumber: m.contactNumber,
+    }));
+
+    return NextResponse.json({ success: true, members: formatted });
+  } catch (error) {
+    console.error("billing-simulator/members error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch members", details: error.message },
+      { status: 500 },
+    );
+  }
+}

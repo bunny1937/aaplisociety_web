@@ -7,6 +7,7 @@ import {
   extractTokenFromHeader,
   getTokenFromRequest,
 } from "@/lib/jwt";
+import cache from "@/lib/cache";
 
 export async function GET(request) {
   try {
@@ -41,6 +42,10 @@ export async function GET(request) {
       query.memberId = memberId;
     }
 
+    const cacheKey = `billing:list:${decoded.societyId}:${billPeriodId || "all"}:${status || "all"}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
     const bills = await Bill.find(query)
       .populate("memberId", "flatNo wing ownerName areaSqFt contact")
       .sort({
@@ -51,15 +56,14 @@ export async function GET(request) {
       })
       .lean();
 
-    return NextResponse.json({
-      bills,
-      count: bills.length,
-    });
+    const responseData = { bills, count: bills.length };
+    await cache.set(cacheKey, responseData, 120);
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Fetch bills error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

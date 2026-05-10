@@ -43,18 +43,14 @@ export function calculateMonthlyInterest({
   referenceDate,
   interestRounding = "TWO_DECIMAL",
   interestTriggerTiming = "NEXT_DAY", // SAME_DAY | NEXT_DAY
-  interestActivationMode = "APPLICABLE", // NEW — "VIEW" suppresses new interest
 }) {
   // interestRate = 0 → bypass
   if (!annualRate || annualRate <= 0) {
     return { currInt: 0, monthInterest: 0, remInt: 0 };
   }
 
-  // VIEW mode: carry remInt but add no new interest this cycle
-  if (interestActivationMode === "VIEW") {
-    const carried = roundInterest(remInt || 0, interestRounding);
-    return { currInt: 0, monthInterest: carried, remInt: carried };
-  }
+  // VIEW vs APPLICABLE: math is identical at bill generation time.
+  // VIEW = UI warning label only; interest still calculated when next bill generates.
 
   // No principal → carry remInt only
   if (!remainingPrincipal || remainingPrincipal <= 0) {

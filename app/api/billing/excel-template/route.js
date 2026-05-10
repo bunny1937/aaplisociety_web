@@ -65,19 +65,12 @@ export async function GET(request) {
         const area = Number(m.carpetAreaSqft || 0);
         let subtotal = 0;
 
-        const _safedue = safeConfigDate(
-          year,
-          month,
-          society.config?.billDueDay || 10,
-        );
+        const periodId = `${year}-${String(month).padStart(2, "0")}`;
         const row = {
-          MemberId: m._id.toString(),
-          Wing: m.wing,
-          FlatNo: m.flatNo,
+          Wing: m.wing || "",
+          FlatNo: m.flatNo || "",
           OwnerName: m.ownerName,
-          Month: month,
-          Year: year,
-          DueDate: dueDate || _safedue.toLocaleDateString("en-IN"),
+          Period: periodId,
         };
 
         // Non-parking heads — apply by calculationType
@@ -130,7 +123,7 @@ export async function GET(request) {
           subtotal += matchHead.defaultAmount;
         }
 
-        row["Total"] = parseFloat(subtotal.toFixed(2));
+        row["CurrentCharges"] = parseFloat(subtotal.toFixed(2));
 
         // Interest config
         const interestRate = parseFloat(society?.config?.interestRate || 0);
@@ -140,94 +133,114 @@ export async function GET(request) {
         // Reference date = 1st of bill month
         const referenceDate = new Date(year, month - 1, 1);
 
-        // Fetch unpaid bills from DB (need principalBalance for correct interest base)
+        const currentPeriodId = `${year}-${String(month).padStart(2, "0")}`;
+
+        // Fetch unpaid PRIOR bills only (exclude current period — it may already exist)
         const unpaidBills = await Bill.find({
           memberId: m._id,
           societyId: decoded.societyId,
           status: { $in: ["Unpaid", "Partial", "Overdue"] },
+          billPeriodId: { $ne: currentPeriodId },
         })
-          .select("balanceAmount principalBalance interestBalance dueDate billYear billMonth")
+          .select("balanceAmount principalBalance interestBalance dueDate billYear billMonth amountPaid status")
           .lean();
 
-        // prevBalance for display = sum of all unpaid bill balances (principal + interest)
-        let prevBalance = unpaidBills.reduce(
-          (sum, b) => sum + (b.balanceAmount || 0),
-          0,
-        );
-        if (prevBalance === 0 && (m.openingBalance || 0) > 0) {
-          prevBalance = m.openingBalance;
-        }
+        // Opening balances (used when no prior bills exist)
+        const openingPrincipal = parseFloat((m.openingPrincipal || 0).toFixed(2));
+        const openingInterest = parseFloat((m.openingInterest || 0).toFixed(2));
 
-        let interestDue = 0;
+        // Prior unpaid principal and interest
+        const prevRemPrincipal = unpaidBills.length > 0
+          ? parseFloat(unpaidBills.reduce((s, b) => s + (b.principalBalance || 0), 0).toFixed(2))
+          : openingPrincipal;
+        const prevRemInt = unpaidBills.length > 0
+          ? parseFloat(unpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0).toFixed(2))
+          : openingInterest;
 
-        // If bill already generated — use the stored value, never recalculate.
-        // This ensures export and UI are always in sync with actual stored data.
+        // If bill already generated — use stored values exactly, never recalculate
         const existingBill = await Bill.findOne({
           memberId: m._id,
           societyId: decoded.societyId,
-          billPeriodId: `${year}-${String(month).padStart(2, "0")}`,
+          billPeriodId: currentPeriodId,
           isDeleted: { $ne: true },
         })
-          .select("interestAmount")
+          .select("openingPrincipal openingInterest currentCharges currentInterest billPrincipalBalance billInterestBalance totalBillDue totalAmount balanceAmount amountPaid status interestAmount")
           .lean();
 
-        if (existingBill) {
-          interestDue = parseFloat(existingBill.interestAmount || 0);
-        } else if (unpaidBills.length > 0 || (m.openingPrincipal || 0) > 0) {
-          // Preview before bill is generated: compute interest on PRINCIPAL only (no interest-on-interest)
-          const principalForInterest =
-            unpaidBills.length > 0
-              ? unpaidBills.reduce((s, b) => s + (b.principalBalance || 0), 0)
-              : m.openingPrincipal || 0;
-          const remInt =
-            unpaidBills.length > 0
-              ? unpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0)
-              : m.openingInterest || 0;
+        let currInt, billPrincipal, billInterest, totalBillDue, alreadyPaid, remainingDue, billStatus;
 
-          if (principalForInterest > 0 || remInt > 0) {
-            const sortedUnpaid = [...unpaidBills].sort(
-              (a, b) => new Date(a.dueDate) - new Date(b.dueDate),
-            );
-            const oldestDueDate = getOldestDueDate(
-              sortedUnpaid,
-              billDueDay,
-              year,
-              month,
-            );
-            const { monthInterest } = calculateMonthlyInterest({
-              remainingPrincipal: principalForInterest,
-              remInt,
+        if (existingBill) {
+          // Use stored bill data — source of truth
+          currInt = parseFloat((existingBill.currentInterest ?? existingBill.interestAmount ?? 0).toFixed(2));
+          billPrincipal = parseFloat((existingBill.billPrincipalBalance ?? existingBill.totalAmount ?? 0).toFixed(2));
+          billInterest = parseFloat((existingBill.billInterestBalance ?? 0).toFixed(2));
+          totalBillDue = parseFloat((existingBill.totalBillDue ?? existingBill.totalAmount ?? 0).toFixed(2));
+          alreadyPaid = parseFloat((existingBill.amountPaid ?? 0).toFixed(2));
+          remainingDue = parseFloat((existingBill.balanceAmount ?? totalBillDue).toFixed(2));
+          billStatus = existingBill.status || "Unpaid";
+        } else {
+          // Pre-generation preview — calculate fresh
+          currInt = 0;
+          if (prevRemPrincipal > 0) {
+            const sortedUnpaid = [...unpaidBills].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+            const oldestDueDate = getOldestDueDate(sortedUnpaid, billDueDay, year, month);
+            const result = calculateMonthlyInterest({
+              remainingPrincipal: prevRemPrincipal,
+              remInt: prevRemInt,
               annualRate: interestRate,
               gracePeriodDays,
               interestAfterDays: society?.config?.interestAfterDays,
-              interestActivationMode: society?.config?.interestActivationMode || "APPLICABLE",
               billDueDate: oldestDueDate,
               referenceDate,
               interestRounding: society?.config?.interestRounding || "TWO_DECIMAL",
               interestTriggerTiming: society?.config?.interestTriggerTiming || "NEXT_DAY",
             });
-            interestDue = monthInterest;
+            currInt = result.currInt;
           }
+          billPrincipal = parseFloat((prevRemPrincipal + subtotal).toFixed(2));
+          billInterest = parseFloat((prevRemInt + currInt).toFixed(2));
+          totalBillDue = parseFloat((billPrincipal + billInterest).toFixed(2));
+          alreadyPaid = 0;
+          remainingDue = totalBillDue;
+          billStatus = "Not Generated";
         }
 
-        row["PreviousBalance"] = parseFloat(prevBalance.toFixed(2));
-        row["InterestDue"] = parseFloat(interestDue.toFixed(2));
-        row["GrandTotal"] = parseFloat(
-          (subtotal + prevBalance + interestDue).toFixed(2),
-        );
+        row["OpeningPrincipal"] = openingPrincipal;
+        row["OpeningInterest"] = openingInterest;
+        row["CurrentInterest"] = currInt;
+        row["BillPrincipal"] = billPrincipal;
+        row["BillInterest"] = billInterest;
+        row["TotalBillDue"] = totalBillDue;
+        row["AlreadyPaid"] = alreadyPaid;
+        row["RemainingDue"] = remainingDue;
+        row["BillStatus"] = billStatus;
+        row["AmountPaid"] = "";
+        row["PaymentMethod"] = "";
+        row["PaymentDate"] = "";
+        row["Remarks"] = "";
         return row;
       }),
     );
 
     const instructions = [
       {
-        MemberId: "⚠ DO NOT change MemberId, Wing, FlatNo, Month, Year columns",
-        Wing: "",
+        Wing: "⚠ DO NOT change Wing, FlatNo, OwnerName, Period columns",
         FlatNo: "",
-        OwnerName: "Adjust charge amounts if needed",
-        Month: "",
-        Year: "",
-        DueDate: "",
+        OwnerName: "Fill AmountPaid + PaymentMethod + PaymentDate to record payments. Leave blank to skip.",
+        Period: "",
+        OpeningPrincipal: "",
+        OpeningInterest: "",
+        CurrentInterest: "",
+        BillPrincipal: "",
+        BillInterest: "",
+        TotalBillDue: "",
+        AlreadyPaid: "",
+        RemainingDue: "",
+        BillStatus: "",
+        AmountPaid: "",
+        PaymentMethod: "Cash / Cheque / Online / NEFT / UPI",
+        PaymentDate: "YYYY-MM-DD",
+        Remarks: "",
       },
     ];
 

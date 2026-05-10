@@ -1,7 +1,9 @@
+//app/api/members/list/route.
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import cache from "@/lib/cache";
 
 export async function GET(request) {
   try {
@@ -19,10 +21,18 @@ export async function GET(request) {
 
     const searchParams = new URL(request.url).searchParams;
     const page = parseInt(searchParams.get("page")) || 1;
-    const limit = parseInt(searchParams.get("limit")) || 1000; // ✅ INCREASED TO 1000
+    const limit = parseInt(searchParams.get("limit")) || 1000;
     const search = searchParams.get("search");
 
-    const query = { societyId: decoded.societyId };
+    const societyId = decoded.societyId;
+
+    // ✅ UNIQUE CACHE KEY (VERY IMPORTANT)
+    const cacheKey = `members:list:${societyId}:p${page}:l${limit}:s${search || "all"}`;
+
+    const cached = await cache.get(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
+    const query = { societyId };
 
     if (search) {
       query.$or = [
@@ -36,14 +46,14 @@ export async function GET(request) {
 
     const [members, total] = await Promise.all([
       Member.find(query)
-        .sort({ wing: 1, roomNo: 1 }) // ✅ PROPER SORTING
+        .sort({ wing: 1, roomNo: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       Member.countDocuments(query),
     ]);
 
-    return NextResponse.json({
+    const responseData = {
       members,
       pagination: {
         page,
@@ -51,12 +61,16 @@ export async function GET(request) {
         total,
         pages: Math.ceil(total / limit),
       },
-    });
+    };
+
+    await cache.set(cacheKey, responseData, 180);
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Fetch members error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

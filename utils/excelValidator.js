@@ -10,20 +10,17 @@ const PAYMENT_METHODS = new Set(["Cash", "Cheque", "Online", "NEFT", "UPI"]);
  *
  * @param {object[]} rows         — parsed Excel rows (1 object per row)
  * @param {object}   opts
- * @param {Set}      opts.validMemberIds   — Set of valid memberID strings from DB
+ * @param {Map}      opts.wingFlatMap      — Map of "wing-flatno" → member object
  * @param {string}   opts.billPeriodId     — expected e.g. "2026-05"
  * @param {string[]} opts.expectedColumns  — mandatory column names
  *
  * @returns {{ gridRows, summary: { valid, warning, error } }}
  */
-export function validateBillRows(rows, { validMemberIds, billPeriodId, expectedColumns = [] }) {
-  const [expectedYear, expectedMonthStr] = billPeriodId.split("-");
-  const expectedMonth = parseInt(expectedMonthStr);
-
-  const seenMemberIds = new Map();
+export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColumns = [] }) {
+  const seenFlats = new Map();
   const gridRows = [];
 
-  const SKIP_COLS = new Set(["MemberId", "Wing", "FlatNo", "OwnerName", "Month", "Year", "DueDate", "PreviousBalance", "InterestDue", "GrandTotal"]);
+  const SKIP_COLS = new Set(["Wing", "FlatNo", "OwnerName", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "RemainingDue", "BillStatus", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
@@ -38,34 +35,35 @@ export function validateBillRows(rows, { validMemberIds, billPeriodId, expectedC
     };
     const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
 
-    // MemberId
-    const memberId = String(raw["MemberId"] || "").trim();
-    if (!memberId) {
-      markCell("MemberId", memberId, "error", "MemberId is required");
-    } else if (!validMemberIds.has(memberId)) {
-      markCell("MemberId", memberId, "error", "Unknown member ID — not in DB");
-    } else if (seenMemberIds.has(memberId)) {
-      markCell("MemberId", memberId, "error", `Duplicate row — already seen at row ${seenMemberIds.get(memberId)}`);
-      rowStatus = "error";
+    const wing = String(raw["Wing"] || "").trim();
+    const flatNo = String(raw["FlatNo"] || "").trim();
+    const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
+
+    // Skip instruction row
+    if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
+
+    // Wing + FlatNo validation
+    if (!wing || !flatNo) {
+      markCell("Wing", wing, "error", "Wing is required");
+      markCell("FlatNo", flatNo, "error", "FlatNo is required");
+    } else if (wingFlatMap && !wingFlatMap[flatKey]) {
+      markCell("Wing", wing, "error", `Flat "${wing}-${flatNo}" not found in system`);
+      markCell("FlatNo", flatNo, "error", "");
+    } else if (seenFlats.has(flatKey)) {
+      markCell("Wing", wing, "error", `Duplicate — already seen at row ${seenFlats.get(flatKey)}`);
+      markCell("FlatNo", flatNo, "error", "");
     } else {
-      seenMemberIds.set(memberId, rowNum);
-      okCell("MemberId", memberId);
+      seenFlats.set(flatKey, rowNum);
+      okCell("Wing", wing);
+      okCell("FlatNo", flatNo);
     }
 
-    // Month
-    const month = parseInt(raw["Month"]);
-    if (isNaN(month) || month !== expectedMonth) {
-      markCell("Month", raw["Month"], "error", `Month must be ${expectedMonth}`);
+    // Period
+    const period = String(raw["Period"] || "").trim();
+    if (billPeriodId && period && period !== billPeriodId) {
+      markCell("Period", period, "error", `Period must be ${billPeriodId}`);
     } else {
-      okCell("Month", month);
-    }
-
-    // Year
-    const year = parseInt(raw["Year"]);
-    if (isNaN(year) || year !== parseInt(expectedYear)) {
-      markCell("Year", raw["Year"], "error", `Year must be ${expectedYear}`);
-    } else {
-      okCell("Year", year);
+      okCell("Period", period || billPeriodId);
     }
 
     // Numeric charge columns
@@ -108,22 +106,34 @@ export function validateBillRows(rows, { validMemberIds, billPeriodId, expectedC
  *
  * @param {object[]} rows
  * @param {object}   opts
- * @param {Set}      opts.validMemberIds       — Set<string>
- * @param {Map}      opts.existingBillMap       — Map<memberId, { balanceAmount, status }>
- * @param {Date}     opts.today                — for future-date check
+ * @param {Map}      opts.wingFlatMap        — Map<"wing-flatno", member>
+ * @param {Map}      opts.existingBillMap    — Map<"wing-flatno", { balanceAmount }>
+ * @param {Date}     opts.today             — for future-date check
  *
  * @returns {{ gridRows, summary, validPayments: object[] }}
  */
-export function validatePaymentRows(rows, { validMemberIds, existingBillMap, today }) {
-  const seenMemberIds = new Map();
+export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today }) {
+  const seenFlats = new Map();
   const gridRows = [];
   const validPayments = [];
 
-  const REF_COLS = ["Wing","FlatNo","OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","RemainingDue","BillStatus","LastReceiptNo","LastPaymentDate"];
+  const REF_COLS = ["OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","RemainingDue","BillStatus"];
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
     const rowNum = i + 2;
+
+    const wing = String(raw["Wing"] || "").trim();
+    const flatNo = String(raw["FlatNo"] || "").trim();
+
+    // Skip instruction row
+    if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
+    // Skip rows with no payment
+    const _amtRaw = String(raw["AmountPaid"] ?? "").trim();
+    if (!_amtRaw) continue;
+
+    const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
+
     const cells = {};
     let rowStatus = "valid";
 
@@ -134,21 +144,29 @@ export function validatePaymentRows(rows, { validMemberIds, existingBillMap, tod
     };
     const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
 
-    // MemberId
-    const memberId = String(raw["MemberId"] || "").trim();
-    if (!memberId) {
-      markCell("MemberId", memberId, "error", "MemberId is required");
-    } else if (!validMemberIds.has(memberId)) {
-      markCell("MemberId", memberId, "error", "Unknown member ID");
-    } else if (seenMemberIds.has(memberId)) {
-      markCell("MemberId", memberId, "error", `Duplicate — already at row ${seenMemberIds.get(memberId)}`);
+    // Wing + FlatNo
+    if (!wing || !flatNo) {
+      markCell("Wing", wing, "error", "Wing is required");
+      markCell("FlatNo", flatNo, "error", "FlatNo is required");
+    } else if (wingFlatMap && !wingFlatMap.get(flatKey)) {
+      markCell("Wing", wing, "error", `Flat "${wing}-${flatNo}" not found`);
+      markCell("FlatNo", flatNo, "error", "");
+    } else if (seenFlats.has(flatKey)) {
+      markCell("Wing", wing, "error", `Duplicate — already at row ${seenFlats.get(flatKey)}`);
+      markCell("FlatNo", flatNo, "error", "");
     } else {
-      seenMemberIds.set(memberId, rowNum);
-      okCell("MemberId", memberId);
+      seenFlats.set(flatKey, rowNum);
+      okCell("Wing", wing);
+      okCell("FlatNo", flatNo);
     }
 
-    okCell("Month", raw["Month"]);
-    okCell("Year", raw["Year"]);
+    // Period
+    if (raw["Period"]) {
+      okCell("Period", raw["Period"]);
+    } else {
+      okCell("Month", raw["Month"]);
+      okCell("Year", raw["Year"]);
+    }
 
     // AmountPaid
     const amountStr = String(raw["AmountPaid"] || "").trim();
@@ -158,7 +176,7 @@ export function validatePaymentRows(rows, { validMemberIds, existingBillMap, tod
     } else if (isNaN(amount) || amount <= 0) {
       markCell("AmountPaid", amountStr, "error", `Invalid amount: ${amountStr} — must be > 0`);
     } else {
-      const bill = existingBillMap?.get(memberId);
+      const bill = existingBillMap?.get(flatKey);
       const remaining = bill?.balanceAmount ?? Infinity;
       if (amount > remaining + 0.01) {
         markCell("AmountPaid", amount, "warning", `Paying ₹${amount} but only ₹${remaining.toFixed(2)} remaining — overpayment`);
@@ -177,24 +195,33 @@ export function validatePaymentRows(rows, { validMemberIds, existingBillMap, tod
       okCell("PaymentMethod", method);
     }
 
-    // PaymentDate
-    const dateStr = String(raw["PaymentDate"] || "").trim();
-    if (!dateStr) {
-      markCell("PaymentDate", dateStr, "error", "PaymentDate is required");
+    // PaymentDate — handle JS Date (cellDates:true), XLSX serial, YYYY-MM-DD, DD-MM-YYYY
+    const rawDate = raw["PaymentDate"];
+    const dateStr = String(rawDate ?? "").trim();
+    if (!dateStr || dateStr === "Invalid Date") {
+      markCell("PaymentDate", "", "error", "PaymentDate is required");
     } else {
       let parsedDate = null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      if (rawDate instanceof Date) {
+        parsedDate = rawDate;
+      } else if (typeof rawDate === "number") {
+        // XLSX serial: days since 1899-12-30
+        parsedDate = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
         parsedDate = new Date(dateStr);
       } else if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
         const [dd, mm, yyyy] = dateStr.split("-");
         parsedDate = new Date(`${yyyy}-${mm}-${dd}`);
       }
+      const displayDate = parsedDate && !isNaN(parsedDate.getTime())
+        ? parsedDate.toISOString().split("T")[0]
+        : dateStr;
       if (!parsedDate || isNaN(parsedDate.getTime())) {
-        markCell("PaymentDate", dateStr, "error", "Invalid date format — use YYYY-MM-DD or DD-MM-YYYY");
+        markCell("PaymentDate", displayDate, "error", "Invalid date format — use YYYY-MM-DD or DD-MM-YYYY");
       } else if (parsedDate > (today || new Date())) {
-        markCell("PaymentDate", dateStr, "error", "Future payment date not allowed");
+        markCell("PaymentDate", displayDate, "error", "Future payment date not allowed");
       } else {
-        okCell("PaymentDate", dateStr);
+        okCell("PaymentDate", displayDate);
       }
     }
 

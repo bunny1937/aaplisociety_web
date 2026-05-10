@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Bill from '@/models/Bill';
-import User from '@/models/User';
-import { getTokenFromRequest, verifyToken } from '@/lib/jwt';
-import { exportToAdminDB, logAdminActivity } from '@/lib/export-to-admin-db';
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import Bill from "@/models/Bill";
+import User from "@/models/User";
+import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import { exportToAdminDB, logAdminActivity } from "@/lib/export-to-admin-db";
 
 export async function POST(request) {
   try {
@@ -11,27 +11,27 @@ export async function POST(request) {
 
     const token = getTokenFromRequest(request);
     if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const decoded = verifyToken(token);
     if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
     const { billIds, reason } = await request.json();
 
     if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
       return NextResponse.json(
-        { error: 'Bill IDs are required' },
-        { status: 400 }
+        { error: "Bill IDs are required" },
+        { status: 400 },
       );
     }
 
-    if (!reason || reason.trim() === '') {
+    if (!reason || reason.trim() === "") {
       return NextResponse.json(
-        { error: 'Deletion reason is required' },
-        { status: 400 }
+        { error: "Deletion reason is required" },
+        { status: 400 },
       );
     }
 
@@ -46,14 +46,14 @@ export async function POST(request) {
 
     if (billsToDelete.length === 0) {
       return NextResponse.json(
-        { error: 'No bills found to delete' },
-        { status: 404 }
+        { error: "No bills found to delete" },
+        { status: 404 },
       );
     }
 
     // ✅ STEP 2: EXPORT TO ADMIN.EXPORTS COLLECTION (BEFORE DELETING)
     const exportResult = await exportToAdminDB(billsToDelete, {
-      collection: 'bills',
+      collection: "bills",
       societyId: decoded.societyId,
       deletedBy: decoded.userId,
       deletedByName: user.name,
@@ -70,20 +70,37 @@ export async function POST(request) {
           deletedAt: new Date(),
           deletedBy: decoded.userId,
         },
-      }
+      },
     );
-
+    // ✅ Also reverse/delete the system Debit transactions created for these bills
+    await Transaction.updateMany(
+      {
+        societyId,
+        referenceId: { $in: billIds },
+        referenceModel: "Bill",
+        type: "Debit",
+        category: "Maintenance",
+        isReversed: { $ne: true },
+      },
+      {
+        $set: {
+          isReversed: true,
+          reversedAt: new Date(),
+          reversedBy: decoded.userId,
+        },
+      },
+    );
     // ✅ STEP 4: LOG ADMIN ACTIVITY
     await logAdminActivity({
       adminId: decoded.userId,
       adminName: user.name,
-      action: 'DELETE_DATA',
+      action: "DELETE_DATA",
       targetSociety: {
         societyId: decoded.societyId,
-        societyName: 'Society Name', // Add from context
+        societyName: "Society Name", // Add from context
       },
       details: {
-        collection: 'bills',
+        collection: "bills",
         recordCount: billsToDelete.length,
         reason,
       },
@@ -98,10 +115,10 @@ export async function POST(request) {
       exportId: exportResult.exportId,
     });
   } catch (error) {
-    console.error('Delete bills error:', error);
+    console.error("Delete bills error:", error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
-      { status: 500 }
+      { error: "Internal server error", details: error.message },
+      { status: 500 },
     );
   }
 }

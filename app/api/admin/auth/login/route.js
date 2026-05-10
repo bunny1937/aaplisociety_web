@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
-import { getAdminModels } from '@/lib/admin-models';
-import jwt from 'jsonwebtoken';
-import { checkRateLimit, clearRateLimit } from '@/lib/admin-middleware';
+// app/api/admin/auth/login/route.js
+import { NextResponse } from "next/server";
+import { getAdminModels } from "@/lib/admin-models";
+import jwt from "jsonwebtoken";
+import { checkRateLimit, clearRateLimit } from "@/lib/admin-middleware";
 
 export async function POST(request) {
   try {
@@ -9,11 +10,8 @@ export async function POST(request) {
 
     // ✅ SECURITY 1: Require admin secret key in request body
     if (!adminKey || adminKey !== process.env.ADMIN_SECRET_KEY) {
-      console.warn('🚨 Admin login attempt without valid admin key');
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      );
+      console.warn("🚨 Admin login attempt without valid admin key");
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // ✅ SECURITY 2: Rate limiting
@@ -21,19 +19,19 @@ export async function POST(request) {
     if (rateLimit.blocked) {
       const remainingTime = Math.ceil((rateLimit.resetAt - Date.now()) / 60000);
       return NextResponse.json(
-        { 
+        {
           error: `Too many attempts. Try again in ${remainingTime} minutes.`,
-          blockedUntil: rateLimit.resetAt
+          blockedUntil: rateLimit.resetAt,
         },
-        { status: 429 }
+        { status: 429 },
       );
     }
 
     // ✅ SECURITY 3: Validate credentials
     if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email and password required' },
-        { status: 400 }
+        { error: "Email and password required" },
+        { status: 400 },
       );
     }
 
@@ -45,8 +43,8 @@ export async function POST(request) {
     if (!admin) {
       console.warn(`🚨 Failed admin login attempt: ${email}`);
       return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
+        { error: "Invalid credentials" },
+        { status: 401 },
       );
     }
 
@@ -56,8 +54,8 @@ export async function POST(request) {
     if (!isMatch) {
       console.warn(`🚨 Wrong password for admin: ${email}`);
       return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
+        { error: "Invalid credentials" },
+        { status: 401 },
       );
     }
 
@@ -65,10 +63,11 @@ export async function POST(request) {
     clearRateLimit(email);
 
     // Update login info
-    const ipAddress = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
-                     'unknown';
-    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const ipAddress =
+      request.headers.get("x-forwarded-for") ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+    const userAgent = request.headers.get("user-agent") || "unknown";
 
     admin.lastLogin = new Date();
     admin.loginHistory.push({
@@ -82,7 +81,7 @@ export async function POST(request) {
     await AdminLog.create({
       adminId: admin._id,
       adminName: admin.name,
-      action: 'LOGIN',
+      action: "LOGIN",
       ipAddress,
       userAgent,
       timestamp: new Date(),
@@ -93,31 +92,39 @@ export async function POST(request) {
       {
         userId: admin._id,
         email: admin.email,
-        role: 'SuperAdmin',
-        iat: Math.floor(Date.now() / 1000),
+        role: admin.role, // 🔥 dynamic
       },
       process.env.ADMIN_JWT_SECRET,
-      { expiresIn: '8h' } // Token expires in 8 hours
+      { expiresIn: "8h" },
     );
 
     console.log(`✅ Admin logged in: ${email}`);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       token,
       user: {
         id: admin._id,
         name: admin.name,
         email: admin.email,
-        role: 'SuperAdmin',
+        role: admin.role,
       },
     });
 
+    response.cookies.set("admin_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 8,
+    });
+
+    return response;
   } catch (error) {
-    console.error('❌ Admin login error:', error);
+    console.error("❌ Admin login error:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: "Internal server error" },
+      { status: 500 },
     );
   }
 }
