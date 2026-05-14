@@ -6,12 +6,7 @@ import Transaction from "@/models/Transaction";
 import Society from "@/models/Society";
 import Bill from "@/models/Bill";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
-import {
-  getOldestDueDate,
-  getBillPayFinalDate,
-  calculateInterestAmount,
-  calculateMonthlyInterest,
-} from "../../../../utils/interestUtils";
+import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
 import { safeConfigDate } from "../../../../utils/dateUtils";
 import cache from "@/lib/cache";
 import BillingHead from "@/models/BillingHead";
@@ -152,13 +147,15 @@ export async function POST(request) {
           continue;
         }
 
-        // Get previous balance
+        // Get previous balance — sort by createdAt only so a same-day Credit
+        // (whose date field = user-supplied payment date = midnight) is never
+        // beaten by an earlier-in-day Debit with a higher time component.
         const previousTransactions = await Transaction.find({
           societyId: decoded.societyId,
           memberId: member._id,
           date: { $lt: startDate },
         })
-          .sort({ date: -1, createdAt: -1 })
+          .sort({ createdAt: -1 })
           .limit(1)
           .lean();
 
@@ -177,38 +174,38 @@ export async function POST(request) {
           .lean();
 
         // Get unpaid bills for page 2
-        const unpaidBills = await Bill.find({
-          societyId: decoded.societyId,
-          memberId: member._id,
-          status: { $in: ["Unpaid", "Partial", "Overdue"] },
-          isDeleted: { $ne: true },
-        })
-          .sort({ billYear: 1, billMonth: 1 }) // oldest first for anchor
-          .lean();
+        const [unpaidBills, anyPriorBill] = await Promise.all([
+          Bill.find({
+            societyId: decoded.societyId,
+            memberId: member._id,
+            status: { $in: ["Unpaid", "Partial", "Overdue"] },
+            isDeleted: { $ne: true },
+          })
+            .sort({ billYear: 1, billMonth: 1 })
+            .lean(),
+          Bill.findOne({
+            societyId: decoded.societyId,
+            memberId: member._id,
+            isDeleted: { $ne: true },
+          })
+            .select("_id")
+            .lean(),
+        ]);
 
-        const oldestUnpaidDate =
-          unpaidBills.length > 0 && unpaidBills[0].dueDate
-            ? new Date(unpaidBills[0].dueDate)
-            : unpaidBills.length > 0
-              ? safeConfigDate(
-                  unpaidBills[0].billYear,
-                  unpaidBills[0].billMonth + 1,
-                  society.config?.billDueDay || 10,
-                )
-              : null;
-
-        // Sum of unpaid interest carried forward from prior bills (remInt)
-        // For first-ever bill: include openingInterest as the carried interest baseline
+        // If member has prior bills and all paid → outstanding = 0.
+        // Only fall back to member opening balances if no bills ever generated (new member).
         const prevRemInt =
-          unpaidBills.length === 0
-            ? member.openingInterest || 0
-            : unpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0);
-        // Sum of unpaid principal from prior bills
-        // For first-ever bill: include openingPrincipal as the principal baseline
+          unpaidBills.length > 0
+            ? unpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0)
+            : anyPriorBill
+              ? 0
+              : member.openingInterest || 0;
         const prevRemPrincipal =
-          unpaidBills.length === 0
-            ? member.openingPrincipal || 0
-            : unpaidBills.reduce((s, b) => s + (b.principalBalance || 0), 0);
+          unpaidBills.length > 0
+            ? unpaidBills.reduce((s, b) => s + (b.principalBalance || 0), 0)
+            : anyPriorBill
+              ? 0
+              : member.openingPrincipal || 0;
         const prevBill = await Bill.findOne(
           {
             memberId: member._id,
@@ -231,11 +228,8 @@ export async function POST(request) {
           newBalance: previousBalance + billData.totalAmount,
           billPeriod,
           billDate: new Date(year, month - 1, 1),
-          dueDate: dueDate
-            ? new Date(dueDate)
-            : safeConfigDate(year, month, society.config?.billDueDay || 10),
+          dueDate: dueDate ? new Date(dueDate) : new Date(year, month - 1, 10),
           unpaidBills,
-          oldestUnpaidDate,
           recentTransactions:
             billData.recentTransactions || recentTransactions || [],
           previousBillHtml: prevBill?.billHtml || null,
@@ -286,20 +280,34 @@ export async function POST(request) {
         const _isScheduled = _forceUnpaid ? false : new Date() < _pushDate;
 
         // Compute new immutable bill-state fields
-        // openingPrincipal: for first-ever bill use member seed; otherwise sum of all unpaid bill principals
-        const _openingPrincipal = parseFloat(
-          (unpaidBills.length === 0 ? member.openingPrincipal || 0 : prevRemPrincipal).toFixed(2)
+        const _openingPrincipal = parseFloat(prevRemPrincipal.toFixed(2));
+        const _openingInterest = parseFloat(prevRemInt.toFixed(2));
+        const _currentCharges = parseFloat(
+          (isNaN(subtotal) ? 0 : subtotal).toFixed(2),
         );
-        const _openingInterest = parseFloat(
-          (unpaidBills.length === 0 ? member.openingInterest || 0 : prevRemInt).toFixed(2)
-        );
-        const _currentCharges = parseFloat((isNaN(subtotal) ? 0 : subtotal).toFixed(2));
         const _currentInterest = parseFloat((currInt || 0).toFixed(2));
         // billPrincipalBalance = openingPrincipal + currentCharges (immutable)
-        const _billPrincipalBalance = parseFloat((_openingPrincipal + _currentCharges).toFixed(2));
+        const _billPrincipalBalance = parseFloat(
+          (_openingPrincipal + _currentCharges).toFixed(2),
+        );
         // billInterestBalance = openingInterest + currentInterest (immutable)
-        const _billInterestBalance = parseFloat((_openingInterest + _currentInterest).toFixed(2));
-        const _totalBillDue = parseFloat((_billPrincipalBalance + _billInterestBalance).toFixed(2));
+        const _billInterestBalance = parseFloat(
+          (_openingInterest + _currentInterest).toFixed(2),
+        );
+        const _totalBillDue = parseFloat(
+          (_billPrincipalBalance + _billInterestBalance).toFixed(2),
+        );
+        // Advance credit: apply member's stored advance to reduce this bill's balance
+        console.log(`[generate] member ${member.flatNo} advanceCredit=${member.advanceCredit}`);
+        const _memberAdvance = parseFloat((member.advanceCredit || 0).toFixed(2));
+        const _advApplied = parseFloat(Math.min(_memberAdvance, _totalBillDue).toFixed(2));
+        const _balanceAfterAdvance = parseFloat(Math.max(0, _totalBillDue - _advApplied).toFixed(2));
+        // Consume advance from member if applied
+        if (_advApplied > 0) {
+          await Member.findByIdAndUpdate(member._id, {
+            $inc: { advanceCredit: -_advApplied },
+          });
+        }
 
         await Bill.findOneAndUpdate(
           {
@@ -348,19 +356,19 @@ export async function POST(request) {
                   parseFloat(v) || 0,
                 ]),
               ),
-              totalAmount: billData.totalAmount,
-              amountPaid: 0,
-
-              principalBalance: _billPrincipalBalance,
-              interestBalance: _billInterestBalance,
-              balanceAmount: _totalBillDue,
+              totalAmount: _totalBillDue,
+              amountPaid: _advApplied,
+              advanceApplied: _advApplied,
+              principalBalance: parseFloat(Math.max(0, _balanceAfterAdvance - _billInterestBalance).toFixed(2)),
+              interestBalance: parseFloat(Math.min(_billInterestBalance, _balanceAfterAdvance).toFixed(2)),
+              balanceAmount: _balanceAfterAdvance,
 
               dueDate: safeConfigDate(
                 year,
                 month,
                 society.config?.billDueDay || 10,
               ),
-              status: _isScheduled ? "Scheduled" : "Unpaid",
+              status: _isScheduled ? "Scheduled" : _balanceAfterAdvance <= 0.005 ? "Paid" : _advApplied > 0 ? "Partial" : "Unpaid",
               scheduledPushDate: _isScheduled ? _pushDate : null,
               billHtml,
               generatedBy: decoded.userId,
@@ -411,9 +419,6 @@ function renderBillHtml(template, data) {
   const config = society.config || {};
   const member = data.member || {};
   const interestRate = config.interestRate || 18;
-  const gracePeriod = config.gracePeriodDays || 1;
-  const interestTriggerTiming = config.interestTriggerTiming || "NEXT_DAY";
-  const interestMethod = config.interestCalculationMethod || "SIMPLE";
   const serviceTaxRate = config.serviceTaxRate || 0;
 
   // ✅ Use Date objects, not formatted strings
@@ -429,20 +434,7 @@ function renderBillHtml(template, data) {
       year: "numeric",
     });
 
-  // Interest calculation — uses prevRemPrincipal + prevRemInt for carry-forward
-  let interestDays = 0;
-  const billDueDay = config.billDueDay || 4;
   const interestRounding = config.interestRounding || "TWO_DECIMAL";
-
-  const bYear = billDate.getFullYear();
-  const bMonth = billDate.getMonth() + 1; // 1-based
-
-  const oldestDueDate = data.oldestUnpaidDate
-    ? new Date(data.oldestUnpaidDate)
-    : getOldestDueDate([], billDueDay, bYear, bMonth - 1);
-
-  // Interest is always computed on prevRemPrincipal (sum of unpaid bill principals,
-  // or openingPrincipal for first-ever bill). Never fall back to ledger previousBalance.
   const principalForInterest = data.prevRemPrincipal || 0;
   const remIntFromPrior = data.prevRemInt || 0;
 
@@ -453,15 +445,8 @@ function renderBillHtml(template, data) {
       remainingPrincipal: principalForInterest,
       remInt: remIntFromPrior,
       annualRate: interestRate,
-      gracePeriodDays: gracePeriod,
-      interestAfterDays: config.interestAfterDays,
-      interestActivationMode: config.interestActivationMode || "APPLICABLE",
-      billDueDate: oldestDueDate,
-      referenceDate: billDate,
       interestRounding,
-      interestTriggerTiming,
     }));
-    interestDays = 0;
   }
   const interestAmount = monthInterest;
 
@@ -621,13 +606,9 @@ function renderBillHtml(template, data) {
       </div>
       <div style="background:rgba(255,255,255,0.5);border-radius:6px;padding:12px 16px;font-size:12px;color:#7f1d1d;line-height:1.7;">
         <strong>Interest Calculation (Monthly):</strong> ₹${(principalForInterest || 0).toLocaleString("en-IN")} × ${interestRate}% ÷ 12
-        ${
-          currInt > 0
-            ? ` = <strong>₹${currInt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong> new interest`
-            : ` — within ${gracePeriod}-day grace period (no interest charged)`
-        }
+        ${currInt > 0 ? ` = <strong>₹${currInt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong> new interest` : ` = ₹0 (no outstanding principal)`}
         ${remIntFromPrior > 0 ? `<br/>+ ₹${remIntFromPrior.toLocaleString("en-IN", { minimumFractionDigits: 2 })} carried-forward interest = Total ₹${interestAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : ""}
-        <br/>Grace Period: <strong>${gracePeriod} days</strong> &nbsp;|&nbsp; See Page 2 for full account statement.
+        <br/>See Page 2 for full account statement.
       </div>
     </div>`
         : `
@@ -690,7 +671,7 @@ function renderBillHtml(template, data) {
       <strong style="color:#374151;display:block;margin-bottom:10px;">Payment Instructions:</strong>
       <ol style="margin:0;padding-left:18px;line-height:2;">
         <li>Please pay on or before <strong style="color:#dc2626;">${formatDate(dueDate)}</strong> to avoid interest charges.</li>
-        <li>Interest @ ${interestRate}% p.a. (monthly) is charged after ${gracePeriod}-day grace period.</li>
+        <li>Interest @ ${interestRate}% p.a. (monthly) is charged on outstanding principal.</li>
         <li>For payment queries or discrepancies, contact the society office.</li>
         <li>This is a computer-generated bill. No signature required.</li>
       </ol>
@@ -751,7 +732,6 @@ function renderBillHtml(template, data) {
         <tr><td style="padding:7px 12px;color:#6b7280;width:45%;">Outstanding Principal</td><td style="padding:7px 12px;font-weight:600;">₹${(principalForInterest || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr>
         ${remIntFromPrior > 0 ? `<tr style="background:rgba(0,0,0,0.03)"><td style="padding:7px 12px;color:#6b7280;">Carried-Forward Interest</td><td style="padding:7px 12px;font-weight:600;">₹${remIntFromPrior.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr>` : ""}
         <tr style="background:rgba(0,0,0,0.03)"><td style="padding:7px 12px;color:#6b7280;">Annual Interest Rate</td><td style="padding:7px 12px;font-weight:600;">${interestRate}% per annum (Monthly)</td></tr>
-        <tr><td style="padding:7px 12px;color:#6b7280;">Grace Period</td><td style="padding:7px 12px;font-weight:600;">${gracePeriod} days (interest-free)</td></tr>
         <tr style="background:rgba(0,0,0,0.03)"><td style="padding:7px 12px;color:#6b7280;">Formula Applied</td><td style="padding:7px 12px;font-family:monospace;font-size:12px;">₹${(principalForInterest || 0).toLocaleString("en-IN")} × ${interestRate} ÷ 1200</td></tr>
         <tr><td style="padding:7px 12px;color:#6b7280;">New Interest This Month</td><td style="padding:7px 12px;font-weight:600;">₹${currInt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr>
         <tr style="background:#fde68a;"><td style="padding:9px 12px;font-weight:700;color:#92400e;">Total Interest on This Bill</td><td style="padding:9px 12px;font-weight:700;font-size:15px;color:#92400e;">₹${interestAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr>

@@ -8,6 +8,7 @@ import Bill from '@/models/Bill';
 import User from '@/models/User';
 import AuditLog from '@/models/AuditLog';
 import BillingHead from '@/models/BillingHead';
+import Receipt from '@/models/Receipt';
 import ExcelJS from 'exceljs';
 
 const modelMap = {
@@ -15,6 +16,7 @@ const modelMap = {
   members: Member,
   transactions: Transaction,
   bills: Bill,
+  receipts: Receipt,
   users: User,
   auditlogs: AuditLog,
   billingheads: BillingHead

@@ -15,12 +15,16 @@ export async function GET(request) {
   try {
     await connectDB();
     const token = getTokenFromRequest(request);
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!token)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const decoded = verifyToken(token);
-    if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    if (!decoded)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
-    const month = parseInt(searchParams.get("month") || new Date().getMonth() + 1);
+    const month = parseInt(
+      searchParams.get("month") || new Date().getMonth() + 1,
+    );
     const year = parseInt(searchParams.get("year") || new Date().getFullYear());
 
     if (isNaN(month) || month < 1 || month > 12) {
@@ -34,10 +38,16 @@ export async function GET(request) {
 
     const memberIdFilter = searchParams.get("memberIds");
     const memberIdSet = memberIdFilter
-      ? memberIdFilter.split(",").map((s) => s.trim()).filter(Boolean)
+      ? memberIdFilter
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
       : null;
 
-    const memberQuery = { societyId: decoded.societyId, isDeleted: { $ne: true } };
+    const memberQuery = {
+      societyId: decoded.societyId,
+      isDeleted: { $ne: true },
+    };
     if (memberIdSet?.length) memberQuery._id = { $in: memberIdSet };
 
     const [members, society] = await Promise.all([
@@ -49,25 +59,32 @@ export async function GET(request) {
     ]);
 
     const dueDay = society?.config?.billDueDay || 10;
-    const dueDate = new Date(year, month - 1, dueDay).toISOString().split("T")[0];
+    const dueDate = new Date(year, month - 1, dueDay)
+      .toISOString()
+      .split("T")[0];
 
-    const memberIds = members.map(m => m._id);
+    const memberIds = members.map((m) => m._id);
     const bills = await Bill.find({
       societyId: decoded.societyId,
       billPeriodId,
       memberId: { $in: memberIds },
       isDeleted: { $ne: true },
     })
-      .select("memberId openingPrincipal openingInterest currentCharges currentInterest billPrincipalBalance billInterestBalance totalBillDue amountPaid balanceAmount status principalBalance interestBalance totalAmount dueDate")
+      .select(
+        "memberId openingPrincipal openingInterest currentCharges currentInterest billPrincipalBalance billInterestBalance totalBillDue amountPaid balanceAmount status principalBalance interestBalance totalAmount dueDate",
+      )
       .lean();
 
-    const billMap = new Map(bills.map(b => [b.memberId.toString(), b]));
+    const billMap = new Map(bills.map((b) => [b.memberId.toString(), b]));
 
     // Fetch last receipt per member for LastReceiptNo / LastPaymentDate columns
     const lastReceipts = await Receipt.find({
       societyId: decoded.societyId,
       memberId: { $in: memberIds },
-    }).sort({ paidAt: -1 }).select("memberId receiptNo paidAt").lean();
+    })
+      .sort({ paidAt: -1 })
+      .select("memberId receiptNo paidAt")
+      .lean();
     // Keep only latest receipt per member
     const receiptMap = new Map();
     for (const r of lastReceipts) {
@@ -77,7 +94,7 @@ export async function GET(request) {
 
     const today = new Date().toISOString().split("T")[0];
 
-    const rows = members.map(m => {
+    const rows = members.map((m) => {
       const bill = billMap.get(m._id.toString());
       const lastReceipt = receiptMap.get(m._id.toString());
       const lastReceiptNo = lastReceipt?.receiptNo || "";
@@ -88,13 +105,21 @@ export async function GET(request) {
       if (bill) {
         const openingPrincipal = twoDp(bill.openingPrincipal || 0);
         const openingInterest = twoDp(bill.openingInterest || 0);
-        const currentCharges = twoDp(bill.currentCharges || bill.totalAmount || 0);
+        const currentCharges = twoDp(
+          bill.currentCharges || bill.totalAmount || 0,
+        );
         const currentInterest = twoDp(bill.currentInterest || 0);
-        const billPrincipal = twoDp(bill.billPrincipalBalance || bill.principalBalance || 0);
-        const billInterest = twoDp(bill.billInterestBalance || bill.interestBalance || 0);
+        const billPrincipal = twoDp(
+          bill.billPrincipalBalance || bill.principalBalance || 0,
+        );
+        const billInterest = twoDp(
+          bill.billInterestBalance || bill.interestBalance || 0,
+        );
         const totalBillDue = twoDp(bill.totalBillDue || bill.totalAmount || 0);
         const alreadyPaid = twoDp(bill.amountPaid || 0);
-        const remaining = twoDp(totalBillDue - alreadyPaid);
+        const remaining = twoDp(
+          bill.balanceAmount ?? Math.max(0, totalBillDue - alreadyPaid),
+        );
 
         const billDueDate = bill.dueDate
           ? new Date(bill.dueDate).toISOString().split("T")[0]
@@ -116,7 +141,6 @@ export async function GET(request) {
           TotalBillDue: totalBillDue,
           AlreadyPaid: alreadyPaid,
           RemainingDue: remaining,
-          BillStatus: bill.status || "Unpaid",
           AmountPaid: "",
           PaymentMethod: "Cash",
           PaymentDate: today,
@@ -144,7 +168,6 @@ export async function GET(request) {
         TotalBillDue: "",
         AlreadyPaid: "",
         RemainingDue: "",
-        BillStatus: "No Bill",
         AmountPaid: "",
         PaymentMethod: "Cash",
         PaymentDate: today,
@@ -154,35 +177,36 @@ export async function GET(request) {
       };
     });
 
-    const instructions = [{
-      MemberId: "⚠ DO NOT change MemberId, Wing, FlatNo, Month, Year",
-      Wing: "",
-      FlatNo: "",
-      OwnerName: "Fill AmountPaid, PaymentMethod, PaymentDate, Remarks only",
-      Month: "",
-      Year: "",
-      DueDate: "",
-      OpeningPrincipal: "READ ONLY",
-      OpeningInterest: "READ ONLY",
-      CurrentCharges: "READ ONLY",
-      CurrentInterest: "READ ONLY",
-      BillPrincipal: "READ ONLY",
-      BillInterest: "READ ONLY",
-      TotalBillDue: "READ ONLY",
-      AlreadyPaid: "READ ONLY",
-      RemainingDue: "READ ONLY",
-      BillStatus: "READ ONLY",
-      AmountPaid: "← FILL THIS",
-      PaymentMethod: "Cash/Cheque/Online/NEFT/UPI",
-      PaymentDate: "DD-MM-YYYY or YYYY-MM-DD",
-      Remarks: "Optional note",
-      LastReceiptNo: "READ ONLY - previous receipt",
-      LastPaymentDate: "READ ONLY - previous payment date",
-    }];
+    const instructions = [
+      {
+        MemberId: "⚠ DO NOT change MemberId, Wing, FlatNo, Month, Year",
+        Wing: "",
+        FlatNo: "",
+        OwnerName: "Fill AmountPaid, PaymentMethod, PaymentDate, Remarks only",
+        Month: "",
+        Year: "",
+        DueDate: "",
+        OpeningPrincipal: "READ ONLY",
+        OpeningInterest: "READ ONLY",
+        CurrentCharges: "READ ONLY",
+        CurrentInterest: "READ ONLY",
+        BillPrincipal: "READ ONLY",
+        BillInterest: "READ ONLY",
+        TotalBillDue: "READ ONLY",
+        AlreadyPaid: "READ ONLY",
+        RemainingDue: "READ ONLY",
+        AmountPaid: "← FILL THIS",
+        PaymentMethod: "Cash/Cheque/Online/NEFT/UPI",
+        PaymentDate: "DD-MM-YYYY or YYYY-MM-DD",
+        Remarks: "Optional note",
+        LastReceiptNo: "READ ONLY - previous receipt",
+        LastPaymentDate: "READ ONLY - previous payment date",
+      },
+    ];
 
     const ws = XLSX.utils.json_to_sheet([...instructions, ...rows]);
     const headerKeys = Object.keys(rows[0] || {});
-    ws["!cols"] = headerKeys.map(k => ({ wch: Math.max(k.length + 2, 14) }));
+    ws["!cols"] = headerKeys.map((k) => ({ wch: Math.max(k.length + 2, 14) }));
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `Payments_${billPeriodId}`);
@@ -190,7 +214,8 @@ export async function GET(request) {
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
     return new NextResponse(buf, {
       headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="PaymentTemplate_${billPeriodId}.xlsx"`,
       },
     });

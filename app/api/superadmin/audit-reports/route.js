@@ -1,4 +1,4 @@
-import NextResponse from "next/server";
+import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import AuditReport from "@/models/AuditReport";
 import { validateAdminRequest } from "@/lib/admin-middleware";

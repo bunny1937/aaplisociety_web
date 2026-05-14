@@ -51,7 +51,11 @@ const BillSchema = new mongoose.Schema(
     closingInterest: { type: Number, default: null },
     closingTotal: { type: Number, default: null },
     paymentUploadedAt: { type: Date, default: null },
-    paymentImportId: { type: mongoose.Schema.Types.ObjectId, ref: "PaymentImport", default: null },
+    paymentImportId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PaymentImport",
+      default: null,
+    },
 
     // ── Legacy / compat fields (kept for existing generate route + reports) ─
     previousBalance: { type: Number, default: 0 },
@@ -85,6 +89,7 @@ const BillSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    advanceApplied: { type: Number, default: 0 },
     dueDate: {
       type: Date,
       required: true,
@@ -174,14 +179,17 @@ BillSchema.index({ "importMetadata.validationStatus": 1 });
 BillSchema.index({ isDeleted: 1 }); // ✅ Defined here only
 
 BillSchema.pre("save", function (next) {
-  // balanceAmount = only this bill's own outstanding (principal + interest).
-  // previousBalance is a DISPLAY-ONLY snapshot of the ledger at generation time
-  // and must NOT be added here — doing so double-counts prior bills' balances.
-  const computedBalance = parseFloat(
-    ((this.principalBalance || 0) + (this.interestBalance || 0)).toFixed(2),
-  );
-  if (computedBalance >= 0 || this.isNew) {
-    this.balanceAmount = computedBalance;
+  // Only auto-compute balanceAmount on fresh bills (no payments yet).
+  // Once amountPaid > 0, the payment engine owns balanceAmount — don't clobber it.
+  if ((this.amountPaid || 0) === 0) {
+    this.balanceAmount = parseFloat(
+      Math.max(
+        0,
+        (this.principalBalance || 0) +
+          (this.interestBalance || 0) -
+          (this.advanceApplied || 0),
+      ).toFixed(2),
+    );
   }
   this.interestAmount = this.monthInterest || this.interestAmount || 0;
   next();

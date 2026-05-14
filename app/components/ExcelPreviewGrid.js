@@ -5,7 +5,7 @@ export default function ExcelPreviewGrid({ columns, rows, title, onReupload, onC
   const errorRows = rows.filter((r) => r.status === "error");
   const warningRows = rows.filter((r) => r.status === "warning");
 
-  const rowBg = (status) => ({ valid: "transparent", warning: "#fffbeb", error: "#fef2f2" }[status] || "transparent");
+  const rowBg = (status) => ({ valid: "transparent", warning: "#fffbeb", error: "#fef2f2", skipped: "#f8fafc" }[status] || "transparent");
 
   const cellStyle = (cellStatus) => {
     const base = {
@@ -64,6 +64,7 @@ export default function ExcelPreviewGrid({ columns, rows, title, onReupload, onC
                   {row.status === "valid" && <span style={{ background: "#d1fae5", color: "#065f46", padding: "2px 8px", borderRadius: "10px", fontSize: "0.7rem", fontWeight: 700 }}>✓ Valid</span>}
                   {row.status === "warning" && <span style={{ background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "10px", fontSize: "0.7rem", fontWeight: 700 }}>⚠ Warn</span>}
                   {row.status === "error" && <span style={{ background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: "10px", fontSize: "0.7rem", fontWeight: 700 }}>✗ Error</span>}
+                  {row.status === "skipped" && <span style={{ background: "#f1f5f9", color: "#64748b", padding: "2px 8px", borderRadius: "10px", fontSize: "0.7rem", fontWeight: 700 }}>— No Payment</span>}
                 </td>
                 {columns.map((col) => {
                   const cell = row.cells[col] || { value: "" };

@@ -1,214 +1,125 @@
-// app/admin/view-bills/page.js
-// KEY FIX: downloadBill now fetches from API if billHtml is missing,
-// and the download function properly opens a print window.
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/ViewBills.module.css";
 
+const STATUS_COLOR = {
+  Paid: { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
+  Partial: { bg: "#fef9c3", text: "#92400e", border: "#fcd34d" },
+  Unpaid: { bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" },
+  Overdue: { bg: "#f3e8ff", text: "#7c3aed", border: "#c4b5fd" },
+  Scheduled: { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
+};
+
+function fmt(n) {
+  return Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDate(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 export default function ViewBillsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [viewingBill, setViewingBill] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
+  const [viewingBill, setViewingBill] = useState(null);
+  const [activeTab, setActiveTab] = useState("summary");
   const [downloadingId, setDownloadingId] = useState(null);
 
-  // Fetch all generated bills
   const { data: billsData, isLoading } = useQuery({
     queryKey: ["view-bills", selectedPeriod, filterStatus],
     queryFn: async () => {
-      let url = "/api/billing/generated";
       const params = new URLSearchParams();
       if (selectedPeriod !== "all") params.append("period", selectedPeriod);
       if (filterStatus !== "all") params.append("status", filterStatus);
-      if (params.toString()) url += `?${params.toString()}`;
-      return apiClient.get(url);
+      const qs = params.toString();
+      return apiClient.get(`/api/billing/generated${qs ? "?" + qs : ""}`);
     },
   });
 
-  const bills = billsData?.bills || [];
-
-  // Get unique periods
-  const periods = [...new Set(bills.map((b) => b.billPeriodId))]
-    .sort()
-    .reverse();
-
-  // Filter bills
-  const filteredBills = bills.filter((bill) => {
-    const matchesSearch =
-      bill.memberId?.flatNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      bill.memberId?.ownerName
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      bill.memberId?.wing?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+  const { data: receiptsData, isLoading: receiptsLoading } = useQuery({
+    queryKey: ["bill-receipts", viewingBill?.memberId?._id],
+    queryFn: () => apiClient.get(`/api/receipts?memberId=${viewingBill.memberId._id}`),
+    enabled: !!viewingBill?.memberId?._id && activeTab === "receipts",
   });
 
-  // ✅ FIXED: Download single bill - fetch HTML from API if not in object
-  const downloadBill = async (bill) => {
-    console.log(
-      "downloadBill called, bill._id:",
-      bill._id,
-      "type:",
-      typeof bill._id,
-      "billHtml present:",
-      !!bill.billHtml,
+  const bills = billsData?.bills || [];
+  const periods = [...new Set(bills.map((b) => b.billPeriodId))].filter(Boolean).sort().reverse();
+
+  const filteredBills = bills.filter((b) => {
+    const q = searchTerm.toLowerCase();
+    return (
+      b.memberId?.flatNo?.toLowerCase().includes(q) ||
+      b.memberId?.ownerName?.toLowerCase().includes(q) ||
+      b.memberId?.wing?.toLowerCase().includes(q)
     );
+  });
+
+  const openBill = (bill) => { setViewingBill(bill); setActiveTab("summary"); };
+
+  const downloadBill = async (bill) => {
     setDownloadingId(bill._id?.toString());
     try {
       let html = bill.billHtml;
-
       if (!html) {
-        const billId = bill._id?.toString?.() || String(bill._id);
-        console.log("No billHtml, fetching from API with id:", billId);
-        const response = await fetch(`/api/bills/download?id=${billId}`, {
-          credentials: "include",
-        });
-        const contentType = response.headers.get("content-type") || "";
-
-        if (contentType.includes("text/html")) {
-          const blob = new Blob([await response.text()], { type: "text/html" });
-          const blobUrl = URL.createObjectURL(blob);
-          const printWindow = window.open(blobUrl, "_blank");
-          if (!printWindow)
-            alert("Popup blocked. Please allow popups for this site.");
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-          return;
+        const res = await fetch(`/api/bills/download?id=${bill._id}`, { credentials: "include" });
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("text/html")) {
+          html = await res.text();
         } else {
-          // Genuine PDF blob path (if society has pdfUrl template)
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `Bill-${bill.memberId?.wing}-${bill.memberId?.flatNo}-${bill.billPeriodId}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = Object.assign(document.createElement("a"), { href: url, download: `Bill-${bill.memberId?.wing}-${bill.memberId?.flatNo}-${bill.billPeriodId}.pdf` });
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          URL.revokeObjectURL(url);
           return;
         }
       }
-
-      if (!html) {
-        alert("No bill data available for this bill. Please regenerate.");
-        return;
-      }
-
-      // Build filename: ownerName_wing-flatNo_period.pdf
-      const ownerRaw = bill.memberId?.ownerName || "Member";
-      const nameParts = ownerRaw.trim().split(/\s+/);
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts[nameParts.length - 1] || "";
-      const nameSlug =
-        nameParts.length > 1 ? `${firstName}_${lastName}` : firstName;
-      const flatSlug = `${bill.memberId?.wing || ""}-${bill.memberId?.flatNo || ""}`;
-      const periodSlug = bill.billPeriodId || "";
-      const filename = `${nameSlug}_${flatSlug}_${periodSlug}.pdf`
-        .replace(/\s+/g, "_")
-        .replace(/[^a-zA-Z0-9_\-\.]/g, "");
-
-      // Give browser a frame to paint the DOM before capture
-      const blob = new Blob(
-        [
-          `<!DOCTYPE html>
-<html>
-<head>
-  <title>${filename.replace(".pdf", "")}</title>
-  <meta charset="UTF-8"/>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 30px; }
-    @media print {
-      body { background: white; padding: 0; }
-      .bill-wrapper { box-shadow: none !important; border-radius: 0 !important; }
-      @page { margin: 8mm; size: A4; }
-    }
-  </style>
-</head>
-<body>
-  ${html}
-  <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 400); }<\/script>
-</body>
-</html>`,
-        ],
-        { type: "text/html" },
-      );
-
-      const blobUrl = URL.createObjectURL(blob);
-      const printWindow = window.open(blobUrl, "_blank");
-      if (!printWindow) {
-        alert("Popup blocked. Please allow popups for this site.");
-      }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-    } catch (error) {
-      console.error("Download error:", error);
-      alert("Failed to download bill: " + error.message);
+      if (!html) { alert("No bill data. Please regenerate."); return; }
+      const blob = new Blob([`<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>body{font-family:Arial,sans-serif;padding:20px;}@media print{body{padding:0;}@page{margin:8mm;size:A4;}}</style></head><body>${html}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, "_blank");
+      if (!w) alert("Popup blocked. Please allow popups for this site.");
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e) {
+      alert("Download failed: " + e.message);
     } finally {
       setDownloadingId(null);
     }
   };
 
-  // Download all filtered bills (with delay)
-  const downloadAllBills = async () => {
-    if (filteredBills.length === 0) {
-      alert("No bills to download");
-      return;
-    }
-    for (const bill of filteredBills) {
-      try {
-        await downloadBill(bill);
-        await new Promise((resolve) => setTimeout(resolve, 800));
-      } catch (error) {
-        console.error("Failed to download bill:", bill._id);
-      }
-    }
-  };
-
-  // Export bills data to Excel
   const exportToExcel = async () => {
     try {
-      const response = await fetch("/api/billing/export", {
+      const res = await fetch("/api/billing/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          period: selectedPeriod !== "all" ? selectedPeriod : null,
-        }),
+        body: JSON.stringify({ period: selectedPeriod !== "all" ? selectedPeriod : null }),
       });
-      if (!response.ok) throw new Error("Export failed");
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Bills-${selectedPeriod}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      alert("Failed to export bills");
-      console.error(error);
-    }
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement("a"), { href: url, download: `Bills-${selectedPeriod}.xlsx` });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { alert("Export failed"); }
   };
+
+  const sc = viewingBill ? (STATUS_COLOR[viewingBill.status] || STATUS_COLOR.Scheduled) : null;
 
   return (
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
         <div>
-          <h1>📄 View Bills</h1>
-          <p>All generated bills with quick preview and download</p>
+          <h1>View Bills</h1>
+          <p>{filteredBills.length} bill{filteredBills.length !== 1 ? "s" : ""}{selectedPeriod !== "all" ? ` · ${selectedPeriod}` : " · all periods"}</p>
         </div>
         <div className={styles.headerActions}>
-          <button onClick={exportToExcel} className="btn btn-secondary">
-            📊 Export to Excel
-          </button>
-          <button onClick={downloadAllBills} className="btn btn-primary">
-            ⬇️ Download All ({filteredBills.length})
-          </button>
+          <button onClick={exportToExcel} className="btn btn-secondary">Export Excel</button>
         </div>
       </div>
 
@@ -216,342 +127,239 @@ export default function ViewBillsPage() {
       <div className={styles.filtersCard}>
         <div className={styles.filterRow}>
           <div className={styles.searchBox}>
-            <input
-              type="text"
-              placeholder="🔍 Search by flat, name, or wing..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={styles.searchInput}
-            />
+            <input type="text" placeholder="Search flat, name, wing..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={styles.searchInput} />
           </div>
-          <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-            className={styles.select}
-          >
+          <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className={styles.select}>
             <option value="all">All Periods</option>
-            {periods.map((period) => (
-              <option key={period} value={period}>
-                {period}
-              </option>
-            ))}
+            {periods.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className={styles.select}
-          >
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={styles.select}>
             <option value="all">All Status</option>
             <option value="Paid">Paid</option>
-            <option value="Unpaid">Unpaid</option>
             <option value="Partial">Partial</option>
+            <option value="Unpaid">Unpaid</option>
             <option value="Overdue">Overdue</option>
           </select>
           <div className={styles.resultCount}>{filteredBills.length} Bills</div>
         </div>
       </div>
 
-      {/* Bills Grid */}
+      {/* Table */}
       {isLoading ? (
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Loading bills...</p>
-        </div>
+        <div className={styles.loading}><div className={styles.spinner} /><p>Loading bills...</p></div>
       ) : filteredBills.length === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon}>📭</div>
           <h3>No bills found</h3>
-          <p>Try adjusting your filters or generate new bills</p>
+          <p>Adjust filters or generate bills first</p>
         </div>
       ) : (
-        <div className={styles.billsGrid}>
-          {filteredBills.map((bill) => (
-            <div key={bill._id} className={styles.billCard}>
-              {/* Thumbnail Preview */}
-              <div className={styles.billThumbnail}>
-                <div className={styles.thumbnailHeader}>
-                  <div className={styles.societyName}>
-                    {bill.societyId?.name || "Society"}
-                  </div>
-                  <div className={styles.billNumber}>#{bill.billPeriodId}</div>
-                </div>
-
-                <div className={styles.thumbnailBody}>
-                  <div className={styles.memberInfo}>
-                    <div className={styles.flatNumber}>
-                      {bill.memberId?.wing}-{bill.memberId?.flatNo}
-                    </div>
-                    <div className={styles.memberName}>
-                      {bill.memberId?.ownerName}
-                    </div>
-                  </div>
-
-                  <div className={styles.amountSection}>
-                    <div className={styles.amountLabel}>Total Amount</div>
-                    <div className={styles.amount}>
-                      ₹{bill.totalAmount?.toLocaleString("en-IN")}
-                    </div>
-                  </div>
-
-                  {/* Previous balance shown if > 0 */}
-                  {(bill.previousBalance || 0) > 0 && (
-                    <div
-                      style={{
-                        background: "rgba(239,68,68,0.2)",
-                        borderRadius: "6px",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        textAlign: "center",
-                      }}
-                    >
-                      ⚠️ Prev: ₹{bill.previousBalance?.toLocaleString("en-IN")}
-                      {(bill.interestAmount || 0) > 0 && (
-                        <span>
-                          {" "}
-                          + Int: ₹{bill.interestAmount?.toLocaleString("en-IN")}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className={styles.statusRow}>
-                    <span
-                      className={`${styles.statusBadge} ${styles[bill.status?.toLowerCase()]}`}
-                    >
-                      {bill.status}
-                    </span>
-                    <span className={styles.dueDate}>
-                      Due:{" "}
-                      {new Date(bill.dueDate).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                      })}
-                    </span>
-                  </div>
-                </div>
-
-                <div className={styles.thumbnailFooter}>
-                  <div className={styles.chargesSummary}>
-                    {bill.charges &&
-                      Object.entries(bill.charges)
-                        .slice(0, 3)
-                        .map(([key, value]) => (
-                          <div key={key} className={styles.chargeLine}>
-                            <span>{key}:</span>
-                            <span>₹{value}</span>
-                          </div>
-                        ))}
-                    {bill.charges && Object.keys(bill.charges).length > 3 && (
-                      <div className={styles.moreCharges}>
-                        +{Object.keys(bill.charges).length - 3} more
+        <div className={styles.tableWrapper}>
+          <table className={styles.billsTable}>
+            <thead>
+              <tr>
+                <th>Flat</th>
+                <th>Member</th>
+                <th>Period</th>
+                <th>Current Bill</th>
+                <th>Prev Balance</th>
+                <th>Interest</th>
+                <th>Total Due</th>
+                <th>Paid</th>
+                <th>Balance</th>
+                <th>Due Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBills.map((bill) => {
+                const colors = STATUS_COLOR[bill.status] || STATUS_COLOR.Scheduled;
+                return (
+                  <tr key={bill._id} className={styles.billRow} onClick={() => openBill(bill)}>
+                    <td><strong>{bill.memberId?.wing}-{bill.memberId?.flatNo}</strong></td>
+                    <td>{bill.memberId?.ownerName}</td>
+                    <td><span className={styles.periodTag}>{bill.billPeriodId}</span></td>
+                    <td>₹{fmt(bill.currentBillTotal ?? bill.subtotal)}</td>
+                    <td style={{ color: (bill.previousBalance || 0) > 0 ? "#b91c1c" : "#15803d" }}>
+                      {(bill.previousBalance || 0) > 0 ? `₹${fmt(bill.previousBalance)}` : "Clear"}
+                    </td>
+                    <td style={{ color: (bill.interestAmount || 0) > 0 ? "#92400e" : "#9ca3af" }}>
+                      {(bill.interestAmount || 0) > 0 ? `₹${fmt(bill.interestAmount)}` : "—"}
+                    </td>
+                    <td><strong>₹{fmt(bill.totalAmount)}</strong></td>
+                    <td style={{ color: "#15803d" }}>
+                      {(bill.amountPaid || 0) > 0 ? `₹${fmt(bill.amountPaid)}` : "—"}
+                    </td>
+                    <td style={{ color: (bill.balanceAmount || 0) > 0 ? "#b91c1c" : "#15803d", fontWeight: 700 }}>
+                      {(bill.balanceAmount || 0) > 0.005 ? `₹${fmt(bill.balanceAmount)}` : "Paid"}
+                    </td>
+                    <td>{fmtDate(bill.dueDate)}</td>
+                    <td>
+                      <span style={{ padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600, background: colors.bg, color: colors.text, border: `1px solid ${colors.border}` }}>
+                        {bill.status}
+                      </span>
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => openBill(bill)} className={styles.actionBtn}>View</button>
+                        <button onClick={() => downloadBill(bill)} className={styles.actionBtn} disabled={downloadingId === bill._id?.toString()}>
+                          {downloadingId === bill._id?.toString() ? "..." : "Print"}
+                        </button>
                       </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className={styles.billActions}>
-                <button
-                  onClick={() => setViewingBill(bill)}
-                  className={styles.actionBtn}
-                  title="View Full Bill"
-                >
-                  👁️ View
-                </button>
-                <button
-                  onClick={() => downloadBill(bill)}
-                  className={styles.actionBtn}
-                  title="Download / Print Bill"
-                  disabled={downloadingId === bill._id?.toString()}
-                >
-                  {downloadingId === bill._id ? "⏳" : "⬇️"} Download
-                </button>
-                <button
-                  onClick={() => {
-                    const url = `/api/billing/share/${bill._id}`;
-                    navigator.clipboard.writeText(window.location.origin + url);
-                    alert("Share link copied to clipboard!");
-                  }}
-                  className={styles.actionBtn}
-                  title="Share Link"
-                >
-                  🔗 Share
-                </button>
-              </div>
-            </div>
-          ))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Full Bill Viewer Modal */}
+      {/* Modal */}
       {viewingBill && (
         <div className={styles.modal} onClick={() => setViewingBill(null)}>
-          <div
-            className={styles.modalContent}
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+
+            {/* Modal Header */}
             <div className={styles.modalHeader}>
-              <div>
-                <h2>Bill Details</h2>
-                <p>
-                  {viewingBill.memberId?.wing}-{viewingBill.memberId?.flatNo} •{" "}
-                  {viewingBill.memberId?.ownerName} • {viewingBill.billPeriodId}
-                </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ background: "#4f46e5", color: "white", borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>
+                  {viewingBill.memberId?.wing}-{viewingBill.memberId?.flatNo}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{viewingBill.memberId?.ownerName}</div>
+                  <div style={{ color: "#6b7280", fontSize: 13 }}>Period: {viewingBill.billPeriodId} · Generated: {fmtDate(viewingBill.generatedAt || viewingBill.createdAt)}</div>
+                </div>
               </div>
-              <button
-                onClick={() => setViewingBill(null)}
-                className={styles.closeBtn}
-              >
-                ✕
-              </button>
+              <button onClick={() => setViewingBill(null)} className={styles.closeBtn}>✕</button>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", borderBottom: "2px solid #e5e7eb", padding: "0 2rem" }}>
+              {[["summary", "Summary"], ["bill", "Bill PDF"], ["receipts", "Receipts"]].map(([tab, label]) => (
+                <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: "12px 20px", border: "none", background: "none", cursor: "pointer", fontWeight: activeTab === tab ? 700 : 400, color: activeTab === tab ? "#4f46e5" : "#6b7280", borderBottom: activeTab === tab ? "3px solid #4f46e5" : "3px solid transparent", marginBottom: -2, fontSize: 14 }}>
+                  {label}
+                </button>
+              ))}
             </div>
 
             <div className={styles.modalBody}>
-              <div className={styles.fullBill}>
-                {viewingBill.billHtml ? (
-                  <div
-                    dangerouslySetInnerHTML={{ __html: viewingBill.billHtml }}
-                  />
-                ) : (
-                  // Fallback for bills without stored HTML
-                  <div>
-                    <div className={styles.billHeader}>
-                      <div className={styles.billLogo}>
-                        <h3>{viewingBill.memberId?.ownerName}</h3>
-                      </div>
-                      <div className={styles.billMeta}>
-                        <div>
-                          <strong>Bill No:</strong> {viewingBill.billPeriodId}-
-                          {viewingBill.memberId?.flatNo}
-                        </div>
-                        <div>
-                          <strong>Date:</strong>{" "}
-                          {new Date(viewingBill.createdAt).toLocaleDateString(
-                            "en-IN",
-                          )}
-                        </div>
-                        <div>
-                          <strong>Due Date:</strong>{" "}
-                          {new Date(viewingBill.dueDate).toLocaleDateString(
-                            "en-IN",
-                          )}
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Previous balance section in fallback */}
-                    {(viewingBill.previousBalance || 0) > 0 && (
-                      <div
-                        style={{
-                          background: "#fee2e2",
-                          border: "1px solid #fca5a5",
-                          borderRadius: "8px",
-                          padding: "16px",
-                          marginBottom: "16px",
-                        }}
-                      >
-                        <strong style={{ color: "#991b1b" }}>
-                          ⚠️ Previous Outstanding
-                        </strong>
-                        <div style={{ marginTop: "8px", fontSize: "14px" }}>
-                          <div>
-                            Previous Balance: ₹
-                            {Number(viewingBill.previousBalance).toLocaleString(
-                              "en-IN",
-                            )}
-                          </div>
-                          {(viewingBill.interestAmount || 0) > 0 && (
-                            <div>
-                              Interest Charged: ₹
-                              {Number(
-                                viewingBill.interestAmount,
-                              ).toLocaleString("en-IN")}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+              {/* SUMMARY TAB */}
+              {activeTab === "summary" && (
+                <div>
+                  {/* Status + due date */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: sc.bg, border: `1px solid ${sc.border}`, borderRadius: 10, padding: "12px 18px", marginBottom: 20 }}>
+                    <span style={{ fontWeight: 700, color: sc.text, fontSize: 15 }}>{viewingBill.status}</span>
+                    <span style={{ color: "#6b7280", fontSize: 13 }}>Due: {fmtDate(viewingBill.dueDate)}</span>
+                  </div>
 
-                    <table className={styles.billTable}>
-                      <thead>
-                        <tr>
-                          <th>Sr.</th>
-                          <th>Particulars</th>
-                          <th>Amount</th>
-                        </tr>
-                      </thead>
+                  {/* Amount cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
+                    {[
+                      { label: "Current Bill", value: `₹${fmt(viewingBill.currentBillTotal ?? viewingBill.subtotal)}`, color: "#1f2937" },
+                      { label: "Prev Balance", value: (viewingBill.previousBalance || 0) > 0 ? `₹${fmt(viewingBill.previousBalance)}` : "Clear", color: (viewingBill.previousBalance || 0) > 0 ? "#b91c1c" : "#15803d" },
+                      { label: "Interest", value: (viewingBill.interestAmount || 0) > 0 ? `₹${fmt(viewingBill.interestAmount)}` : "—", color: (viewingBill.interestAmount || 0) > 0 ? "#92400e" : "#9ca3af" },
+                      { label: "Total Due", value: `₹${fmt(viewingBill.totalAmount)}`, color: "#4f46e5", large: true },
+                      ...(viewingBill.amountPaid > 0 ? [{ label: "Paid", value: `₹${fmt(viewingBill.amountPaid)}`, color: "#15803d" }] : []),
+                      ...((viewingBill.balanceAmount || 0) > 0.005 ? [{ label: "Balance Due", value: `₹${fmt(viewingBill.balanceAmount)}`, color: "#b91c1c", large: true }] : []),
+                    ].map((c) => (
+                      <div key={c.label} style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
+                        <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{c.label}</div>
+                        <div style={{ fontSize: c.large ? 20 : 15, fontWeight: 700, color: c.color }}>{c.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Charges table */}
+                  <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ padding: "12px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", fontWeight: 600, fontSize: 14 }}>Charge Breakdown</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <tbody>
-                        {viewingBill.charges &&
-                          Object.entries(viewingBill.charges).map(
-                            ([key, value], idx) => (
-                              <tr key={key}>
-                                <td>{idx + 1}</td>
-                                <td>{key}</td>
-                                <td>
-                                  ₹{Number(value).toLocaleString("en-IN")}
-                                </td>
-                              </tr>
-                            ),
-                          )}
-                        {(viewingBill.interestAmount || 0) > 0 && (
-                          <tr>
-                            <td>-</td>
-                            <td>Interest on Arrears</td>
-                            <td>
-                              ₹
-                              {Number(
-                                viewingBill.interestAmount,
-                              ).toLocaleString("en-IN")}
-                            </td>
+                        {viewingBill.charges && Object.entries(viewingBill.charges).map(([name, amt], i) => (
+                          <tr key={name} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                            <td style={{ padding: "10px 16px", color: "#6b7280", width: 32 }}>{i + 1}</td>
+                            <td style={{ padding: "10px 16px" }}>{name}</td>
+                            <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600 }}>₹{fmt(amt)}</td>
                           </tr>
-                        )}
-                      </tbody>
-                      <tfoot>
-                        {(viewingBill.previousBalance || 0) > 0 && (
-                          <tr>
-                            <td colSpan={2}>
-                              <strong>Previous Balance</strong>
-                            </td>
-                            <td>
-                              <strong>
-                                ₹
-                                {Number(
-                                  viewingBill.previousBalance,
-                                ).toLocaleString("en-IN")}
-                              </strong>
-                            </td>
-                          </tr>
-                        )}
-                        <tr className={styles.balance}>
-                          <td colSpan={2}>
-                            <strong>Total Payable</strong>
-                          </td>
-                          <td>
-                            <strong>
-                              ₹
-                              {viewingBill.balanceAmount?.toLocaleString(
-                                "en-IN",
-                              )}
-                            </strong>
-                          </td>
+                        ))}
+                        <tr style={{ background: "#f0fdf4" }}>
+                          <td colSpan={2} style={{ padding: "12px 16px", fontWeight: 700 }}>Current Month Total</td>
+                          <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#15803d" }}>₹{fmt(viewingBill.currentBillTotal ?? viewingBill.subtotal)}</td>
                         </tr>
-                      </tfoot>
+                      </tbody>
                     </table>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* BILL PDF TAB */}
+              {activeTab === "bill" && (
+                <div style={{ maxWidth: 800, margin: "0 auto" }}>
+                  {viewingBill.billHtml ? (
+                    <div dangerouslySetInnerHTML={{ __html: viewingBill.billHtml }} />
+                  ) : (
+                    <div className={styles.emptyState} style={{ padding: 60 }}>
+                      <div className={styles.emptyIcon}>📄</div>
+                      <h3>No bill PDF stored</h3>
+                      <p>Click Print / Download to regenerate</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* RECEIPTS TAB */}
+              {activeTab === "receipts" && (
+                <div>
+                  {receiptsLoading ? (
+                    <div className={styles.loading}><div className={styles.spinner} /><p>Loading receipts...</p></div>
+                  ) : receiptsData?.receipts?.length > 0 ? (
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
+                      <div style={{ padding: "12px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", fontWeight: 600, fontSize: 14 }}>
+                        {receiptsData.receipts.length} Payment{receiptsData.receipts.length !== 1 ? "s" : ""} — {viewingBill.memberId?.ownerName}
+                      </div>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ background: "#f9fafb" }}>
+                            <th style={{ padding: "10px 16px", textAlign: "left", fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Receipt No</th>
+                            <th style={{ padding: "10px 16px", textAlign: "left", fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Period</th>
+                            <th style={{ padding: "10px 16px", textAlign: "left", fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Date</th>
+                            <th style={{ padding: "10px 16px", textAlign: "right", fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Amount</th>
+                            <th style={{ padding: "10px 16px", textAlign: "left", fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Mode</th>
+                            <th style={{ padding: "10px 16px", textAlign: "left", fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {receiptsData.receipts.map((r) => (
+                            <tr key={r._id} style={{ borderTop: "1px solid #f3f4f6" }}>
+                              <td style={{ padding: "12px 16px", fontFamily: "monospace", fontSize: 13, color: "#4f46e5" }}>{r.receiptNo}</td>
+                              <td style={{ padding: "12px 16px", fontSize: 13 }}>{r.billPeriodId || "—"}</td>
+                              <td style={{ padding: "12px 16px", fontSize: 13 }}>{fmtDate(r.paidAt || r.createdAt)}</td>
+                              <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#15803d" }}>₹{fmt(r.amount)}</td>
+                              <td style={{ padding: "12px 16px", fontSize: 13 }}>{r.paymentMode}</td>
+                              <td style={{ padding: "12px 16px", fontSize: 13, color: "#6b7280" }}>{r.notes || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className={styles.emptyState} style={{ padding: 60 }}>
+                      <div className={styles.emptyIcon}>🧾</div>
+                      <h3>No payments recorded</h3>
+                      <p>No receipts for this bill yet</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
+            {/* Modal Footer */}
             <div className={styles.modalFooter}>
-              <button
-                onClick={() => downloadBill(viewingBill)}
-                className="btn btn-primary"
-                disabled={downloadingId === viewingBill._id?.toString()}
-              >
-                {downloadingId === viewingBill._id
-                  ? "⏳ Opening..."
-                  : "⬇️ Download / Print"}
+              <button onClick={() => setViewingBill(null)} className="btn btn-secondary">Close</button>
+              <button onClick={() => downloadBill(viewingBill)} className="btn btn-primary" disabled={downloadingId === viewingBill._id?.toString()}>
+                {downloadingId === viewingBill._id?.toString() ? "Opening..." : "Print / Download Bill"}
               </button>
             </div>
           </div>

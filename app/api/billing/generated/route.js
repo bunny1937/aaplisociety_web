@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
-import Member from "@/models/Member";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import cache from "@/lib/cache";
 
@@ -29,7 +28,7 @@ export async function GET(request) {
       isDeleted: { $ne: true },
     })
       .select(
-        "billPeriodId billMonth billYear memberId societyId previousBalance interestAmount charges totalAmount balanceAmount amountPaid dueDate status billHtml generatedAt createdAt",
+        "billPeriodId billMonth billYear memberId societyId previousBalance interestAmount currentBillTotal subtotal charges totalAmount balanceAmount amountPaid dueDate status billHtml generatedAt createdAt",
       )
       .populate(
         "memberId",

@@ -8,7 +8,6 @@ import Transaction from "@/models/Transaction";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import {
   calculateMonthlyInterest,
-  getOldestDueDate,
 } from "../../../../utils/interestUtils";
 import { safeConfigDate } from "../../../../utils/dateUtils";
 import { calculateMemberCharges } from "../../../../lib/calculate-member-bill";
@@ -96,21 +95,8 @@ export async function POST(request) {
       }
     }
 
-    // Interest on opening principal
     const interestRate = society?.config?.interestRate || 0;
-    const gracePeriodDays = society?.config?.gracePeriodDays || 0;
     const interestRounding = society?.config?.interestRounding || "TWO_DECIMAL";
-    const interestTriggerTiming = society?.config?.interestTriggerTiming || "NEXT_DAY";
-    const billDueDay = society?.config?.billDueDay || 10;
-
-    const dueDate = safeConfigDate(year, month, billDueDay);
-    const referenceDate = generationDate ? new Date(generationDate) : new Date(year, month - 1, 1);
-
-    const prevMonth = month === 1 ? 12 : month - 1;
-    const prevYear = month === 1 ? year - 1 : year;
-    const oldestDueDate = _openingPrincipal > 0
-      ? new Date(prevYear, prevMonth - 1, billDueDay)
-      : dueDate;
 
     let currentInterest = 0;
     if (_openingPrincipal > 0 || _openingInterest > 0) {
@@ -118,15 +104,12 @@ export async function POST(request) {
         remainingPrincipal: _openingPrincipal,
         remInt: 0,
         annualRate: interestRate,
-        gracePeriodDays,
-        billDueDate: oldestDueDate,
-        referenceDate,
         interestRounding,
-        interestTriggerTiming,
       });
       currentInterest = twoDp(currInt);
     }
 
+    const dueDate = safeConfigDate(year, month, society?.config?.billDueDay || 10);
     const currentCharges = twoDp(subtotal);
     const billPrincipalBalance = twoDp(_openingPrincipal + currentCharges);
     const billInterestBalance = twoDp(_openingInterest + currentInterest);

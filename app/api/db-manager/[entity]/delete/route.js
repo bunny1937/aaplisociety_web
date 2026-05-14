@@ -6,6 +6,7 @@ import User from "@/models/User";
 import AuditLog from "@/models/AuditLog";
 import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
+import Receipt from "@/models/Receipt";
 
 export async function DELETE(request, { params }) {
   try {
@@ -40,6 +41,8 @@ export async function DELETE(request, { params }) {
     if (entity === "members") Model = Member;
     else if (entity === "users") Model = User;
     else if (entity === "bills") Model = Bill;
+    else if (entity === "transactions") Model = Transaction;
+    else if (entity === "receipts") Model = Receipt;
     else return NextResponse.json({ error: "Invalid entity" }, { status: 400 });
 
     // Perform bulk delete

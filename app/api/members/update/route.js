@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
+import Bill from "@/models/Bill";
 import AuditLog from "@/models/AuditLog";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { memberSchema } from "@/lib/validators";
@@ -47,9 +48,36 @@ export async function PUT(request) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    // Guard: opening balance fields are locked after first bill is generated
+    const openingFieldsChanged =
+      ("openingPrincipal" in validationResult.data &&
+        validationResult.data.openingPrincipal !== oldMember.openingPrincipal) ||
+      ("openingInterest" in validationResult.data &&
+        validationResult.data.openingInterest !== oldMember.openingInterest);
+
+    if (openingFieldsChanged) {
+      const anyBill = await Bill.findOne({
+        memberId,
+        societyId: decoded.societyId,
+        isDeleted: { $ne: true },
+      }).select("_id").lean();
+      if (anyBill) {
+        return NextResponse.json(
+          { error: "Opening balances are locked after first bill is generated. Edit them via a ledger adjustment instead." },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Always derive openingBalance from the two components — never accept it as independent input
+    const finalData = { ...validationResult.data };
+    const newPrincipal = finalData.openingPrincipal ?? oldMember.openingPrincipal ?? 0;
+    const newInterest = finalData.openingInterest ?? oldMember.openingInterest ?? 0;
+    finalData.openingBalance = parseFloat((newPrincipal + newInterest).toFixed(2));
+
     const updatedMember = await Member.findByIdAndUpdate(
       memberId,
-      { $set: validationResult.data },
+      { $set: finalData },
       { new: true, runValidators: true },
     );
 

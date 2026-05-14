@@ -20,7 +20,7 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
   const seenFlats = new Map();
   const gridRows = [];
 
-  const SKIP_COLS = new Set(["Wing", "FlatNo", "OwnerName", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "RemainingDue", "BillStatus", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
+  const SKIP_COLS = new Set(["Wing", "FlatNo", "OwnerName", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "RemainingDue", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
@@ -93,9 +93,10 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
   }
 
   const summary = {
-    valid: gridRows.filter((r) => r.status === "valid").length,
+    valid: gridRows.filter((r) => r.status === "valid" || r.status === "skipped").length,
     warning: gridRows.filter((r) => r.status === "warning").length,
     error: gridRows.filter((r) => r.status === "error").length,
+    skipped: gridRows.filter((r) => r.status === "skipped").length,
   };
 
   return { gridRows, summary };
@@ -117,7 +118,7 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
   const gridRows = [];
   const validPayments = [];
 
-  const REF_COLS = ["OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","RemainingDue","BillStatus"];
+  const REF_COLS = ["OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","RemainingDue"];
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
@@ -168,11 +169,29 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
       okCell("Year", raw["Year"]);
     }
 
-    // AmountPaid
+    // AmountPaid / PaymentMethod / PaymentDate — all blank = skip row (no payment this month)
     const amountStr = String(raw["AmountPaid"] || "").trim();
+    const methodRaw = String(raw["PaymentMethod"] || "").trim();
+    const rawDate = raw["PaymentDate"];
+    const dateStr = String(rawDate ?? "").trim();
+    const isPaymentRow = amountStr || methodRaw || dateStr;
+
+    if (!isPaymentRow) {
+      // No payment fields filled — mark row as skipped (valid, no action needed)
+      okCell("AmountPaid", "");
+      okCell("PaymentMethod", "");
+      okCell("PaymentDate", "");
+      okCell("Remarks", raw["Remarks"] || "");
+      for (const col of REF_COLS) {
+        if (!cells[col]) okCell(col, raw[col] ?? "");
+      }
+      gridRows.push({ rowNum, status: "skipped", cells });
+      continue;
+    }
+
     const amount = parseFloat(amountStr);
     if (!amountStr) {
-      markCell("AmountPaid", amountStr, "error", "AmountPaid is required");
+      markCell("AmountPaid", amountStr, "error", "AmountPaid is required when recording a payment");
     } else if (isNaN(amount) || amount <= 0) {
       markCell("AmountPaid", amountStr, "error", `Invalid amount: ${amountStr} — must be > 0`);
     } else {
@@ -186,7 +205,7 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
     }
 
     // PaymentMethod
-    const method = String(raw["PaymentMethod"] || "").trim();
+    const method = methodRaw;
     if (!method) {
       markCell("PaymentMethod", method, "error", "PaymentMethod is required");
     } else if (!PAYMENT_METHODS.has(method)) {
@@ -196,8 +215,6 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
     }
 
     // PaymentDate — handle JS Date (cellDates:true), XLSX serial, YYYY-MM-DD, DD-MM-YYYY
-    const rawDate = raw["PaymentDate"];
-    const dateStr = String(rawDate ?? "").trim();
     if (!dateStr || dateStr === "Invalid Date") {
       markCell("PaymentDate", "", "error", "PaymentDate is required");
     } else {
@@ -238,9 +255,10 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
   }
 
   const summary = {
-    valid: gridRows.filter((r) => r.status === "valid").length,
+    valid: gridRows.filter((r) => r.status === "valid" || r.status === "skipped").length,
     warning: gridRows.filter((r) => r.status === "warning").length,
     error: gridRows.filter((r) => r.status === "error").length,
+    skipped: gridRows.filter((r) => r.status === "skipped").length,
   };
 
   return { gridRows, summary, validPayments };

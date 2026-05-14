@@ -5,10 +5,7 @@ import Transaction from "@/models/Transaction";
 import Member from "@/models/Member";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import Society from "@/models/Society";
-import {
-  getOldestDueDate,
-  getBillPayFinalDate,
-} from "../../../../utils/interestUtils";
+import { computePreviousBalances } from "../../../../utils/billingEngine";
 
 export async function POST(request) {
   try {
@@ -24,7 +21,6 @@ export async function POST(request) {
 
     const body = await request.json();
     const { memberIds, billYear, billMonth, billDate } = body;
-    // Validate we have year+month to calculate billPayFinalDate correctly
     if (!billYear || !billMonth) {
       return NextResponse.json(
         { error: "billYear and billMonth are required" },
@@ -46,23 +42,13 @@ export async function POST(request) {
         ? new Date(billYear, billMonth, 1)
         : new Date();
 
-    // Fetch society config for billDueDay and billPayFinalDay
-    const society = await Society.findById(decoded.societyId)
-      .select("config")
-      .lean();
-    const billDueDay = society?.config?.billDueDay || 10;
-    const billPayFinalDay = society?.config?.billPayFinalDay || 0;
-    const billPayFinalDate = getBillPayFinalDate(
-      billYear,
-      billMonth,
-      billPayFinalDay,
-    );
-
     const members = await Member.find({
       _id: { $in: memberIds },
       societyId: decoded.societyId,
     })
-      .select("_id openingBalance openingPrincipal openingInterest")
+      .select(
+        "_id openingBalance openingPrincipal openingInterest advanceCredit",
+      )
       .lean();
 
     const memberMap = {};
@@ -71,6 +57,7 @@ export async function POST(request) {
         openingBalance: m.openingBalance || 0,
         openingPrincipal: m.openingPrincipal || 0,
         openingInterest: m.openingInterest || 0,
+        advanceCredit: m.advanceCredit || 0,
       };
     });
 
@@ -88,73 +75,44 @@ export async function POST(request) {
         isReversed: false,
         date: { $lt: referenceDate },
       })
-        .sort({ date: -1, createdAt: -1 })
+        .sort({ createdAt: -1 })
         .lean();
       const ledgerBalance = lastTxn?.balanceAfterTransaction ?? openingBalance;
 
       const currentPeriodId = `${billYear}-${String(billMonth).padStart(2, "0")}`;
-      const unpaidBills = await Bill.find({
-        memberId,
-        societyId: decoded.societyId,
-        status: { $in: ["Unpaid", "Overdue", "Partial"] },
-        billPeriodId: { $ne: currentPeriodId },
-      })
-        .sort({ billYear: 1, billMonth: 1 })
-        .lean();
+      const [unpaidBills, anyPriorBill] = await Promise.all([
+        Bill.find({
+          memberId,
+          societyId: decoded.societyId,
+          status: { $in: ["Unpaid", "Overdue", "Partial"] },
+          billPeriodId: { $ne: currentPeriodId },
+          isDeleted: { $ne: true },
+        })
+          .sort({ billYear: 1, billMonth: 1 })
+          .lean(),
+        Bill.findOne({
+          memberId,
+          societyId: decoded.societyId,
+          billPeriodId: { $ne: currentPeriodId },
+          isDeleted: { $ne: true },
+        })
+          .select("_id")
+          .lean(),
+      ]);
 
-      // If there are unpaid bills, use their balanceAmount sum as the authoritative previous balance.
-      // The transaction ledger balance can diverge from unpaid bills (e.g. opening balances,
-      // bills stored without full prev+interest in totalAmount). Unpaid bill balanceAmounts are
-      // always the source of truth for what is actually owed.
+      // Unpaid bill balanceAmounts are the source of truth for what is owed.
+      // If member has prior bills and all paid → balance is 0 (not ledger, which can have orphan debits).
+      // Only use ledgerBalance for new members with no bills ever.
       const unpaidBillsBalance = unpaidBills.reduce(
         (sum, b) => sum + (b.balanceAmount || 0),
         0,
       );
       const currentBalance =
-        unpaidBillsBalance > 0 ? unpaidBillsBalance : ledgerBalance;
-
-      let daysOverdue = 0;
-      let oldestUnpaidDate = null;
-
-      if (unpaidBills.length > 0) {
-        oldestUnpaidDate = getOldestDueDate(
-          unpaidBills,
-          billDueDay,
-          billYear,
-          billMonth,
-        );
-
-        // Cap at billPayFinalDate if set — interest frozen after that day
-        const effectiveEnd =
-          billPayFinalDate && referenceDate > billPayFinalDate
-            ? billPayFinalDate
-            : referenceDate;
-
-        daysOverdue = Math.max(
-          0,
-          Math.floor((effectiveEnd - oldestUnpaidDate) / (1000 * 60 * 60 * 24)),
-        );
-      } else if (openingBalance > 0 || openingPrincipal > 0) {
-        // Opening balance exists but no bill history
-        // Treat as due from prev month's billDueDay (society-configured, not hardcoded)
-        oldestUnpaidDate = getOldestDueDate(
-          [],
-          billDueDay,
-          billYear,
-          billMonth,
-        );
-
-        // Cap at billPayFinalDate if set
-        const effectiveEnd =
-          billPayFinalDate && referenceDate > billPayFinalDate
-            ? billPayFinalDate
-            : referenceDate;
-
-        daysOverdue = Math.max(
-          0,
-          Math.floor((effectiveEnd - oldestUnpaidDate) / (1000 * 60 * 60 * 24)),
-        );
-      }
+        unpaidBillsBalance > 0
+          ? unpaidBillsBalance
+          : anyPriorBill
+            ? 0
+            : ledgerBalance;
 
       const transactions = await Transaction.find({
         memberId,
@@ -168,23 +126,25 @@ export async function POST(request) {
         )
         .lean();
 
-      const totalPrincipalOutstanding = unpaidBills.length > 0
-        ? unpaidBills.reduce((s, b) => s + (b.principalBalance || 0), 0)
-        : openingPrincipal;
-      const totalInterestOutstanding = unpaidBills.length > 0
-        ? unpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0)
-        : openingInterest;
+      // Use centralized engine to derive previous outstanding balances.
+      // Source of truth = balanceAmount on unpaid bills.
+      // principalBalance is immutable (gross at generation) — never use it directly.
+      const {
+        principalOutstanding: totalPrincipalOutstanding,
+        interestOutstanding: totalInterestOutstanding,
+      } = computePreviousBalances(unpaidBills, anyPriorBill, {
+        openingPrincipal,
+        openingInterest,
+      });
       // Carry remInt for new bill generation (sum of all interestBalance = total remInt)
       const remInt = totalInterestOutstanding;
 
       balances[memberId] = {
-        balance: currentBalance, // total outstanding (principal + interest)
+        balance: currentBalance,
         principalBalance: totalPrincipalOutstanding,
         interestBalance: totalInterestOutstanding,
-        remInt, // pass to bill generation for monthInterest calc
-        advanceCredit: memberId.advanceCredit || 0,
-        daysOverdue,
-        oldestUnpaidDate,
+        remInt,
+        advanceCredit: memberData.advanceCredit || 0,
         unpaidBills: unpaidBills.map((b) => ({
           billPeriodId: b.billPeriodId,
           totalAmount: b.totalAmount,

@@ -43,21 +43,14 @@ export async function POST(request) {
     for (const bill of bills) {
       const member = await Member.findById(bill.memberId)
         .select(
-          "flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary openingBalance openingPrincipal openingInterest",
+          "flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary openingBalance openingPrincipal openingInterest advanceCredit",
         )
         .lean();
       if (!member) continue;
 
-      // Fetch previous bill HTML for page 3 reference
       // Fetch live unpaid bills — NEVER trust Excel previousBalance (member may have paid since template was downloaded)
-      const [prevBill, dbUnpaidBills] = await Promise.all([
-        Bill.findOne({
-          memberId: bill.memberId,
-          societyId: decoded.societyId,
-          billHtml: { $exists: true, $ne: null },
-        })
-          .sort({ billYear: -1, billMonth: -1 })
-          .lean(),
+      const [, dbUnpaidBills] = await Promise.all([
+        Promise.resolve(null),
         Bill.find({
           memberId: bill.memberId,
           societyId: decoded.societyId,
@@ -72,18 +65,60 @@ export async function POST(request) {
           .lean(),
       ]);
 
-      // Live previous balance — sum of all unpaid bill balances from DB
+      // Recompute live balance from immutable fields — balanceAmount may be stale
       const livePrevBalance = dbUnpaidBills.reduce(
-        (sum, b) => sum + (b.balanceAmount || 0),
+        (sum, b) =>
+          sum +
+          Math.max(0, (b.principalBalance || 0) + (b.interestBalance || 0)),
         0,
       );
 
-      const prevRemPrincipal = dbUnpaidBills.length === 0
-        ? member?.openingPrincipal || 0
-        : dbUnpaidBills.reduce((s, b) => s + (b.principalBalance || 0), 0);
-      const prevRemInt = dbUnpaidBills.length === 0
-        ? member?.openingInterest || 0
-        : dbUnpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0);
+      const anyPriorBill = await Bill.findOne({
+        memberId: bill.memberId,
+        societyId: decoded.societyId,
+        billPeriodId: { $ne: billPeriodId },
+        isDeleted: { $ne: true },
+      })
+        .select("_id")
+        .lean();
+
+      // Use totalBillDue - amountPaid as the live remaining principal per bill
+      // principalBalance alone is not enough if it was never split properly
+      const prevRemPrincipal =
+        dbUnpaidBills.length > 0
+          ? dbUnpaidBills.reduce((s, b) => {
+              // If principalBalance was set properly, use it; else derive from totalBillDue - interestBalance - amountPaid
+              const prinBal =
+                b.principalBalance > 0
+                  ? b.principalBalance
+                  : Math.max(
+                      0,
+                      (b.totalBillDue || b.totalAmount || 0) -
+                        (b.interestBalance || 0) -
+                        (b.amountPaid || 0),
+                    );
+              return s + prinBal;
+            }, 0)
+          : anyPriorBill
+            ? 0
+            : member?.openingPrincipal || 0;
+      const prevRemInt =
+        dbUnpaidBills.length > 0
+          ? dbUnpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0)
+          : anyPriorBill
+            ? 0
+            : member?.openingInterest || 0;
+
+      const _prevBalance =
+        dbUnpaidBills.length > 0
+          ? livePrevBalance
+          : anyPriorBill
+            ? 0
+            : parseFloat(
+                (
+                  (member.openingPrincipal || 0) + (member.openingInterest || 0)
+                ).toFixed(2),
+              );
 
       let billHtml = null;
       let interestAmount = bill.interestAmount ?? 0;
@@ -104,7 +139,6 @@ export async function POST(request) {
             dueDate: new Date(dueDate),
             unpaidBills: dbUnpaidBills,
             recentTransactions: bill.recentTransactions || [],
-            previousBillHtml: prevBill?.billHtml || null,
           },
         );
         billHtml = renderResult.billHtml;
@@ -117,16 +151,28 @@ export async function POST(request) {
       }
 
       const _isScheduled = false;
-      const _currentCharges = parseFloat((bill.subtotal || bill.grandTotal || 0).toFixed(2));
+      const _currentCharges = parseFloat(
+        (bill.subtotal || bill.grandTotal || 0).toFixed(2),
+      );
       const _currentInterest = parseFloat((interestAmount || 0).toFixed(2));
       const _openingPrincipal = parseFloat(prevRemPrincipal.toFixed(2));
       const _openingInterest = parseFloat(prevRemInt.toFixed(2));
-      const _prevBalance = dbUnpaidBills.length > 0
-        ? livePrevBalance
-        : parseFloat(((member.openingPrincipal || 0) + (member.openingInterest || 0)).toFixed(2));
-      const _billPrincipalBalance = parseFloat((_openingPrincipal + _currentCharges).toFixed(2));
-      const _billInterestBalance = parseFloat((_openingInterest + _currentInterest).toFixed(2));
-      const _totalBillDue = parseFloat((_billPrincipalBalance + _billInterestBalance).toFixed(2));
+      const _billPrincipalBalance = parseFloat(
+        (_openingPrincipal + _currentCharges).toFixed(2),
+      );
+      const _billInterestBalance = parseFloat(
+        (_openingInterest + _currentInterest).toFixed(2),
+      );
+      const _totalBillDue = parseFloat(
+        (_billPrincipalBalance + _billInterestBalance).toFixed(2),
+      );
+      const _advanceCredit = parseFloat((member.advanceCredit || 0).toFixed(2));
+      const _advanceApplied = parseFloat(
+        Math.min(_advanceCredit, _totalBillDue).toFixed(2),
+      );
+      const _balanceAmount = parseFloat(
+        Math.max(0, _totalBillDue - _advanceApplied).toFixed(2),
+      );
 
       const doc = await Bill.create({
         billPeriodId,
@@ -150,8 +196,9 @@ export async function POST(request) {
         principalBalance: _billPrincipalBalance,
         interestBalance: _billInterestBalance,
         totalAmount: _totalBillDue,
-        balanceAmount: _totalBillDue,
-        amountPaid: 0,
+        balanceAmount: _balanceAmount,
+        advanceApplied: _advanceApplied,
+        amountPaid: _advanceApplied,
         dueDate: new Date(dueDate),
         generatedAt: new Date(),
         generatedBy: decoded.userId,

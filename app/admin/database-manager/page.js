@@ -139,6 +139,7 @@ setSelectedIds([]);
     { value: 'members', label: 'Members' },
     { value: 'transactions', label: 'Transactions' },
     { value: 'bills', label: 'Bills' },
+    { value: 'receipts', label: 'Receipts' },
     { value: 'users', label: 'Users' },
     { value: 'auditlogs', label: 'Audit Logs' },
     { value: 'billingheads', label: 'Billing Heads' }

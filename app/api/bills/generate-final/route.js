@@ -7,6 +7,7 @@ import Member from "@/models/Member";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import renderBillHtml from "@/lib/bill-renderer";
 import cache from "@/lib/cache";
+import { computePreviousBalances } from "../../../../utils/billingEngine";
 
 export async function POST(request) {
   try {
@@ -20,7 +21,8 @@ export async function POST(request) {
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
-    const { billMonth, billYear, dueDate, bills, forceRegenerate } = await request.json();
+    const { billMonth, billYear, dueDate, bills, forceRegenerate } =
+      await request.json();
     if (billMonth === undefined || !billYear || !dueDate || !bills) {
       return NextResponse.json(
         { error: "Missing required fields" },
@@ -85,20 +87,12 @@ export async function POST(request) {
         let renderedCurrInt = 0;
         let renderedMonthInterest = 0;
         let dbUnpaidBills = [];
-        let prevRemPrincipal = member?.openingPrincipal || 0;
-        let prevRemInt = member?.openingInterest || 0;
+        let prevRemPrincipal = 0;
+        let prevRemInt = 0;
         if (member) {
           try {
-            const [prevBill, _dbUnpaidBills] = await Promise.all([
-              Bill.findOne(
-                {
-                  memberId: bill.memberId,
-                  societyId: decoded.societyId,
-                  billHtml: { $exists: true, $ne: null },
-                },
-                { billHtml: 1 },
-                { sort: { billYear: -1, billMonth: -1 } },
-              ).lean(),
+            const [, _dbUnpaidBills] = await Promise.all([
+              Promise.resolve(null),
               // Fetch actual unpaid bills from DB — same query as excel-template route
               // so renderBillHtml uses the real oldest dueDate, not a fallback
               Bill.find({
@@ -121,14 +115,28 @@ export async function POST(request) {
                 ? new Date(dbUnpaidBills[0].dueDate)
                 : null;
 
-            prevRemPrincipal =
-              dbUnpaidBills.length === 0
-                ? member?.openingPrincipal || 0
-                : dbUnpaidBills.reduce((s, b) => s + (b.principalBalance || 0), 0);
-            prevRemInt =
-              dbUnpaidBills.length === 0
-                ? member?.openingInterest || 0
-                : dbUnpaidBills.reduce((s, b) => s + (b.interestBalance || 0), 0);
+            // anyPriorBill: did this member ever have a bill before?
+            // If yes + all paid → outstanding = 0, NOT member opening balances.
+            // Only use member opening balances for brand-new members (no prior bills ever).
+            const anyPriorBill = await Bill.findOne({
+              memberId: bill.memberId,
+              societyId: decoded.societyId,
+              billPeriodId: { $ne: billPeriodId },
+              isDeleted: { $ne: true },
+            })
+              .select("_id")
+              .lean();
+
+            // Use centralized engine — source of truth is balanceAmount on unpaid bills
+            const {
+              principalOutstanding: _prevPrincipal,
+              interestOutstanding: _prevInterest,
+            } = computePreviousBalances(dbUnpaidBills, anyPriorBill, {
+              openingPrincipal: member?.openingPrincipal || 0,
+              openingInterest: member?.openingInterest || 0,
+            });
+            prevRemPrincipal = _prevPrincipal;
+            prevRemInt = _prevInterest;
 
             const renderResult = renderBillHtml(
               billTemplate?.html || "DEFAULT",
@@ -150,7 +158,6 @@ export async function POST(request) {
                     : bill.unpaidBills || [],
                 oldestUnpaidDate,
                 recentTransactions: bill.recentTransactions || [],
-                previousBillHtml: prevBill?.billHtml || null,
               },
             );
             billHtml = renderResult.billHtml;
@@ -193,14 +200,24 @@ export async function POST(request) {
           monthInterest: renderedMonthInterest, // currInt + carried remInt (display only)
           interestAmount: renderedMonthInterest,
           // ── Immutable bill-state fields ──────────────────────────────────
-          ...((() => {
+          // ── Immutable bill-state fields ──────────────────────────────────
+          ...(() => {
             const _op = parseFloat(prevRemPrincipal.toFixed(2));
             const _oi = parseFloat(prevRemInt.toFixed(2));
-            const _cc = parseFloat((bill.subtotal || bill.currentBillTotal || 0).toFixed(2));
+            const _cc = parseFloat(
+              (bill.subtotal || bill.currentBillTotal || 0).toFixed(2),
+            );
             const _ci = parseFloat((renderedCurrInt || 0).toFixed(2));
             const _bp = parseFloat((_op + _cc).toFixed(2));
             const _bi = parseFloat((_oi + _ci).toFixed(2));
             const _total = parseFloat((_bp + _bi).toFixed(2));
+            const _adv = parseFloat((bill.advanceCredit || 0).toFixed(2));
+            const _advApplied = parseFloat(Math.min(_adv, _total).toFixed(2));
+            const _balance = parseFloat(
+              Math.max(0, _total - _advApplied).toFixed(2),
+            );
+            // principalBalance/interestBalance = gross (for allocator correctness)
+            // balanceAmount = net after advance credit (what member actually owes)
             return {
               openingPrincipal: _op,
               openingInterest: _oi,
@@ -212,18 +229,21 @@ export async function POST(request) {
               principalBalance: _bp,
               interestBalance: _bi,
               totalAmount: _total,
-              balanceAmount: _total,
+              balanceAmount: _balance,
+              advanceApplied: _advApplied,
+              _advanceApplied: _advApplied,
+              amountPaid: _advApplied, // ← MOVED INSIDE IIFE where _advApplied is in scope
+              status: _balance <= 0.005 ? "Paid" : _advApplied > 0 ? "Partial" : "Unpaid",
             };
-          })()),
+          })(),
 
           subtotal: bill.subtotal || bill.currentBillTotal || 0,
           serviceTax: bill.serviceTax || 0,
           currentBillTotal: bill.currentBillTotal || bill.subtotal || 0,
-          amountPaid: 0,
+          // amountPaid: _advApplied,        ← REMOVED (was out of scope)
           dueDate: new Date(dueDate),
           generatedAt: new Date(),
           generatedBy: decoded.userId,
-          status: "Unpaid",
           scheduledPushDate: null,
           billHtml,
           importedFrom: "System",
@@ -232,8 +252,49 @@ export async function POST(request) {
       }),
     );
 
+    // Collect advance credit consumption before stripping temp field
+    const advanceToConsume = new Map();
+    for (const b of billsToCreate) {
+      if (b._advanceApplied > 0) {
+        advanceToConsume.set(String(b.memberId), b._advanceApplied);
+      }
+      delete b._advanceApplied;
+    }
+
     const createdBills = await Bill.insertMany(billsToCreate);
-    console.log(`Generated ${createdBills.length} bills for ${billPeriodId}`);
+
+    // Decrement advanceCredit on members where it was applied
+    for (const [memberId, applied] of advanceToConsume) {
+      await Member.findByIdAndUpdate(memberId, {
+        $inc: { advanceCredit: -applied },
+      });
+    }
+
+    // When a new bill absorbs prior unpaid balances into openingPrincipal,
+    // zero out those prior bills so get-previous-balances doesn't double-count them.
+    for (const bill of createdBills) {
+      if ((bill.openingPrincipal || 0) > 0 || (bill.openingInterest || 0) > 0) {
+        await Bill.updateMany(
+          {
+            memberId: bill.memberId,
+            societyId: decoded.societyId,
+            billPeriodId: { $lt: billPeriodId },
+            balanceAmount: { $gt: 0.005 },
+            isDeleted: { $ne: true },
+          },
+          {
+            $set: {
+              balanceAmount: 0,
+              principalBalance: 0,
+              interestBalance: 0,
+              status: "Paid",
+              lastModifiedAt: new Date(),
+            },
+          },
+        );
+      }
+    }
+
 
     // Create a ledger debit transaction per bill so running balance is correct
     for (const bill of createdBills) {
@@ -241,7 +302,9 @@ export async function POST(request) {
         memberId: bill.memberId,
         societyId: decoded.societyId,
         isReversed: false,
-      }).sort({ date: -1, createdAt: -1 }).lean();
+      })
+        .sort({ createdAt: -1 })
+        .lean();
 
       const prevBal = parseFloat(
         (lastTxn?.balanceAfterTransaction ?? 0).toFixed(2),

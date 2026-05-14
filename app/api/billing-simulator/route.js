@@ -74,28 +74,21 @@ function runSimulation(config, member, actions) {
       const openingInterest = twoDp(carry.openingInterest);
 
       // Interest anchor: oldest outstanding due date, or previous month's due date.
-      const dueDate = new Date(year, month - 1, config.billDueDay);
+      const dueDate = new Date(year, month - 1, 10);
       if (openingPrincipal > 0 && !oldestUnpaidDueDate) {
         // First time we have outstanding principal — anchor to previous month's due.
         const prevMonth = month === 1 ? 12 : month - 1;
         const prevYear = month === 1 ? year - 1 : year;
-        oldestUnpaidDueDate = new Date(prevYear, prevMonth - 1, config.billDueDay);
+        oldestUnpaidDueDate = new Date(prevYear, prevMonth - 1, 10);
       }
       const oldestDueDate = oldestUnpaidDueDate ||
-        new Date(year, month - 1 === 0 ? 11 : month - 2, config.billDueDay);
+        new Date(year, month - 1 === 0 ? 11 : month - 2, 10);
 
-      const referenceDate = new Date(action.generationDate);
-
-      // Simple non-compounding interest on openingPrincipal only.
       const { currInt: currentInterest } = calculateMonthlyInterest({
         remainingPrincipal: openingPrincipal,
         remInt: 0,
         annualRate: config.interestRate,
-        gracePeriodDays: config.gracePeriodDays,
-        billDueDate: oldestDueDate,
-        referenceDate,
         interestRounding: config.interestRounding,
-        interestTriggerTiming: config.interestTriggerTiming,
       });
 
       const currentCharges =
@@ -446,32 +439,28 @@ function buildTestCases(snapshots, config) {
       "Carry-forward must derive only from previous month closing state");
   }
 
-  // 7. interest_before_grace: currentInterest === 0 within grace period
+  // 7. interest_when_principal: currentInterest > 0 iff openingPrincipal > 0
   {
     let allOk = true;
     let failNote = "";
     for (const s of snapshots) {
       const b = s.bill;
-      const genDate = new Date(b.generationDate);
-      genDate.setHours(0, 0, 0, 0);
-      const anchorDate = new Date(b.oldestDueDate || b.dueDate);
-      const graceEnd = new Date(anchorDate);
-      graceEnd.setDate(graceEnd.getDate() + config.gracePeriodDays);
-      graceEnd.setHours(0, 0, 0, 0);
-      const isPastGrace =
-        config.interestTriggerTiming === "SAME_DAY"
-          ? genDate >= graceEnd
-          : genDate > graceEnd;
-      if (!isPastGrace && b.currentInterest !== 0) {
+      const shouldHaveInterest = b.openingPrincipal > 0;
+      if (shouldHaveInterest && b.currentInterest === 0) {
         allOk = false;
-        failNote = `${b.billPeriodId}: within grace but currentInterest=${b.currentInterest}`;
+        failNote = `${b.billPeriodId}: openingPrincipal=${b.openingPrincipal} but currentInterest=0`;
+        break;
+      }
+      if (!shouldHaveInterest && b.currentInterest !== 0) {
+        allOk = false;
+        failNote = `${b.billPeriodId}: no principal but currentInterest=${b.currentInterest}`;
         break;
       }
     }
-    tc("interest_before_grace", allOk,
-      "currentInterest === 0 within grace period",
+    tc("interest_when_principal", allOk,
+      "currentInterest > 0 iff openingPrincipal > 0",
       allOk ? "all pass" : failNote,
-      "No interest within grace period");
+      "Interest always applies when principal is outstanding");
   }
 
   // 8. interest_formula: currentInterest ≈ openingPrincipal × rate/1200
@@ -645,10 +634,7 @@ export async function POST(request) {
 
     const cfg = {
       interestRate: config?.interestRate ?? 18,
-      gracePeriodDays: config?.gracePeriodDays ?? 1,
-      billDueDay: config?.billDueDay ?? 10,
       interestRounding: config?.interestRounding ?? "TWO_DECIMAL",
-      interestTriggerTiming: config?.interestTriggerTiming ?? "NEXT_DAY",
       allocationMode: config?.allocationMode ?? "INTEREST_FIRST",
       charges: config?.charges ?? 0,
     };

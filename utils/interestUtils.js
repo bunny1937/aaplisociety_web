@@ -37,20 +37,13 @@ export function calculateMonthlyInterest({
   remainingPrincipal,
   remInt = 0,
   annualRate,
-  gracePeriodDays = 0,      // kept for backward compat
-  interestAfterDays,        // NEW — takes priority over gracePeriodDays
-  billDueDate,
-  referenceDate,
+  // gracePeriodDays, interestAfterDays, billDueDate, referenceDate, interestTriggerTiming — removed
   interestRounding = "TWO_DECIMAL",
-  interestTriggerTiming = "NEXT_DAY", // SAME_DAY | NEXT_DAY
 }) {
   // interestRate = 0 → bypass
   if (!annualRate || annualRate <= 0) {
     return { currInt: 0, monthInterest: 0, remInt: 0 };
   }
-
-  // VIEW vs APPLICABLE: math is identical at bill generation time.
-  // VIEW = UI warning label only; interest still calculated when next bill generates.
 
   // No principal → carry remInt only
   if (!remainingPrincipal || remainingPrincipal <= 0) {
@@ -58,28 +51,12 @@ export function calculateMonthlyInterest({
     return { currInt: 0, monthInterest: carried, remInt: carried };
   }
 
-  // Resolve effective grace days: new field takes priority
-  const effectiveGraceDays = interestAfterDays !== undefined ? interestAfterDays : (gracePeriodDays || 0);
-
-  const due = new Date(billDueDate);
-  const graceEnd = new Date(due);
-  graceEnd.setDate(graceEnd.getDate() + effectiveGraceDays);
-  // Normalize to midnight so date comparisons are day-level only
-  graceEnd.setHours(0, 0, 0, 0);
-
-  const ref =
-    referenceDate instanceof Date ? new Date(referenceDate) : new Date(referenceDate);
-  ref.setHours(0, 0, 0, 0);
-
-  // SAME_DAY: interest starts ON graceEnd day (ref >= graceEnd)
-  // NEXT_DAY: interest starts the day AFTER graceEnd (ref > graceEnd)
-  const isPastGrace =
-    interestTriggerTiming === "SAME_DAY" ? ref >= graceEnd : ref > graceEnd;
-
-  // currInt on principal only (your confirmed formula)
-  const currInt = isPastGrace
-    ? roundInterest((remainingPrincipal * annualRate) / 1200, interestRounding)
-    : 0;
+  // Simple monthly interest: principal * annualRate / 1200
+  // Always applies when prevRemPrincipal > 0 — no grace period gate
+  const currInt = roundInterest(
+    (remainingPrincipal * annualRate) / 1200,
+    interestRounding,
+  );
 
   const totalMonthInterest = roundInterest(
     (remInt || 0) + currInt,
@@ -128,12 +105,12 @@ export function getOldestDueDate(unpaidBills, billDueDay, refYear, refMonth) {
  */
 export function calculateInterestAmount(
   principal,
-  oldestDueDate,
-  referenceDate,
-  gracePeriodDays,
+  _oldestDueDate,
+  _referenceDate,
+  _gracePeriodDays,
   interestRate,
-  _ignoredMethod, // was interestCalculationMethod — ignored now
-  _ignoredCapDate, // was billPayFinalDate — ignored (handled at call site)
+  _ignoredMethod,
+  _ignoredCapDate,
   interestRounding = "TWO_DECIMAL",
 ) {
   if (!principal || principal <= 0) {
@@ -144,17 +121,12 @@ export function calculateInterestAmount(
       chargeableMonths: 0,
     };
   }
-
   const { monthInterest } = calculateMonthlyInterest({
     remainingPrincipal: principal,
     remInt: 0,
     annualRate: interestRate || 0,
-    gracePeriodDays: gracePeriodDays || 0,
-    billDueDate: oldestDueDate,
-    referenceDate,
     interestRounding,
   });
-
   return {
     interestAmount: monthInterest,
     interestDays: 0,
@@ -221,7 +193,9 @@ export function allocatePaymentInterestFirst(
       if (remaining <= 0) break;
       if (wb.principalBalance <= 0) continue;
       const clear = Math.min(remaining, wb.principalBalance);
-      wb.principalBalance = parseFloat((wb.principalBalance - clear).toFixed(2));
+      wb.principalBalance = parseFloat(
+        (wb.principalBalance - clear).toFixed(2),
+      );
       wb.balanceAmount = parseFloat((wb.balanceAmount - clear).toFixed(2));
       wb.amountPaid = parseFloat((wb.amountPaid + clear).toFixed(2));
       totalPrincipalCleared += clear;
