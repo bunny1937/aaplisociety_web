@@ -4,34 +4,13 @@ import Society from "@/models/Society";
 import Member from "@/models/Member";
 import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
-import jwt from "jsonwebtoken";
+import { validateAdminRequest } from "@/lib/admin-middleware";
 
 export async function GET(request, { params }) {
+  const validation = validateAdminRequest(request);
+  if (!validation.valid) return validation;
+
   try {
-    // Validate JWT
-    let token = request.cookies.get("token")?.value;
-    if (!token) {
-      const authHeader = request.headers.get("authorization");
-      if (authHeader?.startsWith("Bearer ")) token = authHeader.substring(7);
-    }
-    if (!token) return NextResponse.json({ error: "No token", status: 401 });
-    else {
-      token = request.cookies.get("token")?.value;
-    }
-    if (!token)
-      return NextResponse.json({ error: "No token provided" }, { status: 401 });
-    let decoded;
-
-    try {
-      decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
-    } catch (error) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    if (decoded.role !== "SuperAdmin") {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-    }
-
     await connectDB();
 
     const { id: societyId } = await params;

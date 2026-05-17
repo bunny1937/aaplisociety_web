@@ -20,7 +20,7 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
   const seenFlats = new Map();
   const gridRows = [];
 
-  const SKIP_COLS = new Set(["Wing", "FlatNo", "OwnerName", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "RemainingDue", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
+  const SKIP_COLS = new Set(["Wing-FlatNo", "Wing", "FlatNo", "OwnerName", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentCharges", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "AdvanceCredit", "RemainingDue", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
@@ -35,27 +35,32 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
     };
     const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
 
-    const wing = String(raw["Wing"] || "").trim();
-    const flatNo = String(raw["FlatNo"] || "").trim();
+    // Support both merged "Wing-FlatNo" and legacy separate Wing/FlatNo columns
+    const wingFlatRaw = String(raw["Wing-FlatNo"] || "").trim();
+    let wing, flatNo;
+    if (wingFlatRaw) {
+      const dashIdx = wingFlatRaw.indexOf("-");
+      wing = dashIdx > 0 ? wingFlatRaw.slice(0, dashIdx).trim() : wingFlatRaw;
+      flatNo = dashIdx > 0 ? wingFlatRaw.slice(dashIdx + 1).trim() : "";
+    } else {
+      wing = String(raw["Wing"] || "").trim();
+      flatNo = String(raw["FlatNo"] || "").trim();
+    }
     const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
 
     // Skip instruction row
-    if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
+    if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
 
-    // Wing + FlatNo validation
+    // Wing-FlatNo validation
     if (!wing || !flatNo) {
-      markCell("Wing", wing, "error", "Wing is required");
-      markCell("FlatNo", flatNo, "error", "FlatNo is required");
+      markCell("Wing-FlatNo", wingFlatRaw || `${wing}-${flatNo}`, "error", "Wing-FlatNo is required (format: C-210)");
     } else if (wingFlatMap && !wingFlatMap[flatKey]) {
-      markCell("Wing", wing, "error", `Flat "${wing}-${flatNo}" not found in system`);
-      markCell("FlatNo", flatNo, "error", "");
+      markCell("Wing-FlatNo", wingFlatRaw || `${wing}-${flatNo}`, "error", `Flat "${wing}-${flatNo}" not found in system`);
     } else if (seenFlats.has(flatKey)) {
-      markCell("Wing", wing, "error", `Duplicate — already seen at row ${seenFlats.get(flatKey)}`);
-      markCell("FlatNo", flatNo, "error", "");
+      markCell("Wing-FlatNo", wingFlatRaw || `${wing}-${flatNo}`, "error", `Duplicate — already seen at row ${seenFlats.get(flatKey)}`);
     } else {
       seenFlats.set(flatKey, rowNum);
-      okCell("Wing", wing);
-      okCell("FlatNo", flatNo);
+      okCell("Wing-FlatNo", wingFlatRaw || `${wing}-${flatNo}`);
     }
 
     // Period
@@ -118,17 +123,26 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
   const gridRows = [];
   const validPayments = [];
 
-  const REF_COLS = ["OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","RemainingDue"];
+  const REF_COLS = ["OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","AdvanceCredit","RemainingDue"];
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
     const rowNum = i + 2;
 
-    const wing = String(raw["Wing"] || "").trim();
-    const flatNo = String(raw["FlatNo"] || "").trim();
+    // Support both merged "Wing-FlatNo" and legacy separate Wing/FlatNo columns
+    const wingFlatRaw = String(raw["Wing-FlatNo"] || "").trim();
+    let wing, flatNo;
+    if (wingFlatRaw) {
+      const dashIdx = wingFlatRaw.indexOf("-");
+      wing = dashIdx > 0 ? wingFlatRaw.slice(0, dashIdx).trim() : wingFlatRaw;
+      flatNo = dashIdx > 0 ? wingFlatRaw.slice(dashIdx + 1).trim() : "";
+    } else {
+      wing = String(raw["Wing"] || "").trim();
+      flatNo = String(raw["FlatNo"] || "").trim();
+    }
 
     // Skip instruction row
-    if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
+    if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
     // Skip rows with no payment
     const _amtRaw = String(raw["AmountPaid"] ?? "").trim();
     if (!_amtRaw) continue;
@@ -145,20 +159,17 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
     };
     const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
 
-    // Wing + FlatNo
+    // Wing-FlatNo validation
+    const wingFlatDisplay = wingFlatRaw || `${wing}-${flatNo}`;
     if (!wing || !flatNo) {
-      markCell("Wing", wing, "error", "Wing is required");
-      markCell("FlatNo", flatNo, "error", "FlatNo is required");
+      markCell("Wing-FlatNo", wingFlatDisplay, "error", "Wing-FlatNo is required (format: C-210)");
     } else if (wingFlatMap && !wingFlatMap.get(flatKey)) {
-      markCell("Wing", wing, "error", `Flat "${wing}-${flatNo}" not found`);
-      markCell("FlatNo", flatNo, "error", "");
+      markCell("Wing-FlatNo", wingFlatDisplay, "error", `Flat "${wing}-${flatNo}" not found in system. Check spelling and case.`);
     } else if (seenFlats.has(flatKey)) {
-      markCell("Wing", wing, "error", `Duplicate — already at row ${seenFlats.get(flatKey)}`);
-      markCell("FlatNo", flatNo, "error", "");
+      markCell("Wing-FlatNo", wingFlatDisplay, "error", `Duplicate flat — already recorded at row ${seenFlats.get(flatKey)}`);
     } else {
       seenFlats.set(flatKey, rowNum);
-      okCell("Wing", wing);
-      okCell("FlatNo", flatNo);
+      okCell("Wing-FlatNo", wingFlatDisplay);
     }
 
     // Period
@@ -189,18 +200,61 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
       continue;
     }
 
+    const bill = existingBillMap?.get(flatKey);
+
     const amount = parseFloat(amountStr);
     if (!amountStr) {
       markCell("AmountPaid", amountStr, "error", "AmountPaid is required when recording a payment");
     } else if (isNaN(amount) || amount <= 0) {
       markCell("AmountPaid", amountStr, "error", `Invalid amount: ${amountStr} — must be > 0`);
     } else {
-      const bill = existingBillMap?.get(flatKey);
       const remaining = bill?.balanceAmount ?? Infinity;
       if (amount > remaining + 0.01) {
-        markCell("AmountPaid", amount, "warning", `Paying ₹${amount} but only ₹${remaining.toFixed(2)} remaining — overpayment`);
+        markCell("AmountPaid", amount, "warning", `Paying ₹${amount} but only ₹${remaining.toFixed(2)} remaining — excess will become advance credit`);
       } else {
         okCell("AmountPaid", amount);
+      }
+    }
+
+    // Tamper detection — compare read-only reference fields against DB values
+    if (bill) {
+      // TotalBillDue tamper check
+      const excelTotalBillDue = raw["TotalBillDue"] !== undefined && raw["TotalBillDue"] !== ""
+        ? parseFloat(raw["TotalBillDue"])
+        : null;
+      if (excelTotalBillDue !== null && !isNaN(excelTotalBillDue) && bill.totalBillDue != null) {
+        if (Math.abs(excelTotalBillDue - bill.totalBillDue) > 0.02) {
+          markCell("TotalBillDue", excelTotalBillDue, "error",
+            `TotalBillDue tampered: Excel shows ₹${excelTotalBillDue} but system has ₹${bill.totalBillDue.toFixed(2)}. Do not edit read-only columns — re-download the template.`);
+        } else if (!cells["TotalBillDue"]) {
+          okCell("TotalBillDue", excelTotalBillDue);
+        }
+      }
+
+      // OpeningPrincipal tamper check
+      const excelOP = raw["OpeningPrincipal"] !== undefined && raw["OpeningPrincipal"] !== ""
+        ? parseFloat(raw["OpeningPrincipal"])
+        : null;
+      if (excelOP !== null && !isNaN(excelOP) && bill.openingPrincipal != null) {
+        if (Math.abs(excelOP - bill.openingPrincipal) > 0.02) {
+          markCell("OpeningPrincipal", excelOP, "error",
+            `OpeningPrincipal tampered: Excel shows ₹${excelOP} but system has ₹${bill.openingPrincipal.toFixed(2)}. Re-download the template.`);
+        } else if (!cells["OpeningPrincipal"]) {
+          okCell("OpeningPrincipal", excelOP);
+        }
+      }
+
+      // OpeningInterest tamper check
+      const excelOI = raw["OpeningInterest"] !== undefined && raw["OpeningInterest"] !== ""
+        ? parseFloat(raw["OpeningInterest"])
+        : null;
+      if (excelOI !== null && !isNaN(excelOI) && bill.openingInterest != null) {
+        if (Math.abs(excelOI - bill.openingInterest) > 0.02) {
+          markCell("OpeningInterest", excelOI, "error",
+            `OpeningInterest tampered: Excel shows ₹${excelOI} but system has ₹${bill.openingInterest.toFixed(2)}. Re-download the template.`);
+        } else if (!cells["OpeningInterest"]) {
+          okCell("OpeningInterest", excelOI);
+        }
       }
     }
 

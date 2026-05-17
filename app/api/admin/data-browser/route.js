@@ -4,7 +4,7 @@ import Bill from "@/models/Bill";
 import Member from "@/models/Member";
 import Transaction from "@/models/Transaction";
 import BillingHead from "@/models/BillingHead";
-import jwt from "jsonwebtoken";
+import { validateAdminRequest } from "@/lib/admin-middleware";
 import { logAdminActivity } from "@/lib/export-to-admin-db";
 
 const COLLECTIONS = {
@@ -15,38 +15,11 @@ const COLLECTIONS = {
 };
 
 export async function GET(request) {
+  const validation = validateAdminRequest(request);
+  if (!validation.valid) return validation;
+
   try {
     await connectDB();
-
-    // ✅ Admin JWT validation
-    let token = request.cookies.get("token")?.value;
-    if (!token) {
-      const authHeader = request.headers.get("authorization");
-      if (authHeader?.startsWith("Bearer ")) token = authHeader.substring(7);
-    }
-    if (!token)
-      return NextResponse.json({ error: "No token" }, { status: 401 });
-    else {
-      token = request.cookies.get("token")?.value;
-    }
-    if (!token)
-      return NextResponse.json({ error: "No token provided" }, { status: 401 });
-    let decoded;
-
-    try {
-      decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
-    } catch (error) {
-      console.error("JWT verification failed:", error.message);
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    // Check if SuperAdmin
-    if (decoded.role !== "SuperAdmin") {
-      return NextResponse.json(
-        { error: "SuperAdmin access required" },
-        { status: 403 },
-      );
-    }
 
     const { searchParams } = new URL(request.url);
     const societyId = searchParams.get("societyId");
@@ -76,19 +49,6 @@ export async function GET(request) {
         .lean();
     }
 
-    // Log activity
-    await logAdminActivity({
-      adminId: decoded.userId,
-      adminName: decoded.email,
-      action: "VIEW_DATA",
-      details: {
-        resource: `${collection} for society ${societyId}`,
-        count: data.length,
-      },
-      ipAddress: request.headers.get("x-forwarded-for") || "unknown",
-      userAgent: request.headers.get("user-agent") || "unknown",
-    });
-
     return NextResponse.json({
       success: true,
       data,
@@ -103,31 +63,11 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const validation = validateAdminRequest(request);
+  if (!validation.valid) return validation;
+
   try {
     await connectDB();
-
-    // ✅ Admin JWT validation
-    let token = request.cookies.get("token")?.value;
-    if (!token) {
-      const authHeader = request.headers.get("authorization");
-      if (authHeader?.startsWith("Bearer ")) token = authHeader.substring(7);
-    }
-    if (!token)
-      return NextResponse.json({ error: "No token" }, { status: 401 });
-    let decoded;
-
-    try {
-      decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
-    } catch (error) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    if (decoded.role !== "SuperAdmin") {
-      return NextResponse.json(
-        { error: "SuperAdmin access required" },
-        { status: 403 },
-      );
-    }
 
     const { action, societyId, collection, ids, reason } = await request.json();
 
@@ -171,8 +111,8 @@ export async function POST(request) {
       data: docsToDelete,
       recordCount: docsToDelete.length,
       deletedBy: {
-        userId: decoded.userId,
-        userName: decoded.email,
+        userId: "superadmin",
+        userName: "superadmin",
         role: "SuperAdmin",
       },
       deletionReason: reason,
@@ -187,17 +127,11 @@ export async function POST(request) {
       societyId,
     });
 
-    // Log activity
     await logAdminActivity({
-      adminId: decoded.userId,
-      adminName: decoded.email,
+      adminId: "superadmin",
+      adminName: "superadmin",
       action: "DELETE_DATA",
-      details: {
-        collection,
-        societyId,
-        deletedCount: deleteResult.deletedCount,
-        reason,
-      },
+      details: { collection, societyId, deletedCount: deleteResult.deletedCount, reason },
       ipAddress: request.headers.get("x-forwarded-for") || "unknown",
       userAgent: request.headers.get("user-agent") || "unknown",
     });

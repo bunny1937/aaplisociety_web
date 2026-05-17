@@ -107,7 +107,7 @@ const BillSchema = new mongoose.Schema(
 
     importedFrom: {
       type: String,
-      enum: ["Manual", "Excel", "API", "System"],
+      enum: ["Manual", "Excel", "API", "System", "BulkImport"],
       default: "System",
     },
     importBatchId: { type: String }, // ❌ REMOVED: index: true

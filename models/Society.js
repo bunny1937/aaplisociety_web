@@ -205,6 +205,14 @@ const SocietySchema = new mongoose.Schema(
     // Config versioning
     configVersion: { type: Number, default: 1 },
 
+    // Onboarding tracking
+    onboarding: {
+      billHistoryImported: { type: Boolean, default: false },
+      billHistoryImportedAt: { type: Date, default: null },
+      billHistoryPeriods: [{ type: String }], // e.g. ["2025-04", "2025-05", ...]
+      joinPeriodId: { type: String, default: null }, // YYYY-MM when society joined platform
+    },
+
     // Matrix Config
     matrixConfig: {
       L: { type: Number, default: 0 },

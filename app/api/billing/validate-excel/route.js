@@ -8,7 +8,9 @@ import * as XLSX from "xlsx";
 import { calculateMemberCharges } from "../../../../lib/calculate-member-bill";
 import { validateBillRows } from "../../../../utils/excelValidator";
 
-const REQUIRED_COLS = ["Wing", "FlatNo", "Period", "CurrentCharges"];
+// Accepts merged "Wing-FlatNo" (new template) OR separate Wing+FlatNo (legacy)
+const REQUIRED_MERGED = ["Wing-FlatNo", "Period"];
+const REQUIRED_LEGACY = ["Wing", "FlatNo", "Period"];
 
 export async function POST(request) {
   try {
@@ -39,10 +41,13 @@ export async function POST(request) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rawRows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
-    // Skip instruction row (Wing cell starts with ⚠ or both Wing and FlatNo are blank)
-    const dataRows = rawRows.filter(
-      (r) => !String(r.Wing || "").startsWith("⚠") && (String(r.Wing || "").trim() || String(r.FlatNo || "").trim()),
-    );
+    // Skip instruction row (Wing-FlatNo or Wing cell starts with ⚠, or all id columns blank)
+    const dataRows = rawRows.filter((r) => {
+      const wf = String(r["Wing-FlatNo"] || "").trim();
+      const w = String(r.Wing || "").trim();
+      if (wf.startsWith("⚠") || w.startsWith("⚠")) return false;
+      return wf || w || String(r.FlatNo || "").trim();
+    });
 
     const issues = [];
     const seenMembers = new Set();
@@ -81,8 +86,10 @@ export async function POST(request) {
       existingBills.map((b) => b.memberId?.toString()),
     );
 
-    // Check required columns
+    // Check required columns — accept merged "Wing-FlatNo" (new) or separate Wing+FlatNo (legacy)
     const excelCols = Object.keys(dataRows[0] || {});
+    const hasMergedWingFlat = excelCols.includes("Wing-FlatNo");
+    const REQUIRED_COLS = hasMergedWingFlat ? REQUIRED_MERGED : REQUIRED_LEGACY;
     for (const col of REQUIRED_COLS) {
       if (!excelCols.includes(col)) {
         issues.push({
@@ -106,7 +113,16 @@ export async function POST(request) {
     // Detect upload mode: if ALL data rows resolve to members that already have bills → payment-only upload
     const resolvedMemberIds = dataRows
       .map(r => {
-        const key = `${String(r.Wing || "").trim().toLowerCase()}-${String(r.FlatNo || "").trim().toLowerCase()}`;
+        const wf = String(r["Wing-FlatNo"] || "").trim();
+        let key;
+        if (wf) {
+          const dash = wf.indexOf("-");
+          const w = dash > 0 ? wf.slice(0, dash).trim() : wf;
+          const f = dash > 0 ? wf.slice(dash + 1).trim() : "";
+          key = `${w.toLowerCase()}-${f.toLowerCase()}`;
+        } else {
+          key = `${String(r.Wing || "").trim().toLowerCase()}-${String(r.FlatNo || "").trim().toLowerCase()}`;
+        }
         return wingFlatMap[key]?._id.toString();
       })
       .filter(Boolean);
@@ -129,8 +145,17 @@ export async function POST(request) {
       const row = dataRows[i];
       const rowNum = i + 2;
 
-      const wing = String(row.Wing || "").trim();
-      const flatNo = String(row.FlatNo || "").trim();
+      // Support both merged "Wing-FlatNo" and legacy separate Wing/FlatNo columns
+      const wingFlatRaw = String(row["Wing-FlatNo"] || "").trim();
+      let wing, flatNo;
+      if (wingFlatRaw) {
+        const dashIdx = wingFlatRaw.indexOf("-");
+        wing = dashIdx > 0 ? wingFlatRaw.slice(0, dashIdx).trim() : wingFlatRaw;
+        flatNo = dashIdx > 0 ? wingFlatRaw.slice(dashIdx + 1).trim() : "";
+      } else {
+        wing = String(row.Wing || "").trim();
+        flatNo = String(row.FlatNo || "").trim();
+      }
       const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
       const member = wingFlatMap[flatKey];
       const memberId = member?._id.toString();
@@ -142,7 +167,7 @@ export async function POST(request) {
       const excelTotal = parseFloat(row.CurrentCharges ?? row.Total) || 0;
 
       // Skip instruction row
-      if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
+      if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
 
       // Unknown member
       if (!member) {
@@ -194,7 +219,7 @@ export async function POST(request) {
         issues.push({
           row: rowNum,
           type: "warning",
-          message: `Total is negative (${excelTotal}) for ${row.Wing}-${row.FlatNo}`,
+          message: `Total is negative (${excelTotal}) for ${wing}-${flatNo}`,
           fix: "Check if charge amounts are correct. Negative total is unusual.",
         });
       }
@@ -204,7 +229,7 @@ export async function POST(request) {
         issues.push({
           row: rowNum,
           type: "warning",
-          message: `Total is ₹0 for ${row.Wing}-${row.FlatNo}`,
+          message: `Total is ₹0 for ${wing}-${flatNo}`,
           fix: "Verify if this member truly has zero charges this month, or check charge columns.",
         });
       }
@@ -277,7 +302,7 @@ export async function POST(request) {
     const { gridRows, summary: gridSummary } = validateBillRows(dataRows, {
       wingFlatMap,
       billPeriodId,
-      expectedColumns: ["Wing", "FlatNo", "Period"],
+      expectedColumns: hasMergedWingFlat ? ["Wing-FlatNo", "Period"] : ["Wing", "FlatNo", "Period"],
     });
     const gridColumns = Object.keys(dataRows[0] || {});
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/ViewBills.module.css";
@@ -19,6 +19,44 @@ function fmt(n) {
 function fmtDate(d) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function BillPdfTab({ bill }) {
+  const [html, setHtml] = useState(bill.billHtml || null);
+  const [loading, setLoading] = useState(!bill.billHtml);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (bill.billHtml) { setHtml(bill.billHtml); setLoading(false); return; }
+    setLoading(true);
+    fetch(`/api/bills/download?id=${bill._id}`, { credentials: "include" })
+      .then(async (res) => {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("text/html")) return res.text();
+        throw new Error("PDF template — use Print button to download");
+      })
+      .then((h) => { setHtml(h); setLoading(false); })
+      .catch((e) => { setError(e.message); setLoading(false); });
+  }, [bill._id]);
+
+  if (loading) return <div style={{ padding: 60, textAlign: "center", color: "#6b7280" }}>Loading bill...</div>;
+  if (error) return (
+    <div style={{ padding: 40, textAlign: "center" }}>
+      <div style={{ fontSize: 32 }}>📄</div>
+      <p style={{ color: "#6b7280", marginTop: 8 }}>{error}</p>
+    </div>
+  );
+  if (!html) return (
+    <div style={{ padding: 60, textAlign: "center" }}>
+      <div style={{ fontSize: 32 }}>📄</div>
+      <p style={{ color: "#6b7280", marginTop: 8 }}>No bill content. Click Print to regenerate.</p>
+    </div>
+  );
+  return (
+    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
 }
 
 export default function ViewBillsPage() {
@@ -296,17 +334,7 @@ export default function ViewBillsPage() {
 
               {/* BILL PDF TAB */}
               {activeTab === "bill" && (
-                <div style={{ maxWidth: 800, margin: "0 auto" }}>
-                  {viewingBill.billHtml ? (
-                    <div dangerouslySetInnerHTML={{ __html: viewingBill.billHtml }} />
-                  ) : (
-                    <div className={styles.emptyState} style={{ padding: 60 }}>
-                      <div className={styles.emptyIcon}>📄</div>
-                      <h3>No bill PDF stored</h3>
-                      <p>Click Print / Download to regenerate</p>
-                    </div>
-                  )}
-                </div>
+                <BillPdfTab bill={viewingBill} />
               )}
 
               {/* RECEIPTS TAB */}

@@ -37,7 +37,8 @@ export default function AdminLayout({ children }) {
       items: [
         { name: "Ledger", path: "/admin/ledger", icon: "📖" },
         { name: "Payments", path: "/admin/payments", icon: "💳" },
-        { name: "Late Payments", path: "/admin/late-payments", icon: "⚠️" }, // ← NEW
+        { name: "Late Payments", path: "/admin/late-payments", icon: "⚠️" },
+        { name: "Balance Sheet", path: "/admin/balance-sheet", icon: "📊" },
       ],
     },
     {

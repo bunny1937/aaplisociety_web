@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import * as XLSX from "xlsx";
 import styles from "@/styles/ImportBills.module.css";
+import DropZone from "../../../components/DropZone";
 
 export default function ImportBillsPage() {
   const queryClient = useQueryClient();
@@ -173,8 +174,7 @@ export default function ImportBillsPage() {
     },
   });
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
+  const handleFileChange = (selectedFile) => {
     if (!selectedFile) return;
 
     if (!selectedFile.name.match(/\.(xlsx|xls)$/)) {
@@ -223,32 +223,15 @@ export default function ImportBillsPage() {
           </div>
 
           <div className={styles.uploadCard}>
-            <div className={styles.uploadZone}>
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileChange}
-                id="fileInput"
-                style={{ display: "none" }}
-              />
-              <label htmlFor="fileInput" className={styles.uploadLabel}>
-                {file ? (
-                  <>
-                    <div className={styles.fileIcon}>📄</div>
-                    <div className={styles.fileName}>{file.name}</div>
-                    <div className={styles.fileSize}>
-                      {(file.size / 1024).toFixed(2)} KB
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className={styles.uploadIcon}>📤</div>
-                    <div>Click to select Excel file</div>
-                    <div className={styles.uploadHint}>or drag and drop</div>
-                  </>
-                )}
-              </label>
-            </div>
+            <DropZone
+              accept=".xlsx,.xls"
+              file={file}
+              onFile={handleFileChange}
+              onClear={() => setFile(null)}
+              label="Click or drag & drop Bills Excel here"
+              hint=".xlsx or .xls — max 10MB"
+              style={{ marginBottom: "1rem" }}
+            />
 
             <button
               onClick={() => validateMutation.mutate(file)}

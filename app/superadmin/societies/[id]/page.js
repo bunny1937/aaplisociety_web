@@ -13,12 +13,14 @@ export default function SocietyDetail() {
   const queryClient = useQueryClient();
   const societyId = params.id;
 
-  // Check auth
+  // Superadmin auth check via cookie (no localStorage needed)
   useEffect(() => {
-    const token = localStorage.getItem("admin_token");
-    if (!token) {
-      router.push("/admin/login");
-    }
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if ((d.user || d)?.role !== "SuperAdmin") router.push("/superadmin/login");
+      })
+      .catch(() => router.push("/superadmin/login"));
   }, [router]);
 
   // ✅ Fetch society (cached for 5 min)
@@ -89,7 +91,7 @@ export default function SocietyDetail() {
   return (
     <div className={styles.container}>
       <button
-        onClick={() => router.push("/admin/dashboard")}
+        onClick={() => router.push("/superadmin/societies")}
         className={styles.backBtn}
       >
         ← Back to Dashboard

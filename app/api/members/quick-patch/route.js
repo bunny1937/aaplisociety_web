@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
+import BillingHead from "@/models/BillingHead";
+import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import cache from "@/lib/cache";
+import { calculateMemberCharges } from "@/lib/calculate-member-bill";
 
 export async function POST(request) {
   try {
@@ -14,7 +17,7 @@ export async function POST(request) {
     if (decoded.role !== "Admin")
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
-    const { memberId, carpetAreaSqft, parkingSlots } = await request.json();
+    const { memberId, carpetAreaSqft, parkingSlots, recalcBillPeriodId } = await request.json();
     if (!memberId) return NextResponse.json({ error: "memberId required" }, { status: 400 });
 
     const patch = {};
@@ -24,12 +27,59 @@ export async function POST(request) {
     const member = await Member.findOneAndUpdate(
       { _id: memberId, societyId: decoded.societyId },
       { $set: patch },
-      { new: true, projection: { flatNo: 1, wing: 1, ownerName: 1, carpetAreaSqft: 1, parkingSlots: 1 } },
+      { new: true },
     );
 
     if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 });
     await cache.delPattern(`members:list:${decoded.societyId}:*`);
-    return NextResponse.json({ member: member.toObject() });
+
+    let billRecalculated = false;
+    if (recalcBillPeriodId) {
+      const existingBill = await Bill.findOne({
+        memberId,
+        societyId: decoded.societyId,
+        billPeriodId: recalcBillPeriodId,
+        isDeleted: { $ne: true },
+      });
+      if (existingBill) {
+        const heads = await BillingHead.find({
+          societyId: decoded.societyId,
+          isActive: true,
+          isDeleted: false,
+        }).sort({ order: 1 }).lean();
+
+        const { subtotal, breakdown } = calculateMemberCharges(member.toObject(), heads);
+        const newCurrentCharges = parseFloat(subtotal.toFixed(2));
+        const prevPrincipal = parseFloat((existingBill.openingPrincipal || 0).toFixed(2));
+        const prevInterest = parseFloat((existingBill.openingInterest || 0).toFixed(2));
+        const currInt = parseFloat((existingBill.currentInterest ?? existingBill.interestAmount ?? 0).toFixed(2));
+        const newBillPrincipal = parseFloat((prevPrincipal + newCurrentCharges).toFixed(2));
+        const newBillInterest = parseFloat((prevInterest + currInt).toFixed(2));
+        const newTotalBillDue = parseFloat((newBillPrincipal + newBillInterest).toFixed(2));
+        const alreadyPaid = parseFloat((existingBill.amountPaid || 0).toFixed(2));
+        const advApplied = parseFloat((existingBill.advanceApplied || 0).toFixed(2));
+        const newBalance = parseFloat(Math.max(0, newTotalBillDue - alreadyPaid - advApplied).toFixed(2));
+        const newStatus = newBalance <= 0.005 ? "Paid" : alreadyPaid > 0 || advApplied > 0 ? "Partial" : "Unpaid";
+
+        await Bill.findByIdAndUpdate(existingBill._id, {
+          $set: {
+            currentCharges: newCurrentCharges,
+            subtotal: newCurrentCharges,
+            currentBillTotal: newCurrentCharges,
+            billPrincipalBalance: newBillPrincipal,
+            billInterestBalance: newBillInterest,
+            totalBillDue: newTotalBillDue,
+            totalAmount: newTotalBillDue,
+            balanceAmount: newBalance,
+            status: newStatus,
+            charges: new Map(Object.entries(breakdown).map(([k, v]) => [k, parseFloat(v) || 0])),
+          },
+        });
+        billRecalculated = true;
+      }
+    }
+
+    return NextResponse.json({ member: member.toObject(), billRecalculated });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

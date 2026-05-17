@@ -8,9 +8,61 @@ node_modules/
 out/
 build/
 dist/
+BillHistory_*.xlsx
+BulkImport_Template.xlsx
+transactions_*.xlsx
 .vercel
 
 all-changes.txt
 REPO_CONTEXT.txt
 changes.txt
 project-structure.txt
+
+
+AapliSociety.zip
+admin_DEBUG.txt
+auth_DEBUG.txt
+billing-context.txt
+billing-lifecycle-report.html
+billing_DEBUG.txt
+Bills-all (10).xlsx
+bills_2026-05-10T13_04_11.499Z.xlsx
+bills_2026-05-11T19_36_03.114Z.json
+BillTemplate_2026-05 (27).xlsx
+debug.config.js
+DEBUG_SMART.txt
+graph.png
+intro_block_v4 (1).html
+ledger___payments_DEBUG.txt
+lib___models_DEBUG.txt
+megha_may_bill.pdf
+megha_sgr_2flats.xlsx
+megha_sgr_flat504B.xlsx
+memberDashboard_DEBUG.txt
+members_DEBUG.txt
+member_import_template.xlsx
+member_import_template_detailed.xlsx
+migrateusers.js
+new.pdf
+patch-usernames.mjs
+PaymentTemplate_2026-05 (13).xlsx
+PaymentTemplate_2026-05.xlsx
+PaymentTemplate_2026-05_filled.xlsx
+receipts_2026-05-11T19_36_08.292Z.json
+scripts
+shopify-plan-guide.html
+society_DEBUG.txt
+society_upload_template.xlsx
+structure.txt
+superadmin_DEBUG.txt
+temp
+test-billing.js
+test-cache.mjs
+test.bills.json
+test.members.json
+test.receipts.json
+test.transactions.json
+test.users.json
+tests
+transactions_2026-05-11T19_35_56.670Z.json
+~$megha_sgr_2flats.xlsx

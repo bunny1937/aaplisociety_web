@@ -1,14 +1,25 @@
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { verifyToken, getTokenFromRequest } from '@/lib/jwt';
+import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
   try {
-    const token = getTokenFromRequest(request);
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    
-    const decoded = verifyToken(token);
-    if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    // Accept: regular JWT (admin/member cookie) OR superadmin admin_token cookie
+    const apiKey = request.headers.get("x-admin-api-key");
+    const adminToken = request.cookies.get("admin_token")?.value;
+    const regularToken = getTokenFromRequest(request);
+
+    let authorized = false;
+    if (regularToken && verifyToken(regularToken)) {
+      authorized = true;
+    } else if (apiKey === process.env.NEXT_PUBLIC_ADMIN_API_KEY && adminToken) {
+      try {
+        jwt.verify(adminToken, process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET);
+        authorized = true;
+      } catch { /* invalid */ }
+    }
+    if (!authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { credentials } = await request.json();
 

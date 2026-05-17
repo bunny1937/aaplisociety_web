@@ -77,10 +77,18 @@ export async function POST(request) {
       if (!rows.length)
         return NextResponse.json({ error: "Empty file" }, { status: 400 });
 
-      // Validate required columns
+      // Validate required columns — accept merged "Wing-FlatNo" or legacy separate Wing+FlatNo
       const headers = Object.keys(rows[0]);
-      const required = ["Wing", "FlatNo", "AmountPaid", "PaymentDate"];
-      const missing = required.filter((c) => !headers.includes(c));
+      const hasMergedCol = headers.includes("Wing-FlatNo");
+      const hasLegacyCols = headers.includes("Wing") && headers.includes("FlatNo");
+      if (!hasMergedCol && !hasLegacyCols) {
+        return NextResponse.json(
+          { error: "Missing column: Wing-FlatNo (or legacy Wing and FlatNo columns)" },
+          { status: 400 },
+        );
+      }
+      const otherRequired = ["AmountPaid", "PaymentDate"];
+      const missing = otherRequired.filter((c) => !headers.includes(c));
       if (missing.length) {
         return NextResponse.json(
           { error: `Missing columns: ${missing.join(", ")}` },
@@ -123,11 +131,20 @@ export async function POST(request) {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const rowNum = i + 2;
-        const wing = String(row.Wing || "").trim();
-        const flatNo = String(row.FlatNo || "").trim();
+        // Support both merged "Wing-FlatNo" and legacy separate Wing/FlatNo columns
+        const wingFlatRaw = String(row["Wing-FlatNo"] || "").trim();
+        let wing, flatNo;
+        if (wingFlatRaw) {
+          const dashIdx = wingFlatRaw.indexOf("-");
+          wing = dashIdx > 0 ? wingFlatRaw.slice(0, dashIdx).trim() : wingFlatRaw;
+          flatNo = dashIdx > 0 ? wingFlatRaw.slice(dashIdx + 1).trim() : "";
+        } else {
+          wing = String(row.Wing || "").trim();
+          flatNo = String(row.FlatNo || "").trim();
+        }
 
         // Skip instruction row
-        if (wing.startsWith("⚠") || (!wing && !flatNo)) continue;
+        if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
         // Skip rows with no payment
         const _amtRaw = String(row.AmountPaid ?? "").trim();
         if (!_amtRaw) continue;
@@ -229,12 +246,25 @@ export async function POST(request) {
       const batchKey = `${decoded.societyId}-${Date.now()}`;
       staged[batchKey] = { rows: preview, decoded, fileName: file.name };
 
-      // Build per-cell grid for ExcelPreviewGrid
-      // Build bill map keyed by wing-flatno for overpayment detection
+      // Build bill map keyed by wing-flatno for grid validation (overpayment + tamper detection)
       const billMap = new Map();
       for (const p of preview) {
         if (p.status === "Valid") {
-          billMap.set(p.flat.toLowerCase(), { balanceAmount: p.remaining });
+          // Find the bill we fetched to pass tamper-check fields
+          const bill = await Bill.findOne({
+            memberId: p.memberId,
+            societyId: decoded.societyId,
+            billPeriodId: p.billPeriodId,
+            isDeleted: { $ne: true },
+          })
+            .select("totalBillDue openingPrincipal openingInterest balanceAmount")
+            .lean();
+          billMap.set(p.flat.toLowerCase(), {
+            balanceAmount: p.remaining,
+            totalBillDue: bill?.totalBillDue ?? p.billDue,
+            openingPrincipal: bill?.openingPrincipal ?? null,
+            openingInterest: bill?.openingInterest ?? null,
+          });
         }
       }
       const { gridRows, summary: gridSummary } = validatePaymentRows(rows, {

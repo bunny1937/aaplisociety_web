@@ -57,7 +57,8 @@ export async function GET(request) {
       Society.findById(decoded.societyId).lean(),
     ]);
 
-    const dueDate = new Date(year, month - 1, 10).toISOString().split("T")[0];
+    const _dueDayNum = society?.config?.interestAfterDays || 15;
+    const dueDate = `${year}-${String(month).padStart(2, "0")}-${String(_dueDayNum).padStart(2, "0")}`;
 
     const parkingHeads = heads.filter((h) =>
       h.headName?.toLowerCase().includes("parking"),
@@ -70,10 +71,10 @@ export async function GET(request) {
 
         const periodId = `${year}-${String(month).padStart(2, "0")}`;
         const row = {
-          Wing: m.wing || "",
-          FlatNo: m.flatNo || "",
+          "Wing-FlatNo": `${m.wing || ""}-${m.flatNo || ""}`,
           OwnerName: m.ownerName,
           Period: periodId,
+          CurrentCharges: 0, // placeholder — filled after subtotal is computed
         };
 
         // Non-parking heads — apply by calculationType
@@ -115,18 +116,18 @@ export async function GET(request) {
         // Parking — only charge slots this member actually has (skip Stilt)
         for (const slot of m.parkingSlots || []) {
           if (slot.type === "Stilt" || slot.monthlyBilling === false) continue;
-          const vehicleLabel = slot.vehicleType.replace(/-/g, " "); // "Two-Wheeler" → "Two Wheeler"
-          const expectedName = `${slot.type} Parking - ${vehicleLabel}`;
+          const normalize = (s) => s.replace(/-/g, " ").toLowerCase();
+          const slotKey = normalize(`${slot.type} Parking - ${slot.vehicleType}`);
           const matchHead = parkingHeads.find(
-            (h) => h.headName === expectedName,
+            (h) => normalize(h.headName) === slotKey,
           );
           if (!matchHead || matchHead.defaultAmount <= 0) continue;
-          row[expectedName] =
-            (row[expectedName] || 0) + matchHead.defaultAmount;
+          row[matchHead.headName] =
+            (row[matchHead.headName] || 0) + matchHead.defaultAmount;
           subtotal += matchHead.defaultAmount;
         }
 
-        row["CurrentCharges"] = parseFloat(subtotal.toFixed(2));
+        row["CurrentCharges"] = parseFloat(subtotal.toFixed(2)); // overwritten below if bill already exists
 
         const interestRate = parseFloat(society?.config?.interestRate || 0);
         const currentPeriodId = `${year}-${String(month).padStart(2, "0")}`;
@@ -265,6 +266,7 @@ export async function GET(request) {
         row["BillInterest"] = billInterest;
         row["TotalBillDue"] = totalBillDue;
         row["AlreadyPaid"] = alreadyPaid;
+        row["AdvanceCredit"] = advanceCredit;
         row["RemainingDue"] = remainingDue;
         row["AmountPaid"] = "";
         row["PaymentMethod"] = "";
@@ -276,20 +278,20 @@ export async function GET(request) {
 
     const instructions = [
       {
-        Wing: "⚠ DO NOT change Wing, FlatNo, OwnerName, Period columns",
-        FlatNo: "",
-        OwnerName:
-          "Fill AmountPaid + PaymentMethod + PaymentDate to record payments. Leave blank to skip.",
+        "Wing-FlatNo": "⚠ DO NOT change Wing-FlatNo, OwnerName, Period columns",
+        OwnerName: "Fill AmountPaid + PaymentMethod + PaymentDate to record payments. Leave blank to skip.",
         Period: "",
-        OpeningPrincipal: "",
-        OpeningInterest: "",
-        CurrentInterest: "",
-        BillPrincipal: "",
-        BillInterest: "",
-        TotalBillDue: "",
-        AlreadyPaid: "",
-        RemainingDue: "",
-        AmountPaid: "",
+        CurrentCharges: "READ ONLY",
+        OpeningPrincipal: "READ ONLY",
+        OpeningInterest: "READ ONLY",
+        CurrentInterest: "READ ONLY",
+        BillPrincipal: "READ ONLY",
+        BillInterest: "READ ONLY",
+        TotalBillDue: "READ ONLY",
+        AlreadyPaid: "READ ONLY",
+        AdvanceCredit: "READ ONLY",
+        RemainingDue: "READ ONLY",
+        AmountPaid: "← FILL THIS",
         PaymentMethod: "Cash / Cheque / Online / NEFT / UPI",
         PaymentDate: "YYYY-MM-DD",
         Remarks: "",

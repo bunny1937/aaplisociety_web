@@ -20,7 +20,7 @@ export default function SuperAdminLayout({ children }) {
       title: "Super Admin",
       items: [
         { name: "Societies", path: "/superadmin/societies", icon: "🏢" },
-        { name: "Audit Reports", path: "superadmin/audit-reports", icon: "📋" },
+        { name: "Audit Reports", path: "/superadmin/audit-reports", icon: "📋" },
         { name: "Data Browser", path: "/superadmin/data-browser", icon: "🗄️" },
         { name: "Logs", path: "/superadmin/logs", icon: "📜" },
         { name: "Exports", path: "/superadmin/exports", icon: "📦" },

@@ -147,9 +147,7 @@ export async function POST(request) {
           continue;
         }
 
-        // Get previous balance — sort by createdAt only so a same-day Credit
-        // (whose date field = user-supplied payment date = midnight) is never
-        // beaten by an earlier-in-day Debit with a higher time component.
+        // Get recent transactions for page 2
         const previousTransactions = await Transaction.find({
           societyId: decoded.societyId,
           memberId: member._id,
@@ -159,7 +157,7 @@ export async function POST(request) {
           .limit(1)
           .lean();
 
-        const previousBalance =
+        const ledgerBalance =
           previousTransactions.length > 0
             ? previousTransactions[0].balanceAfterTransaction
             : member.openingBalance || 0;
@@ -191,6 +189,15 @@ export async function POST(request) {
             .select("_id")
             .lean(),
         ]);
+
+        // previousBalance: use unpaid bill balances as source of truth (same as get-previous-balances).
+        // Ledger balances are unreliable when advance credit pays a bill without a credit transaction.
+        const unpaidBillsBalance = unpaidBills.reduce((s, b) => s + (b.balanceAmount || 0), 0);
+        const previousBalance = unpaidBillsBalance > 0
+          ? unpaidBillsBalance
+          : anyPriorBill
+            ? 0
+            : ledgerBalance;
 
         // If member has prior bills and all paid → outstanding = 0.
         // Only fall back to member opening balances if no bills ever generated (new member).
@@ -228,7 +235,11 @@ export async function POST(request) {
           newBalance: previousBalance + billData.totalAmount,
           billPeriod,
           billDate: new Date(year, month - 1, 1),
-          dueDate: dueDate ? new Date(dueDate) : new Date(year, month - 1, 10),
+          dueDate: (() => {
+            const d = dueDate || `${year}-${String(month).padStart(2, "0")}-${String(society?.config?.interestAfterDays || 15).padStart(2, "0")}`;
+            const [dy, dm, dd] = d.split("-").map(Number);
+            return new Date(dy, dm - 1, dd, 12, 0, 0);
+          })(),
           unpaidBills,
           recentTransactions:
             billData.recentTransactions || recentTransactions || [],

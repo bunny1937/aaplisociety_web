@@ -1,8 +1,20 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
-import styles from '@/styles/Admin.module.css';
+
+const H = { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY || "" };
+
+async function adminGet(url) {
+  const res = await fetch(url, { credentials: "include", headers: H });
+  if (!res.ok) throw new Error((await res.json()).error || "Request failed");
+  return res.json();
+}
+
+async function adminPost(url, body) {
+  const res = await fetch(url, { method: "POST", credentials: "include", headers: { ...H, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error((await res.json()).error || "Request failed");
+  return res.json();
+}
 
 export default function AdminDataBrowserPage() {
   const [selectedSociety, setSelectedSociety] = useState('');
@@ -10,24 +22,21 @@ export default function AdminDataBrowserPage() {
   const [selectedItems, setSelectedItems] = useState([]);
   const queryClient = useQueryClient();
 
-  // Fetch societies
   const { data: societiesData } = useQuery({
     queryKey: ['admin-societies'],
-    queryFn: () => apiClient.get('/api/admin/societies')
+    queryFn: () => adminGet('/api/admin/societies'),
   });
 
-  // Fetch data for selected society + collection
   const { data: collectionData, isLoading } = useQuery({
     queryKey: ['admin-data', selectedSociety, selectedCollection],
-    queryFn: () => apiClient.get(`/api/admin/data-browser?societyId=${selectedSociety}&collection=${selectedCollection}`),
-    enabled: !!selectedSociety && !!selectedCollection
+    queryFn: () => adminGet(`/api/admin/data-browser?societyId=${selectedSociety}&collection=${selectedCollection}`),
+    enabled: !!selectedSociety && !!selectedCollection,
   });
 
   const data = collectionData?.data || [];
 
-  // Delete with auto-export mutation
   const deleteMutation = useMutation({
-    mutationFn: (payload) => apiClient.post('/api/admin/data-browser', payload),
+    mutationFn: (payload) => adminPost('/api/admin/data-browser', payload),
     onSuccess: (response) => {
       alert(`✅ ${response.deletedCount} items deleted. Exported to Archive for 90 days.`);
       setSelectedItems([]);
@@ -76,26 +85,32 @@ export default function AdminDataBrowserPage() {
     }
   };
 
+  const statusColors = {
+    paid: { background: "#10b98122", color: "#10b981" },
+    unpaid: { background: "#ef444422", color: "#ef4444" },
+    partial: { background: "#f59e0b22", color: "#f59e0b" },
+  };
+
   return (
-    <div className={styles.adminContainer}>
-      <div className={styles.pageHeader}>
+    <div style={{ padding: "2rem", maxWidth: 1300, margin: "0 auto", color: "#f0f0f0" }}>
+      <div style={{ marginBottom: "1.5rem" }}>
         <div>
-          <h1 className={styles.pageTitle}>Data Browser</h1>
-          <p className={styles.pageSubtitle}>View and manage all society data with export-before-delete protection</p>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>Data Browser</h1>
+          <p style={{ color: "#6b7280", fontSize: "0.85rem", marginTop: 4 }}>View and manage all society data with export-before-delete protection</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className={styles.browserControls}>
-        <div className={styles.controlGroup}>
-          <label>Society</label>
-          <select 
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
+          <label style={{ color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600 }}>Society</label>
+          <select
             value={selectedSociety}
             onChange={(e) => {
               setSelectedSociety(e.target.value);
               setSelectedItems([]);
             }}
-            className={styles.controlSelect}
+            style={{ padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #374151", background: "#1f2937", color: "#f0f0f0" }}
           >
             <option value="">-- Select Society --</option>
             {societiesData?.societies?.map(s => (
@@ -104,15 +119,15 @@ export default function AdminDataBrowserPage() {
           </select>
         </div>
 
-        <div className={styles.controlGroup}>
-          <label>Collection</label>
-          <select 
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
+          <label style={{ color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600 }}>Collection</label>
+          <select
             value={selectedCollection}
             onChange={(e) => {
               setSelectedCollection(e.target.value);
               setSelectedItems([]);
             }}
-            className={styles.controlSelect}
+            style={{ padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #374151", background: "#1f2937", color: "#f0f0f0" }}
           >
             <option value="bills">Bills</option>
             <option value="members">Members</option>
@@ -121,12 +136,12 @@ export default function AdminDataBrowserPage() {
           </select>
         </div>
 
-        <div className={styles.controlGroup}>
-          <label>&nbsp;</label>
-          <button 
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
+          <label style={{ color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600 }}>&nbsp;</label>
+          <button
             onClick={handleDelete}
             disabled={selectedItems.length === 0 || deleteMutation.isPending}
-            className={styles.deleteButton}
+            style={{ padding: "0.6rem 1.25rem", borderRadius: 6, border: "none", background: selectedItems.length > 0 ? "#dc2626" : "#374151", color: "#fff", fontWeight: 700, cursor: selectedItems.length > 0 ? "pointer" : "not-allowed" }}
           >
             {deleteMutation.isPending ? 'Deleting...' : `🗑️ Delete Selected (${selectedItems.length})`}
           </button>
@@ -135,7 +150,7 @@ export default function AdminDataBrowserPage() {
 
       {/* Info Box */}
       {selectedSociety && (
-        <div className={styles.infoBox}>
+        <div style={{ background: "#0a2010", border: "1px solid #065f46", borderRadius: 8, padding: "1rem 1.25rem", marginBottom: "1.25rem", fontSize: "0.82rem", color: "#6ee7b7" }}>
           <h4>🔒 Export-Before-Delete Protection Active</h4>
           <ul>
             <li>✅ All deleted data is automatically exported to Archive collection</li>
@@ -148,110 +163,121 @@ export default function AdminDataBrowserPage() {
 
       {/* Data Table */}
       {isLoading ? (
-        <div className={styles.loading}>Loading data...</div>
+        <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>Loading data...</div>
       ) : selectedSociety && data.length > 0 ? (
-        <div className={styles.tableCard}>
-          <div className={styles.tableHeader}>
+        <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #1f2937", display: "flex", justifyContent: "space-between", alignItems: "center", color: "#9ca3af", fontSize: "0.85rem" }}>
             <div>
               <strong>{data.length}</strong> records found
             </div>
-            <button onClick={toggleSelectAll} className={styles.btnSmall}>
+            <button onClick={toggleSelectAll} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #374151", background: "none", color: "#9ca3af", cursor: "pointer", fontSize: "0.8rem" }}>
               {selectedItems.length === data.length ? '☐ Deselect All' : '☑ Select All'}
             </button>
           </div>
 
-          <table className={styles.adminTable}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
             <thead>
-              <tr>
-                <th style={{width: '50px'}}>
-                  <input 
+              <tr style={{ background: "#0f172a" }}>
+                <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937", width: 50 }}>
+                  <input
                     type="checkbox"
                     checked={selectedItems.length === data.length && data.length > 0}
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th>ID</th>
+                <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>ID</th>
                 {selectedCollection === 'bills' && (
                   <>
-                    <th>Member</th>
-                    <th>Period</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Created</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Member</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Period</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Amount</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Status</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Created</th>
                   </>
                 )}
                 {selectedCollection === 'members' && (
                   <>
-                    <th>Name</th>
-                    <th>Flat</th>
-                    <th>Contact</th>
-                    <th>Area</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Name</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Flat</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Contact</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Area</th>
                   </>
                 )}
                 {selectedCollection === 'transactions' && (
                   <>
-                    <th>Member</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Date</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Member</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Type</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Amount</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Date</th>
                   </>
                 )}
                 {selectedCollection === 'billingheads' && (
                   <>
-                    <th>Name</th>
-                    <th>Calculation Type</th>
-                    <th>Default Amount</th>
-                    <th>Active</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Name</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Calculation Type</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Default Amount</th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Active</th>
                   </>
                 )}
               </tr>
             </thead>
             <tbody>
-              {data.map(item => (
-                <tr key={item._id} className={selectedItems.includes(item._id) ? styles.selectedRow : ''}>
-                  <td>
-                    <input 
+              {data.map((item, i) => (
+                <tr
+                  key={item._id}
+                  style={{
+                    background: i % 2 === 0 ? "#111827" : "#0f172a",
+                    borderBottom: "1px solid #1a2234",
+                    ...(selectedItems.includes(item._id) ? { border: "1px solid #3b82f6" } : {}),
+                  }}
+                >
+                  <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>
+                    <input
                       type="checkbox"
                       checked={selectedItems.includes(item._id)}
                       onChange={() => toggleItem(item._id)}
                     />
                   </td>
-                  <td className={styles.idCell}>{item._id}</td>
-                  
+                  <td style={{ padding: "7px 12px", color: "#475569", fontFamily: "monospace", fontSize: "0.72rem", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{item._id}</td>
+
                   {selectedCollection === 'bills' && (
                     <>
-                      <td>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
-                      <td>{item.billPeriodId}</td>
-                      <td>₹{item.totalAmount}</td>
-                      <td><span className={`${styles.statusBadge} ${styles[item.status?.toLowerCase()]}`}>{item.status}</span></td>
-                      <td>{new Date(item.createdAt).toLocaleDateString('en-IN')}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.billPeriodId}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>₹{item.totalAmount}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>
+                        <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: "0.75rem", fontWeight: 700, ...statusColors[item.status?.toLowerCase()] }}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{new Date(item.createdAt).toLocaleDateString('en-IN')}</td>
                     </>
                   )}
-                  
+
                   {selectedCollection === 'members' && (
                     <>
-                      <td>{item.ownerName}</td>
-                      <td>{item.wing}-{item.roomNo}</td>
-                      <td>{item.contact}</td>
-                      <td>{item.areaSqFt} sq ft</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.ownerName}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.wing}-{item.roomNo}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.contact}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.areaSqFt} sq ft</td>
                     </>
                   )}
-                  
+
                   {selectedCollection === 'transactions' && (
                     <>
-                      <td>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
-                      <td>{item.type}</td>
-                      <td>₹{item.amount}</td>
-                      <td>{new Date(item.date).toLocaleDateString('en-IN')}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.type}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>₹{item.amount}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{new Date(item.date).toLocaleDateString('en-IN')}</td>
                     </>
                   )}
-                  
+
                   {selectedCollection === 'billingheads' && (
                     <>
-                      <td>{item.headName}</td>
-                      <td>{item.calculationType}</td>
-                      <td>₹{item.defaultAmount}</td>
-                      <td>{item.isActive ? '✅' : '❌'}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.headName}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.calculationType}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>₹{item.defaultAmount}</td>
+                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.isActive ? '✅' : '❌'}</td>
                     </>
                   )}
                 </tr>
@@ -260,11 +286,11 @@ export default function AdminDataBrowserPage() {
           </table>
         </div>
       ) : selectedSociety ? (
-        <div className={styles.emptyState}>
+        <div style={{ padding: "4rem", textAlign: "center", color: "#374151", border: "2px dashed #1f2937", borderRadius: 10, margin: "1rem 0" }}>
           <p>No data found in this collection</p>
         </div>
       ) : (
-        <div className={styles.emptyState}>
+        <div style={{ padding: "4rem", textAlign: "center", color: "#374151", border: "2px dashed #1f2937", borderRadius: 10, margin: "1rem 0" }}>
           <p>👆 Select a society to view data</p>
         </div>
       )}

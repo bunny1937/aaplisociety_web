@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import DropZone from "../../../components/DropZone";
 
 // Helper: compute required audit window for display
 function getAuditWindow(joinMonth, joinYear) {
@@ -273,10 +274,13 @@ export default function AuditPage() {
           PreviousBalance, InterestDue, GrandTotal, and all active billing head
           columns.
         </p>
-        <input
-          type="file"
+        <DropZone
           accept=".xlsx"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          file={file}
+          onFile={setFile}
+          onClear={() => setFile(null)}
+          label="Click or drag & drop Audit Excel here"
+          hint=".xlsx only"
           style={{ marginBottom: "1rem" }}
         />
         {file && (

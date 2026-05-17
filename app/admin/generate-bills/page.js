@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/GenerateBills.module.css";
 import ExcelPreviewGrid from "../../components/ExcelPreviewGrid";
-
+import DropZone from "components/DropZone";
 // ─── Pure billing engine functions (client-safe, no DB/React imports) ────────
 
 function buildParkingRates(heads) {
@@ -13,7 +13,9 @@ function buildParkingRates(heads) {
   heads.forEach((h) => {
     const hLower = h.headName?.trim().toLowerCase() || "";
     if (!hLower.includes("parking")) return;
-    const typeMatch = ["covered", "open", "stilt"].find((t) => hLower.includes(t));
+    const typeMatch = ["covered", "open", "stilt"].find((t) =>
+      hLower.includes(t),
+    );
     const vehicleMatch = hLower.includes("four")
       ? "Four-Wheeler"
       : hLower.includes("two")
@@ -47,7 +49,10 @@ function computeCurrentCharges(member, heads, parkingRates, serviceTaxRate) {
     } else {
       amount = head.defaultAmount;
     }
-    charges.push({ name: head.headName, amount: parseFloat(amount.toFixed(2)) });
+    charges.push({
+      name: head.headName,
+      amount: parseFloat(amount.toFixed(2)),
+    });
     subtotal += amount;
   }
 
@@ -83,12 +88,24 @@ function computeMonthlyInterest(principalOutstanding, annualRate) {
   return parseFloat(((principalOutstanding * annualRate) / 1200).toFixed(2));
 }
 
-function computeBillTotal({ principalOutstanding, interestOutstanding, currInt, currentBillTotal, advanceCredit }) {
-  const billPrincipal = parseFloat((principalOutstanding + currentBillTotal).toFixed(2));
+function computeBillTotal({
+  principalOutstanding,
+  interestOutstanding,
+  currInt,
+  currentBillTotal,
+  advanceCredit,
+}) {
+  const billPrincipal = parseFloat(
+    (principalOutstanding + currentBillTotal).toFixed(2),
+  );
   const billInterest = parseFloat((interestOutstanding + currInt).toFixed(2));
   const totalBillDue = parseFloat((billPrincipal + billInterest).toFixed(2));
-  const advApplied = parseFloat(Math.min(advanceCredit, totalBillDue).toFixed(2));
-  const grandTotal = parseFloat(Math.max(0, totalBillDue - advApplied).toFixed(2));
+  const advApplied = parseFloat(
+    Math.min(advanceCredit, totalBillDue).toFixed(2),
+  );
+  const grandTotal = parseFloat(
+    Math.max(0, totalBillDue - advApplied).toFixed(2),
+  );
   return { billPrincipal, billInterest, totalBillDue, advApplied, grandTotal };
 }
 
@@ -97,13 +114,14 @@ function computeBillTotal({ principalOutstanding, interestOutstanding, currInt, 
 const SLOT_TYPES = ["Open", "Covered", "Stilt"];
 const VEHICLE_TYPES = ["Two-Wheeler", "Four-Wheeler"];
 
-function TestConfigPanel({ members, onSaved }) {
+function TestConfigPanel({ members, periodLabel, onSaved }) {
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [carpetArea, setCarpetArea] = useState("");
   const [slots, setSlots] = useState([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [applyTo, setApplyTo] = useState("next"); // "next" | "current"
 
   const activeMem = (members || []).filter((m) => !m.isDeleted);
 
@@ -126,7 +144,12 @@ function TestConfigPanel({ members, onSaved }) {
   function addSlot() {
     setSlots((prev) => [
       ...prev,
-      { slotNumber: "", type: "Open", vehicleType: "Two-Wheeler", monthlyBilling: true },
+      {
+        slotNumber: "",
+        type: "Open",
+        vehicleType: "Two-Wheeler",
+        monthlyBilling: true,
+      },
     ]);
   }
 
@@ -158,11 +181,13 @@ function TestConfigPanel({ members, onSaved }) {
           memberId: selectedId,
           carpetAreaSqft: carpetArea !== "" ? Number(carpetArea) : undefined,
           parkingSlots: slots,
+          recalcBillPeriodId: applyTo === "current" && periodLabel ? periodLabel : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
-      setMsg(`✅ Saved: ${data.member.wing}-${data.member.flatNo}`);
+      const recalcNote = data.billRecalculated ? ` · Bill ${periodLabel} updated` : "";
+      setMsg(`✅ Saved: ${data.member.wing}-${data.member.flatNo}${recalcNote}`);
       onSaved?.();
     } catch (e) {
       setMsg(`❌ ${e.message}`);
@@ -201,14 +226,38 @@ function TestConfigPanel({ members, onSaved }) {
         🧪 Test Config Panel — edit member parking &amp; carpet area instantly
       </button>
       {open && (
-        <div style={{ padding: "1rem 1.25rem", borderTop: "1px dashed #f59e0b" }}>
-          <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "1rem" }}>
+        <div
+          style={{ padding: "1rem 1.25rem", borderTop: "1px dashed #f59e0b" }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: "1rem",
+              alignItems: "flex-end",
+              flexWrap: "wrap",
+              marginBottom: "1rem",
+            }}
+          >
             <div>
-              <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 4 }}>Member</label>
+              <label
+                style={{
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  display: "block",
+                  marginBottom: 4,
+                }}
+              >
+                Member
+              </label>
               <select
                 value={selectedId}
                 onChange={(e) => loadMember(e.target.value)}
-                style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d97706", minWidth: 180 }}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  border: "1px solid #d97706",
+                  minWidth: 180,
+                }}
               >
                 <option value="">-- select --</option>
                 {activeMem.map((m) => (
@@ -220,12 +269,26 @@ function TestConfigPanel({ members, onSaved }) {
             </div>
             {selectedId && (
               <div>
-                <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 4 }}>Carpet Area (sqft)</label>
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Carpet Area (sqft)
+                </label>
                 <input
                   type="number"
                   value={carpetArea}
                   onChange={(e) => setCarpetArea(e.target.value)}
-                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d97706", width: 120 }}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    border: "1px solid #d97706",
+                    width: 120,
+                  }}
                 />
               </div>
             )}
@@ -233,11 +296,26 @@ function TestConfigPanel({ members, onSaved }) {
 
           {selectedId && (
             <>
-              <div style={{ marginBottom: "0.5rem", fontWeight: 600, fontSize: "0.85rem", color: "#78350f" }}>
+              <div
+                style={{
+                  marginBottom: "0.5rem",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  color: "#78350f",
+                }}
+              >
                 Parking Slots
               </div>
               {slots.length === 0 && (
-                <div style={{ fontSize: "0.8rem", color: "#92400e", marginBottom: "0.5rem" }}>No slots</div>
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#92400e",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  No slots
+                </div>
               )}
               {slots.map((s, i) => (
                 <div
@@ -257,53 +335,135 @@ function TestConfigPanel({ members, onSaved }) {
                     placeholder="Slot#"
                     value={s.slotNumber}
                     onChange={(e) => patchSlot(i, "slotNumber", e.target.value)}
-                    style={{ width: 70, padding: "4px 6px", borderRadius: 4, border: "1px solid #d97706" }}
+                    style={{
+                      width: 70,
+                      padding: "4px 6px",
+                      borderRadius: 4,
+                      border: "1px solid #d97706",
+                    }}
                   />
                   <select
                     value={s.type}
                     onChange={(e) => patchSlot(i, "type", e.target.value)}
-                    style={{ padding: "4px 6px", borderRadius: 4, border: "1px solid #d97706" }}
+                    style={{
+                      padding: "4px 6px",
+                      borderRadius: 4,
+                      border: "1px solid #d97706",
+                    }}
                   >
-                    {SLOT_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    {SLOT_TYPES.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
                   </select>
                   <select
                     value={s.vehicleType}
-                    onChange={(e) => patchSlot(i, "vehicleType", e.target.value)}
-                    style={{ padding: "4px 6px", borderRadius: 4, border: "1px solid #d97706" }}
+                    onChange={(e) =>
+                      patchSlot(i, "vehicleType", e.target.value)
+                    }
+                    style={{
+                      padding: "4px 6px",
+                      borderRadius: 4,
+                      border: "1px solid #d97706",
+                    }}
                   >
-                    {VEHICLE_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    {VEHICLE_TYPES.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
                   </select>
-                  <label style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: 4 }}>
+                  <label
+                    style={{
+                      fontSize: "0.78rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={s.monthlyBilling}
-                      onChange={(e) => patchSlot(i, "monthlyBilling", e.target.checked)}
+                      onChange={(e) =>
+                        patchSlot(i, "monthlyBilling", e.target.checked)
+                      }
                     />
                     Bill monthly
                   </label>
                   <button
                     onClick={() => removeSlot(i)}
-                    style={{ background: "#ef4444", color: "#fff", border: "none", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: "0.75rem" }}
+                    style={{
+                      background: "#ef4444",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                      cursor: "pointer",
+                      fontSize: "0.75rem",
+                    }}
                   >
                     ✕
                   </button>
                 </div>
               ))}
-              <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem", alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.75rem",
+                  marginTop: "0.5rem",
+                  alignItems: "center",
+                }}
+              >
                 <button
                   onClick={addSlot}
-                  style={{ background: "#f59e0b", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
+                  style={{
+                    background: "#f59e0b",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "6px 14px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
                 >
                   + Add Slot
                 </button>
-                <button
-                  onClick={save}
-                  disabled={saving}
-                  style={{ background: "#059669", color: "#fff", border: "none", borderRadius: 6, padding: "6px 18px", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
-                >
-                  {saving ? "Saving…" : "💾 Save"}
-                </button>
-                {msg && <span style={{ fontSize: "0.85rem", color: msg.startsWith("✅") ? "#065f46" : "#991b1b" }}>{msg}</span>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", gap: 8, fontSize: "0.8rem", color: "#92400e" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                      <input type="radio" name="applyTo" value="next" checked={applyTo === "next"} onChange={() => setApplyTo("next")} />
+                      Apply from next month
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                      <input type="radio" name="applyTo" value="current" checked={applyTo === "current"} onChange={() => setApplyTo("current")} />
+                      Apply to current month ({periodLabel || "…"})
+                    </label>
+                  </div>
+                  <button
+                    onClick={save}
+                    disabled={saving}
+                    style={{
+                      background: "#059669",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "6px 18px",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {saving ? "Saving…" : "💾 Save"}
+                  </button>
+                </div>
+                {msg && (
+                  <span
+                    style={{
+                      fontSize: "0.85rem",
+                      color: msg.startsWith("✅") ? "#065f46" : "#991b1b",
+                    }}
+                  >
+                    {msg}
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -316,13 +476,8 @@ function TestConfigPanel({ members, onSaved }) {
 export default function GenerateBillsPage() {
   const queryClient = useQueryClient();
 
-  const NOW = new Date();
-  const CUR_MONTH = NOW.getMonth(); // actual current month for disabling past options
-  const CUR_YEAR = NOW.getFullYear();
-  const _nextMonth = new Date();
-  _nextMonth.setMonth(_nextMonth.getMonth() + 1); // handles Dec->Jan rollover automatically
-  const [billMonth, setBillMonth] = useState(_nextMonth.getMonth()); // 0-indexed: May = 4
-  const [billYear, setBillYear] = useState(_nextMonth.getFullYear()); // bumps year if Dec->Jan
+  const [billMonth, setBillMonth] = useState(null); // 0-indexed, null until auto-detected
+  const [billYear, setBillYear] = useState(null);
 
   // Flow 1: Bill Generation
   const [showPreview, setShowPreview] = useState(false);
@@ -361,7 +516,7 @@ export default function GenerateBillsPage() {
   const canGenerate = !excelImporting && allDiffsApproved;
 
   const runValidation = async (file) => {
-    if (!file) return;
+    if (!file || billMonth === null || billYear === null) return;
     setExcelValidating(true);
     setExcelValidation(null);
     setBillGrid(null);
@@ -392,9 +547,43 @@ export default function GenerateBillsPage() {
     queryKey: ["society-config"],
     queryFn: () => apiClient.get("/api/society/config"),
   });
+
+  const { data: latestPeriodData, isLoading: latestPeriodLoading } = useQuery({
+    queryKey: ["latest-period"],
+    queryFn: () => apiClient.get("/api/bills/latest-period"),
+    staleTime: 30000,
+  });
+
+  // Auto-detect billing period on load
   useEffect(() => {
-    setBillsGeneratedForPeriod(null);
-  }, [billMonth, billYear]);
+    if (!latestPeriodData || billMonth !== null) return;
+    const {
+      latestPeriodId,
+      currentPeriodId,
+      currentGenerated,
+      allPaid,
+      nextPeriodId,
+    } = latestPeriodData;
+
+    let targetPeriod;
+    if (!latestPeriodId) {
+      // No bills ever — generate current month
+      targetPeriod = currentPeriodId;
+    } else if (!currentGenerated) {
+      // Nothing generated yet for current month
+      targetPeriod = currentPeriodId;
+    } else if (allPaid) {
+      // Latest period fully paid — move to next period for generation
+      targetPeriod = nextPeriodId || latestPeriodId;
+    } else {
+      // Latest period generated but payments pending — stay on it for payment collection
+      targetPeriod = latestPeriodId;
+    }
+
+    const [y, m] = targetPeriod.split("-").map(Number);
+    setBillYear(y);
+    setBillMonth(m - 1); // convert to 0-indexed
+  }, [latestPeriodData, billMonth]);
 
   const { data: membersData } = useQuery({
     queryKey: ["members-list"],
@@ -412,9 +601,13 @@ export default function GenerateBillsPage() {
   });
 
   const allMembers = membersData?.members || [];
-  const periodLabel = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
+  const periodLabel =
+    billMonth !== null && billYear
+      ? `${billYear}-${String(billMonth + 1).padStart(2, "0")}`
+      : "...";
 
   const generatePreview = async () => {
+    if (billMonth === null || billYear === null) return;
     const members = allMembers.filter((m) => !m.isDeleted);
     setIsPreviewing(true);
     setPreviewProgress({ current: 0, total: members.length });
@@ -474,12 +667,20 @@ export default function GenerateBillsPage() {
         const currInt = computeMonthlyInterest(principalBase, interestRate);
         const interestAmount = parseFloat((remInt + currInt).toFixed(2));
 
-        const { charges: activeCharges, subtotal, serviceTax, currentBillTotal } =
-          computeCurrentCharges(member, heads, parkingRates, serviceTaxRate);
+        const {
+          charges: activeCharges,
+          subtotal,
+          serviceTax,
+          currentBillTotal,
+        } = computeCurrentCharges(member, heads, parkingRates, serviceTaxRate);
 
         const memberParkingCharges = (member.parkingSlots || [])
           .filter((s) => s.type !== "Stilt" && s.monthlyBilling !== false)
-          .reduce((sum, slot) => sum + (parkingRates[`${slot.type}-${slot.vehicleType}`] ?? 0), 0);
+          .reduce(
+            (sum, slot) =>
+              sum + (parkingRates[`${slot.type}-${slot.vehicleType}`] ?? 0),
+            0,
+          );
 
         const advanceCredit = prevData.advanceCredit || 0;
         const { grandTotal: grandTotalRounded } = computeBillTotal({
@@ -544,13 +745,8 @@ export default function GenerateBillsPage() {
     const nextYear = nextDate.getFullYear();
     const nextPeriodLabel = `${nextYear}-${String(nextMonth + 1).padStart(2, "0")}`;
     const currentPeriodLabel = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
-    const nextDueDate = new Date(
-      nextYear,
-      nextMonth + 1,
-      societyData?.society?.config?.billDueDay || 10,
-    )
-      .toISOString()
-      .split("T")[0];
+    const _nextDueDay = societyData?.society?.config?.interestAfterDays || 15;
+    const nextDueDate = `${nextYear}-${String(nextMonth + 1).padStart(2, "0")}-${String(_nextDueDay).padStart(2, "0")}`;
 
     setAutoGenState({
       status: "running",
@@ -560,37 +756,54 @@ export default function GenerateBillsPage() {
     });
 
     try {
-      // Guard: check current period has payment upload done before generating next month
-      const members = allMembers.filter((m) => !m.isDeleted);
-      const checkRes = await apiClient.post("/api/bills/get-previous-balances", {
-        memberIds: members.map((m) => m._id).filter(Boolean),
-        billMonth: billMonth + 1,
-        billYear,
-        billDate: `${billYear}-${String(billMonth + 1).padStart(2, "0")}-01T00:00:00.000Z`,
-      });
+      // Fetch fresh member data — user may have changed carpetArea/parking after page load
+      const freshMembersRes = await apiClient.get("/api/members/list");
+      queryClient.setQueryData(["members-list"], freshMembersRes);
+      const members = (freshMembersRes?.members || []).filter((m) => !m.isDeleted);
+      const checkRes = await apiClient.post(
+        "/api/bills/get-previous-balances",
+        {
+          memberIds: members.map((m) => m._id).filter(Boolean),
+          billMonth: billMonth + 1,
+          billYear,
+          billDate: `${billYear}-${String(billMonth + 1).padStart(2, "0")}-01T00:00:00.000Z`,
+        },
+      );
       const balances = checkRes.balances || {};
       const unpaidMembers = Object.values(balances).filter(
-        (b) => (b.unpaidBills || []).reduce((s, u) => s + (u.balanceAmount || 0), 0) > 0.005
+        (b) =>
+          (b.unpaidBills || []).reduce(
+            (s, u) => s + (u.balanceAmount || 0),
+            0,
+          ) > 0.005,
       );
       const unpaidCount = unpaidMembers.length;
       if (unpaidCount > 0) {
-        const memberLines = unpaidMembers.map((b) => {
-          const bill = b.unpaidBills[0];
-          return `  • Member has Rs ${b.unpaidBills.reduce((s, u) => s + (u.balanceAmount || 0), 0).toFixed(2)} pending since ${b.unpaidBills.map(u => u.billPeriodId).join(", ")}`;
-        }).join("\n");
+        const memberLines = unpaidMembers
+          .map((b) => {
+            const bill = b.unpaidBills[0];
+            return `  • Member has Rs ${b.unpaidBills.reduce((s, u) => s + (u.balanceAmount || 0), 0).toFixed(2)} pending since ${b.unpaidBills.map((u) => u.billPeriodId).join(", ")}`;
+          })
+          .join("\n");
         const proceed = window.confirm(
           `${unpaidCount} member(s) have not fully paid their previous bills:\n\n${memberLines}\n\n` +
-          `Their unpaid amount will be carried forward into ${nextPeriodLabel} bills and interest will be added.\n\n` +
-          `OK = Generate ${nextPeriodLabel} bills now\nCancel = Go back and collect pending payments first`
+            `Their unpaid amount will be carried forward into ${nextPeriodLabel} bills and interest will be added.\n\n` +
+            `OK = Generate ${nextPeriodLabel} bills now\nCancel = Go back and collect pending payments first`,
         );
         if (!proceed) {
           setAutoGenState(null);
           return;
         }
       }
-      const society = societyData?.society || {};
+      const [freshSocietyRes, freshHeadsRes] = await Promise.all([
+        apiClient.get("/api/society/config"),
+        apiClient.get("/api/billing-heads/list"),
+      ]);
+      queryClient.setQueryData(["society-config"], freshSocietyRes);
+      queryClient.setQueryData(["billing-heads"], freshHeadsRes);
+      const society = freshSocietyRes?.society || societyData?.society || {};
       const config = society.config || {};
-      const heads = billingHeadsData?.heads || [];
+      const heads = freshHeadsRes?.heads || billingHeadsData?.heads || [];
       const interestRate = parseFloat(config.interestRate) || 0;
       const serviceTaxRate = parseFloat(config.serviceTaxRate) || 0;
       const parkingRates = buildParkingRates(heads);
@@ -668,6 +881,7 @@ export default function GenerateBillsPage() {
       setPayGrid(null);
       setBillsGeneratedForPeriod(nextPeriodLabel);
       queryClient.invalidateQueries(["bills-list"]);
+      queryClient.invalidateQueries(["latest-period"]);
       setAutoGenState({
         status: "done",
         label: nextPeriodLabel,
@@ -695,7 +909,8 @@ export default function GenerateBillsPage() {
         throw new Error("No preview data available");
       }
 
-      const computedDueDate = new Date(billYear, billMonth + 1, societyData?.society?.config?.billDueDay || 10).toISOString().split("T")[0];
+      const _dueDay = societyData?.society?.config?.interestAfterDays || 15;
+      const computedDueDate = `${billYear}-${String(billMonth + 1).padStart(2, "0")}-${String(_dueDay).padStart(2, "0")}`;
 
       const payload = {
         billMonth,
@@ -744,6 +959,7 @@ export default function GenerateBillsPage() {
       setShowPreview(false);
       setBillsGeneratedForPeriod(periodLabel);
       queryClient.invalidateQueries(["bills-list"]);
+      queryClient.invalidateQueries(["latest-period"]);
     },
     onError: (error) => {
       alert("Failed to generate bills: " + error.message);
@@ -891,14 +1107,18 @@ export default function GenerateBillsPage() {
         `
             : ""
         }
-        ${billData.advanceCredit > 0 ? `
+        ${
+          billData.advanceCredit > 0
+            ? `
         <div style="background:#d1fae5;border:2px solid #059669;border-radius:8px;padding:1rem 1.5rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
           <div>
             <div style="font-weight:700;color:#065f46;font-size:0.95rem;">Advance Credit Applied</div>
             <div style="font-size:0.8rem;color:#065f46;margin-top:2px;">Overpayment from previous month adjusted</div>
           </div>
           <div style="font-size:1.5rem;font-weight:700;color:#059669;">- Rs ${billData.advanceCredit.toFixed(2)}</div>
-        </div>` : ""}
+        </div>`
+            : ""
+        }
         <div style="background: #dbeafe; padding: 1.5rem; border-radius: 8px; border: 3px solid #1e40af; margin-bottom: 1rem;">
          <div style="display: flex; justify-content: space-between; align-items: center;">
   <div style="font-size: 1.2rem; font-weight: 700; color: ${billData.grandTotal <= 0 ? "#059669" : "#1e40af"};">
@@ -1271,9 +1491,12 @@ ${
   };
 
   const currentBill = previewData?.[previewIndex];
-  const billTemplateDisabled = billsGeneratedForPeriod === periodLabel;
+  const billTemplateDisabled =
+    billMonth === null ||
+    billYear === null;
 
   const downloadBillTemplate = async () => {
+    if (billMonth === null || billYear === null) return;
     try {
       const memberIdsParam = allMembers.map((m) => m._id).join(",");
       const res = await fetch(
@@ -1302,7 +1525,23 @@ ${
       <div className={styles.header}>
         <div>
           <h1>Generate Bills</h1>
-          <p>Select month, preview bills, then generate and collect payments</p>
+          <p>
+            {latestPeriodLoading
+              ? "Detecting billing period..."
+              : billMonth !== null && billYear
+                ? (() => {
+                    const { currentGenerated, allPaid, latestPeriodId } =
+                      latestPeriodData || {};
+                    if (!latestPeriodId)
+                      return `No bills generated yet — starting with ${periodLabel}`;
+                    if (!currentGenerated)
+                      return `Current period ${periodLabel} not yet generated`;
+                    if (allPaid)
+                      return `Payments collected — ready for ${periodLabel}`;
+                    return `Bills generated for ${latestPeriodId} — collect payments or generate ${periodLabel}`;
+                  })()
+                : "Detecting billing period..."}
+          </p>
         </div>
       </div>
 
@@ -1320,43 +1559,21 @@ ${
             </div>
             <div className={styles.statLabel}>Billing Heads</div>
           </div>
-          <div className={styles.formGrid}>
-            <div className={styles.formGroup}>
-              <label>Bill Month</label>
-              <select
-                value={billMonth}
-                onChange={(e) => setBillMonth(parseInt(e.target.value))}
-                className={styles.select}
-              >
-                {Array.from({ length: 12 }, (_, i) => {
-                  return (
-                    <option key={i} value={i}>
-                      {new Date(2000, i).toLocaleString("default", {
-                        month: "long",
-                      })}
-                    </option>
-                  );
-                })}
-              </select>
+          <div className={styles.statCard}>
+            <div className={styles.statNumber} style={{ fontSize: "1.1rem" }}>
+              {periodLabel}
             </div>
-            <div className={styles.formGroup}>
-              <label>Bill Year</label>
-              <input
-                type="number"
-                value={billYear}
-                onChange={(e) => {
-                  setBillYear(parseInt(e.target.value));
-                }}
-                min={2020}
-                max={2035}
-              />
-            </div>
+            <div className={styles.statLabel}>Active Period</div>
           </div>
         </div>
       )}
 
       {/* ── TEST CONFIG PANEL (temporary) ──────────────────────────────── */}
-      <TestConfigPanel members={allMembers} onSaved={() => queryClient.invalidateQueries(["members-list"])} />
+      <TestConfigPanel
+        members={allMembers}
+        periodLabel={periodLabel}
+        onSaved={() => queryClient.invalidateQueries(["members-list"])}
+      />
 
       {/* UNIFIED TEMPLATE SECTION */}
       <div
@@ -1429,14 +1646,15 @@ ${
                 marginBottom: "1rem",
               }}
             >
-              <strong>Columns:</strong> Wing - FlatNo - OwnerName - Period -{" "}
+              <strong>Columns:</strong> Wing-FlatNo - OwnerName - Period -
+              CurrentCharges -{" "}
               {billingHeadsData?.heads
                 ?.filter((h) => h.isActive && !h.isDeleted)
                 .map((h) => h.headName)
                 .join(" - ")}{" "}
-              - CurrentCharges - OpeningPrincipal - OpeningInterest -
-              CurrentInterest - BillPrincipal - BillInterest - TotalBillDue -
-              AlreadyPaid - RemainingDue - BillStatus -{" "}
+              - OpeningPrincipal - OpeningInterest - CurrentInterest -
+              BillPrincipal - BillInterest - TotalBillDue - AlreadyPaid -
+              AdvanceCredit - RemainingDue -{" "}
               <strong>AmountPaid - PaymentMethod - PaymentDate</strong> -
               Remarks
             </div>
@@ -1509,82 +1727,29 @@ ${
             </p>
 
             {/* File upload */}
-            <div
-              style={{
-                border: "2px dashed #d1d5db",
-                borderRadius: "10px",
-                padding: "2rem",
-                textAlign: "center",
-                background: excelFile ? "#f0fdf4" : "#fafafa",
-                marginBottom: "1rem",
+            <DropZone
+              accept=".xlsx,.xls"
+              file={excelFile}
+              onFile={(f) => {
+                setExcelFile(f);
+                setPayGrid(null);
+                setPayPreview(null);
+                setPayBatchKey(null);
+                runValidation(f);
               }}
-            >
-              {excelFile ? (
-                <div>
-                  <div style={{ fontSize: "2rem" }}>OK</div>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      color: "#374151",
-                      margin: "0.5rem 0 0.25rem",
-                    }}
-                  >
-                    {excelFile.name}
-                  </div>
-                  <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                    {(excelFile.size / 1024).toFixed(1)} KB
-                  </div>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}
-                    onClick={() => {
-                      setExcelFile(null);
-                      setExcelValidation(null);
-                      setBillGrid(null);
-                      setPayGrid(null);
-                      setApprovedDiffs(new Set());
-                      setPayPreview(null);
-                      setPayBatchKey(null);
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <label style={{ cursor: "pointer", display: "block" }}>
-                  <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-                    Open
-                  </div>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.25rem",
-                    }}
-                  >
-                    Click to select Unified Template
-                  </div>
-                  <div style={{ fontSize: "0.8rem", color: "#9ca3af" }}>
-                    .xlsx or .xls - max 5MB
-                  </div>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) {
-                        setExcelFile(f);
-                        setPayGrid(null);
-                        setPayPreview(null);
-                        setPayBatchKey(null);
-                        runValidation(f);
-                      }
-                    }}
-                  />
-                </label>
-              )}
-            </div>
+              onClear={() => {
+                setExcelFile(null);
+                setExcelValidation(null);
+                setBillGrid(null);
+                setPayGrid(null);
+                setApprovedDiffs(new Set());
+                setPayPreview(null);
+                setPayBatchKey(null);
+              }}
+              label="Click or drag & drop Unified Template here"
+              hint=".xlsx or .xls — max 5MB"
+              style={{ marginBottom: "1rem" }}
+            />
 
             {/* Auto-validating spinner */}
             {excelValidating && (
@@ -1611,8 +1776,7 @@ ${
                   setBillGrid(null);
                   setApprovedDiffs(new Set());
                 }}
-                onContinue={(validRows) => {
-                }}
+                onContinue={(validRows) => {}}
                 onCancel={() => {
                   setExcelFile(null);
                   setExcelValidation(null);
@@ -1943,7 +2107,9 @@ ${
                         Generate blocked - approve all{" "}
                         {diffIssues.length - approvedDiffs.size} remaining
                         mismatch
-                        {diffIssues.length - approvedDiffs.size > 1 ? "es" : ""}{" "}
+                        {diffIssues.length - approvedDiffs.size > 1
+                          ? "es"
+                          : ""}{" "}
                         to unlock
                       </div>
                     )}
@@ -2393,14 +2559,13 @@ ${
                       color: "#166534",
                     }}
                   >
-                    {payResults.successRows} succeeded - {payResults.failedRows}{" "}
-                    failed - Total Rs{" "}
-                    {(payResults.totalAmountProcessed || 0).toFixed(2)} -
-                    Interest cleared Rs{" "}
-                    {(payResults.totalInterestCleared || 0).toFixed(2)} -
-                    Principal cleared Rs{" "}
-                    {(payResults.totalPrincipalCleared || 0).toFixed(2)}
+                    {payResults.successRows} succeeded · {payResults.failedRows} failed · Total ₹{(payResults.totalAmountProcessed || 0).toFixed(2)} · Interest cleared ₹{(payResults.totalInterestCleared || 0).toFixed(2)} · Principal cleared ₹{(payResults.totalPrincipalCleared || 0).toFixed(2)}
                   </div>
+                  {payResults.results?.filter(r => r.status === "Failed").map((r, i) => (
+                    <div key={i} style={{ marginTop: "0.5rem", padding: "0.5rem 0.75rem", background: "#fee2e2", borderRadius: 6, fontSize: "0.8rem", color: "#991b1b" }}>
+                      ❌ {r.flat} ({r.memberName}): {r.errorMessage}
+                    </div>
+                  ))}
                 </div>
                 <div
                   style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}
@@ -2422,7 +2587,9 @@ ${
                   >
                     {autoGenState?.status === "running"
                       ? "Generating..."
-                      : `Auto-Generate ${new Date(billYear, billMonth + 1, 1).toLocaleString("en-IN", { month: "short", year: "numeric" })} Bills`}
+                      : billMonth !== null && billYear
+                        ? `Auto-Generate ${new Date(billYear, billMonth + 1, 1).toLocaleString("en-IN", { month: "short", year: "numeric" })} Bills`
+                        : "Auto-Generate Next Month Bills"}
                   </button>
                   {autoGenState?.status === "done" && (
                     <div

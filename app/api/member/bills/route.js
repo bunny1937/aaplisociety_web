@@ -22,7 +22,8 @@ export async function GET(request) {
       memberId: decoded.memberId,
       societyId: decoded.societyId,
       isDeleted: { $ne: true },
-      status: { $ne: "Scheduled" }, // never expose scheduled bills to members
+      status: { $ne: "Scheduled" },
+      importedFrom: { $ne: "BulkImport" },
     };
     if (status && status !== "all") query.status = status;
 

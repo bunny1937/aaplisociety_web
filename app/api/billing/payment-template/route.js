@@ -120,14 +120,14 @@ export async function GET(request) {
         const remaining = twoDp(
           bill.balanceAmount ?? Math.max(0, totalBillDue - alreadyPaid),
         );
+        const advanceCredit = twoDp(bill.advanceApplied || 0);
 
         const billDueDate = bill.dueDate
           ? new Date(bill.dueDate).toISOString().split("T")[0]
           : dueDate;
         return {
           MemberId: m._id.toString(),
-          Wing: m.wing,
-          FlatNo: m.flatNo,
+          "Wing-FlatNo": `${m.wing}-${m.flatNo}`,
           OwnerName: m.ownerName,
           Month: month,
           Year: year,
@@ -140,6 +140,7 @@ export async function GET(request) {
           BillInterest: billInterest,
           TotalBillDue: totalBillDue,
           AlreadyPaid: alreadyPaid,
+          AdvanceCredit: advanceCredit,
           RemainingDue: remaining,
           AmountPaid: "",
           PaymentMethod: "Cash",
@@ -153,8 +154,7 @@ export async function GET(request) {
       // No bill generated for this period yet
       return {
         MemberId: m._id.toString(),
-        Wing: m.wing,
-        FlatNo: m.flatNo,
+        "Wing-FlatNo": `${m.wing}-${m.flatNo}`,
         OwnerName: m.ownerName,
         Month: month,
         Year: year,
@@ -167,6 +167,7 @@ export async function GET(request) {
         BillInterest: "",
         TotalBillDue: "",
         AlreadyPaid: "",
+        AdvanceCredit: "",
         RemainingDue: "",
         AmountPaid: "",
         PaymentMethod: "Cash",
@@ -179,9 +180,8 @@ export async function GET(request) {
 
     const instructions = [
       {
-        MemberId: "⚠ DO NOT change MemberId, Wing, FlatNo, Month, Year",
-        Wing: "",
-        FlatNo: "",
+        MemberId: "⚠ DO NOT change MemberId, Wing-FlatNo, Month, Year",
+        "Wing-FlatNo": "",
         OwnerName: "Fill AmountPaid, PaymentMethod, PaymentDate, Remarks only",
         Month: "",
         Year: "",
@@ -194,6 +194,7 @@ export async function GET(request) {
         BillInterest: "READ ONLY",
         TotalBillDue: "READ ONLY",
         AlreadyPaid: "READ ONLY",
+        AdvanceCredit: "READ ONLY",
         RemainingDue: "READ ONLY",
         AmountPaid: "← FILL THIS",
         PaymentMethod: "Cash/Cheque/Online/NEFT/UPI",
