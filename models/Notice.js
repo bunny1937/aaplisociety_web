@@ -71,7 +71,7 @@ const NoticeSchema = new mongoose.Schema(
       },
     ],
 
-    expiresAt: { type: Date, index: true },
+    expiresAt: { type: Date },
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },

@@ -60,11 +60,11 @@ export async function GET(request) {
   const priorBills = await Bill.find({
     societyId: sid,
     isDeleted: { $ne: true },
+    status: { $in: ["Unpaid", "Partial", "Overdue"] },
     $or: [
       { billYear: { $lt: fy } },
       { billYear: fy, billMonth: { $lt: 3 } },
     ],
-    status: { $in: ["Unpaid", "Partial", "Overdue"] },
   }).lean();
 
   // Group current FY bills by periodId
@@ -81,6 +81,7 @@ export async function GET(request) {
     const generated = periodBills.length > 0;
     const totalBilled = periodBills.reduce((s, b) => s + (b.totalBillDue || b.totalAmount || 0), 0);
     const totalPaid = periodBills.reduce((s, b) => s + (b.amountPaid || 0), 0);
+    const totalAdvance = periodBills.reduce((s, b) => s + (b.advanceApplied || 0), 0);
     const totalPending = periodBills.reduce((s, b) => s + (b.balanceAmount || 0), 0);
     const totalInterest = periodBills.reduce((s, b) => s + (b.currentInterest || b.interestAmount || 0), 0);
     const totalSinking = periodBills.reduce((s, b) => {
@@ -108,6 +109,7 @@ export async function GET(request) {
       generated, billCount: periodBills.length,
       totalBilled: +totalBilled.toFixed(2),
       totalPaid: +totalPaid.toFixed(2),
+      totalAdvance: +totalAdvance.toFixed(2),
       totalPending: +totalPending.toFixed(2),
       totalInterest: +totalInterest.toFixed(2),
       totalSinking: +totalSinking.toFixed(2),
@@ -132,6 +134,10 @@ export async function GET(request) {
     totalRepair += row.totalRepair;
   }
   const priorPending = priorBills.reduce((s, b) => s + (b.balanceAmount || 0), 0);
+  // Interest still outstanding = unpaid interest on bills not yet fully cleared
+  const interestOutstanding = bills
+    .filter(b => b.status !== "Paid")
+    .reduce((s, b) => s + (b.billInterestBalance ?? b.interestBalance ?? 0), 0);
 
   // ── Closing scenario analysis ──────────────────────────────────────────
   // Find last generated month, last fully-paid month
@@ -191,6 +197,7 @@ export async function GET(request) {
       totalPending: +totalPending.toFixed(2),
       priorPending: +priorPending.toFixed(2),
       totalInterest: +totalInterest.toFixed(2),
+      interestOutstanding: +interestOutstanding.toFixed(2),
       totalSinking: +totalSinking.toFixed(2),
       totalRepair: +totalRepair.toFixed(2),
       billCount: bills.length,

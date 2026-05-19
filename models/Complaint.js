@@ -62,7 +62,7 @@ const ComplaintSchema = new mongoose.Schema(
     reviewedAt: { type: Date },
     replyCount: { type: Number, default: 0 },
     lastReplyAt: { type: Date },
-    expiresAt: { type: Date, index: true },
+    expiresAt: { type: Date },
   },
   { timestamps: true },
 );

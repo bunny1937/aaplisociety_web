@@ -52,7 +52,7 @@ export async function GET(request) {
 
     const [members, society] = await Promise.all([
       Member.find(memberQuery)
-        .select("_id flatNo wing ownerName")
+        .select("_id flatNo wing")
         .sort({ wing: 1, flatNo: 1 })
         .lean(),
       Society.findById(decoded.societyId).select("config").lean(),
@@ -128,7 +128,6 @@ export async function GET(request) {
         return {
           MemberId: m._id.toString(),
           "Wing-FlatNo": `${m.wing}-${m.flatNo}`,
-          OwnerName: m.ownerName,
           Month: month,
           Year: year,
           DueDate: billDueDate,
@@ -155,7 +154,6 @@ export async function GET(request) {
       return {
         MemberId: m._id.toString(),
         "Wing-FlatNo": `${m.wing}-${m.flatNo}`,
-        OwnerName: m.ownerName,
         Month: month,
         Year: year,
         DueDate: dueDate,
@@ -181,8 +179,7 @@ export async function GET(request) {
     const instructions = [
       {
         MemberId: "⚠ DO NOT change MemberId, Wing-FlatNo, Month, Year",
-        "Wing-FlatNo": "",
-        OwnerName: "Fill AmountPaid, PaymentMethod, PaymentDate, Remarks only",
+        "Wing-FlatNo": "Fill AmountPaid, PaymentMethod, PaymentDate, Remarks only",
         Month: "",
         Year: "",
         DueDate: "",

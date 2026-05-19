@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 
 const HEADERS = [
-  "Wing-FlatNo", "OwnerName", "Period",
+  "Wing-FlatNo", "Period",
   "CurrentCharges", "OpeningPrincipal", "OpeningInterest",
   "CurrentInterest", "BillPrincipal", "BillInterest",
   "TotalBillDue", "AlreadyPaid", "AdvanceCredit", "RemainingDue",
@@ -59,7 +59,7 @@ export async function GET(request) {
   await connectDB();
   const sid = mongoose.Types.ObjectId.createFromHexString(societyId);
   const members = await Member.find({ societyId: sid, isDeleted: { $ne: true } })
-    .select("flatNo wing ownerName")
+    .select("flatNo wing")
     .sort({ wing: 1, flatNo: 1 })
     .lean();
 
@@ -92,7 +92,7 @@ export async function GET(request) {
     ...months.map((m, i) => [`Sheet ${i + 2}: ${periodIdFromYM(m.year, m.month0)}`]),
     [""],
     ["Members (Wing-FlatNo):"],
-    ...members.map((m) => [`${m.wing ? m.wing + "-" : ""}${m.flatNo}`, m.ownerName]),
+    ...members.map((m) => [`${m.wing ? m.wing + "-" : ""}${m.flatNo}`]),
   ];
   const instrWs = XLSX.utils.aoa_to_sheet(instrData);
   instrWs["!cols"] = [{ wch: 40 }, { wch: 30 }];
@@ -105,7 +105,7 @@ export async function GET(request) {
     for (const m of members) {
       const wingFlat = m.wing ? `${m.wing}-${m.flatNo}` : m.flatNo;
       const row = [
-        wingFlat, m.ownerName, pid,
+        wingFlat, pid,
         0, 0, 0,  // CurrentCharges, OpeningPrincipal, OpeningInterest
         0, 0, 0,  // CurrentInterest, BillPrincipal, BillInterest
         0, 0, 0, 0, // TotalBillDue, AlreadyPaid, AdvanceCredit, RemainingDue

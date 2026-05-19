@@ -88,8 +88,9 @@ export default function LoginPage() {
     <div className={styles.authContainer}>
       <div className={styles.authCard}>
         <div className={styles.authHeader}>
+          <div className={styles.authLogoMark}>N</div>
           <h1 className={styles.authTitle}>Welcome Back</h1>
-          <p className={styles.authSubtitle}>Sign in to your society account</p>
+          <p className={styles.authSubtitle}>Sign in to NexGen Society ERP</p>
         </div>
 
         <form onSubmit={handleSubmit} autoComplete="off">
@@ -152,7 +153,7 @@ export default function LoginPage() {
             >
               {isLoading ? (
                 <>
-                  <span className="loading-spinner"></span>
+                  <span className="loading-spinner loading-spinner-sm loading-spinner-white" />
                   Signing in...
                 </>
               ) : (

@@ -12,7 +12,9 @@ BillHistory_*.xlsx
 BulkImport_Template.xlsx
 transactions_*.xlsx
 .vercel
-
+.claude
+.agents
+skulls.md
 all-changes.txt
 REPO_CONTEXT.txt
 changes.txt

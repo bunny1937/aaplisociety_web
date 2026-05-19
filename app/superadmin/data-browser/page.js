@@ -92,10 +92,10 @@ export default function AdminDataBrowserPage() {
   };
 
   return (
-    <div style={{ padding: "2rem", maxWidth: 1300, margin: "0 auto", color: "#f0f0f0" }}>
+    <div style={{ padding: 0, maxWidth: 1300, margin: "0 auto", color: "#1f2937" }}>
       <div style={{ marginBottom: "1.5rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>Data Browser</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: "#1f2937" }}>Data Browser</h1>
           <p style={{ color: "#6b7280", fontSize: "0.85rem", marginTop: 4 }}>View and manage all society data with export-before-delete protection</p>
         </div>
       </div>
@@ -103,14 +103,14 @@ export default function AdminDataBrowserPage() {
       {/* Filters */}
       <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
-          <label style={{ color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600 }}>Society</label>
+          <label style={{ color: "#6b7280", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Society</label>
           <select
             value={selectedSociety}
             onChange={(e) => {
               setSelectedSociety(e.target.value);
               setSelectedItems([]);
             }}
-            style={{ padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #374151", background: "#1f2937", color: "#f0f0f0" }}
+            style={{ padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #d1d5db", background: "#ffffff", color: "#1f2937" }}
           >
             <option value="">-- Select Society --</option>
             {societiesData?.societies?.map(s => (
@@ -120,14 +120,14 @@ export default function AdminDataBrowserPage() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
-          <label style={{ color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600 }}>Collection</label>
+          <label style={{ color: "#6b7280", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Collection</label>
           <select
             value={selectedCollection}
             onChange={(e) => {
               setSelectedCollection(e.target.value);
               setSelectedItems([]);
             }}
-            style={{ padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #374151", background: "#1f2937", color: "#f0f0f0" }}
+            style={{ padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #d1d5db", background: "#ffffff", color: "#1f2937" }}
           >
             <option value="bills">Bills</option>
             <option value="members">Members</option>
@@ -137,11 +137,11 @@ export default function AdminDataBrowserPage() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
-          <label style={{ color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600 }}>&nbsp;</label>
+          <label style={{ color: "#6b7280", fontSize: "12px", fontWeight: 600 }}>&nbsp;</label>
           <button
             onClick={handleDelete}
             disabled={selectedItems.length === 0 || deleteMutation.isPending}
-            style={{ padding: "0.6rem 1.25rem", borderRadius: 6, border: "none", background: selectedItems.length > 0 ? "#dc2626" : "#374151", color: "#fff", fontWeight: 700, cursor: selectedItems.length > 0 ? "pointer" : "not-allowed" }}
+            style={{ padding: "0.6rem 1.25rem", borderRadius: 6, border: "none", background: selectedItems.length > 0 ? "#dc2626" : "#e5e7eb", color: selectedItems.length > 0 ? "#fff" : "#9ca3af", fontWeight: 700, cursor: selectedItems.length > 0 ? "pointer" : "not-allowed" }}
           >
             {deleteMutation.isPending ? 'Deleting...' : `🗑️ Delete Selected (${selectedItems.length})`}
           </button>
@@ -150,7 +150,7 @@ export default function AdminDataBrowserPage() {
 
       {/* Info Box */}
       {selectedSociety && (
-        <div style={{ background: "#0a2010", border: "1px solid #065f46", borderRadius: 8, padding: "1rem 1.25rem", marginBottom: "1.25rem", fontSize: "0.82rem", color: "#6ee7b7" }}>
+        <div style={{ background: "#d1fae5", border: "1px solid #6ee7b7", borderRadius: 8, padding: "1rem 1.25rem", marginBottom: "1.25rem", fontSize: "13px", color: "#065f46" }}>
           <h4>🔒 Export-Before-Delete Protection Active</h4>
           <ul>
             <li>✅ All deleted data is automatically exported to Archive collection</li>
@@ -165,58 +165,58 @@ export default function AdminDataBrowserPage() {
       {isLoading ? (
         <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>Loading data...</div>
       ) : selectedSociety && data.length > 0 ? (
-        <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #1f2937", display: "flex", justifyContent: "space-between", alignItems: "center", color: "#9ca3af", fontSize: "0.85rem" }}>
+        <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center", color: "#6b7280", fontSize: "13px", background: "#f9fafb" }}>
             <div>
-              <strong>{data.length}</strong> records found
+              <strong style={{ color: "#1f2937" }}>{data.length}</strong> records found
             </div>
-            <button onClick={toggleSelectAll} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #374151", background: "none", color: "#9ca3af", cursor: "pointer", fontSize: "0.8rem" }}>
+            <button onClick={toggleSelectAll} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #e5e7eb", background: "none", color: "#6b7280", cursor: "pointer", fontSize: "12px" }}>
               {selectedItems.length === data.length ? '☐ Deselect All' : '☑ Select All'}
             </button>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
-              <tr style={{ background: "#0f172a" }}>
-                <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937", width: 50 }}>
+              <tr style={{ background: "#f9fafb" }}>
+                <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", width: 50 }}>
                   <input
                     type="checkbox"
                     checked={selectedItems.length === data.length && data.length > 0}
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>ID</th>
+                <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>ID</th>
                 {selectedCollection === 'bills' && (
                   <>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Member</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Period</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Amount</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Status</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Created</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Member</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Period</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Amount</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Status</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Created</th>
                   </>
                 )}
                 {selectedCollection === 'members' && (
                   <>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Name</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Flat</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Contact</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Area</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Name</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Flat</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Contact</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Area</th>
                   </>
                 )}
                 {selectedCollection === 'transactions' && (
                   <>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Member</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Type</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Amount</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Date</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Member</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Type</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Amount</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Date</th>
                   </>
                 )}
                 {selectedCollection === 'billingheads' && (
                   <>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Name</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Calculation Type</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Default Amount</th>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937" }}>Active</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Name</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Calculation Type</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Default Amount</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Active</th>
                   </>
                 )}
               </tr>
@@ -226,58 +226,58 @@ export default function AdminDataBrowserPage() {
                 <tr
                   key={item._id}
                   style={{
-                    background: i % 2 === 0 ? "#111827" : "#0f172a",
-                    borderBottom: "1px solid #1a2234",
-                    ...(selectedItems.includes(item._id) ? { border: "1px solid #3b82f6" } : {}),
+                    background: selectedItems.includes(item._id) ? "#dbeafe" : "#ffffff",
+                    borderBottom: "1px solid #f3f4f6",
+                    ...(selectedItems.includes(item._id) ? { outline: "1px solid #1e3a8a" } : {}),
                   }}
                 >
-                  <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>
+                  <td style={{ padding: "10px 12px", color: "#374151" }}>
                     <input
                       type="checkbox"
                       checked={selectedItems.includes(item._id)}
                       onChange={() => toggleItem(item._id)}
                     />
                   </td>
-                  <td style={{ padding: "7px 12px", color: "#475569", fontFamily: "monospace", fontSize: "0.72rem", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{item._id}</td>
+                  <td style={{ padding: "10px 12px", color: "#9ca3af", fontFamily: "monospace", fontSize: "11px", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{item._id}</td>
 
                   {selectedCollection === 'bills' && (
                     <>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.billPeriodId}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>₹{item.totalAmount}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.billPeriodId}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>₹{item.totalAmount}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>
                         <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: "0.75rem", fontWeight: 700, ...statusColors[item.status?.toLowerCase()] }}>
                           {item.status}
                         </span>
                       </td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{new Date(item.createdAt).toLocaleDateString('en-IN')}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{new Date(item.createdAt).toLocaleDateString('en-IN')}</td>
                     </>
                   )}
 
                   {selectedCollection === 'members' && (
                     <>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.ownerName}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.wing}-{item.roomNo}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.contact}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.areaSqFt} sq ft</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.ownerName}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.wing}-{item.roomNo}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.contact}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.areaSqFt} sq ft</td>
                     </>
                   )}
 
                   {selectedCollection === 'transactions' && (
                     <>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.type}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>₹{item.amount}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{new Date(item.date).toLocaleDateString('en-IN')}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.type}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>₹{item.amount}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{new Date(item.date).toLocaleDateString('en-IN')}</td>
                     </>
                   )}
 
                   {selectedCollection === 'billingheads' && (
                     <>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.headName}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.calculationType}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>₹{item.defaultAmount}</td>
-                      <td style={{ padding: "7px 12px", color: "#cbd5e1" }}>{item.isActive ? '✅' : '❌'}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.headName}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.calculationType}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>₹{item.defaultAmount}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.isActive ? '✅' : '❌'}</td>
                     </>
                   )}
                 </tr>

@@ -97,13 +97,11 @@ export default function LatePaymentsPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "2rem" }}>
-      <h1
-        style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem" }}
-      >
-        ⚠️ Late Payments
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 0 }}>
+      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: "#0f172a", letterSpacing: "-0.01em" }}>
+        Late Payments
       </h1>
-      <p style={{ color: "#6b7280", marginBottom: "1.5rem" }}>
+      <p style={{ color: "#64748b", fontSize: 13, marginBottom: "1.25rem" }}>
         Members whose oldest unpaid bill is past the payment deadline. Payment
         window is closed for them — record cash/cheque payments manually here.
         Interest-satisfy-first allocation applied automatically.

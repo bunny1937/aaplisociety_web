@@ -99,13 +99,11 @@ export default function AuditPage() {
   };
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "2rem" }}>
-      <h1
-        style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem" }}
-      >
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: 0 }}>
+      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: "#0f172a", letterSpacing: "-0.01em" }}>
         Audit Report Submission
       </h1>
-      <p style={{ color: "#6b7280", marginBottom: "2rem" }}>
+      <p style={{ color: "#64748b", fontSize: 13, marginBottom: "1.25rem" }}>
         Submit previous bills for audit as per Indian Financial Year
         requirement. Bills must cover from April of the previous FY up to the
         month before your society joined.

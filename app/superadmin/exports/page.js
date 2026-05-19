@@ -113,15 +113,15 @@ export default function SuperAdminExportsPage() {
   };
 
   const card = (label, value, color) => (
-    <div style={{ background: "#111827", border: `1px solid ${color}33`, borderRadius: 8, padding: "1rem 1.25rem" }}>
-      <div style={{ color, fontSize: "0.75rem", fontWeight: 600, marginBottom: 4 }}>{label}</div>
-      <div style={{ color: "#fff", fontSize: "1.4rem", fontWeight: 700 }}>{value}</div>
+    <div style={{ background: "#ffffff", border: `1px solid #e5e7eb`, borderRadius: 12, padding: "18px 20px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+      <div style={{ color: "#6b7280", fontSize: "13px", fontWeight: 500, marginBottom: 8 }}>{label}</div>
+      <div style={{ color, fontSize: "26px", fontWeight: 700, lineHeight: 1.1 }}>{value}</div>
     </div>
   );
 
   return (
-    <div style={{ padding: "2rem", maxWidth: 1300, margin: "0 auto", color: "#f0f0f0" }}>
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.25rem" }}>📦 Data Exports</h1>
+    <div style={{ padding: 0, maxWidth: 1300, margin: "0 auto", color: "#1f2937" }}>
+      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: "0.25rem", color: "#1f2937" }}>📦 Data Exports</h1>
       <p style={{ color: "#6b7280", fontSize: "0.85rem", marginBottom: "1.75rem" }}>
         Export any collection for any society as Excel or CSV.
       </p>
@@ -135,25 +135,25 @@ export default function SuperAdminExportsPage() {
       </div>
 
       {/* Controls */}
-      <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 10, padding: "1.5rem", marginBottom: "1.5rem" }}>
+      <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "20px", marginBottom: "1.5rem", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto auto", gap: "1rem", alignItems: "flex-end" }}>
           <div>
-            <label style={{ display: "block", color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600, marginBottom: 6 }}>SOCIETY</label>
+            <label style={{ display: "block", color: "#6b7280", fontSize: "12px", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>SOCIETY</label>
             <select
               value={selectedSociety}
               onChange={(e) => { setSelectedSociety(e.target.value); setPreview(null); }}
-              style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #374151", background: "#1f2937", color: "#f0f0f0", fontSize: "0.9rem" }}
+              style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #d1d5db", background: "#ffffff", color: "#1f2937", fontSize: "0.9rem" }}
             >
               <option value="all">All Societies ({societies.length})</option>
               {societies.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
             </select>
           </div>
           <div>
-            <label style={{ display: "block", color: "#9ca3af", fontSize: "0.75rem", fontWeight: 600, marginBottom: 6 }}>COLLECTION</label>
+            <label style={{ display: "block", color: "#6b7280", fontSize: "12px", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>COLLECTION</label>
             <select
               value={selectedCollection}
               onChange={(e) => { setSelectedCollection(e.target.value); setPreview(null); }}
-              style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #374151", background: "#1f2937", color: "#f0f0f0", fontSize: "0.9rem" }}
+              style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: 6, border: "1px solid #d1d5db", background: "#ffffff", color: "#1f2937", fontSize: "0.9rem" }}
             >
               {COLLECTIONS.map((c) => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
             </select>
@@ -190,29 +190,29 @@ export default function SuperAdminExportsPage() {
         preview.length === 0 ? (
           <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>No records found for this selection.</div>
         ) : (
-          <div style={{ background: "#111827", borderRadius: 10, border: "1px solid #1f2937", overflow: "hidden" }}>
-            <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #1f2937", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: "#9ca3af", fontSize: "0.82rem" }}>
-                Showing <strong style={{ color: "#fff" }}>{Math.min(preview.length, 200)}</strong> of <strong style={{ color: "#fff" }}>{preview.length}</strong> rows
+          <div style={{ background: "#ffffff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f9fafb" }}>
+              <span style={{ color: "#6b7280", fontSize: "13px" }}>
+                Showing <strong style={{ color: "#1f2937" }}>{Math.min(preview.length, 200)}</strong> of <strong style={{ color: "#1f2937" }}>{preview.length}</strong> rows
               </span>
-              <span style={{ color: "#475569", fontSize: "0.75rem" }}>Download buttons above export ALL rows</span>
+              <span style={{ color: "#9ca3af", fontSize: "12px" }}>Download buttons above export ALL rows</span>
             </div>
             <div style={{ overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
-                <thead style={{ position: "sticky", top: 0, background: "#0f172a", zIndex: 1 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead style={{ position: "sticky", top: 0, background: "#f9fafb", zIndex: 1 }}>
                   <tr>
-                    <th style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937", whiteSpace: "nowrap" }}>Society</th>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Society</th>
                     {COL_LABELS[selectedCollection].map((h) => (
-                      <th key={h} style={{ padding: "9px 12px", textAlign: "left", color: "#475569", fontWeight: 700, borderBottom: "1px solid #1f2937", whiteSpace: "nowrap" }}>{h}</th>
+                      <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "#6b7280", fontWeight: 600, borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {preview.slice(0, 200).map((item, i) => (
-                    <tr key={item._id || i} style={{ background: i % 2 === 0 ? "#111827" : "#0f172a", borderBottom: "1px solid #1a2234" }}>
-                      <td style={{ padding: "7px 12px", color: "#60a5fa", fontWeight: 600, whiteSpace: "nowrap" }}>{item._societyName}</td>
+                    <tr key={item._id || i} style={{ background: "#ffffff", borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={{ padding: "10px 12px", color: "#1e3a8a", fontWeight: 600, whiteSpace: "nowrap" }}>{item._societyName}</td>
                       {rowForCollection(item, selectedCollection).map((v, ci) => (
-                        <td key={ci} style={{ padding: "7px 12px", color: "#cbd5e1", whiteSpace: "nowrap", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <td key={ci} style={{ padding: "10px 12px", color: "#374151", whiteSpace: "nowrap", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>
                           {v === undefined || v === null ? "—" : String(v)}
                         </td>
                       ))}

@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
-import { getTokenFromRequest } from "@/lib/jwt";
+import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import cache from "@/lib/cache";
 
 export async function GET(request) {
   try {
-    const decoded = getTokenFromRequest(request);
-    if (!decoded)
+    const token = getTokenFromRequest(request);
+    if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const decoded = verifyToken(token);
+    if (!decoded)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+
+    const cacheKey = `billing:year-range:${decoded.societyId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return NextResponse.json(cached);
 
     await connectDB();
 
@@ -23,10 +32,13 @@ export async function GET(request) {
     ]);
 
     const now = new Date();
-    return NextResponse.json({
+    const responseData = {
       minYear: minDoc?.billYear || now.getFullYear(),
       maxYear: now.getFullYear() + 1,
-    });
+    };
+
+    await cache.set(cacheKey, responseData, 300);
+    return NextResponse.json(responseData);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

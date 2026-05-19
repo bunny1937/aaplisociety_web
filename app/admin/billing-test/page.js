@@ -775,7 +775,7 @@ export default function BillingTestPage() {
   const canGenFromExcel = allDiffsApproved && excelValidation?.canProceed !== false && (excelValidation?.bills?.length ?? 0) > 0;
 
   return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", padding: "1rem 1.5rem", fontFamily: "system-ui, sans-serif" }}>
+    <div style={{ maxWidth: 1600, margin: "0 auto", padding: 0 }}>
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
         <div>

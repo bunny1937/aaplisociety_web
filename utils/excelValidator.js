@@ -20,7 +20,7 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
   const seenFlats = new Map();
   const gridRows = [];
 
-  const SKIP_COLS = new Set(["Wing-FlatNo", "Wing", "FlatNo", "OwnerName", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentCharges", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "AdvanceCredit", "RemainingDue", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
+  const SKIP_COLS = new Set(["Wing-FlatNo", "Wing", "FlatNo", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentCharges", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "AdvanceCredit", "RemainingDue", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
@@ -123,7 +123,7 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
   const gridRows = [];
   const validPayments = [];
 
-  const REF_COLS = ["OwnerName","DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","AdvanceCredit","RemainingDue"];
+  const REF_COLS = ["DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","AdvanceCredit","RemainingDue"];
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];

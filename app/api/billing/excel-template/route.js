@@ -43,7 +43,7 @@ export async function GET(request) {
     const [members, heads, society] = await Promise.all([
       Member.find(memberQuery)
         .select(
-          "_id flatNo wing ownerName carpetAreaSqft contactNumber parkingSlots openingBalance openingPrincipal openingInterest advanceCredit",
+          "_id flatNo wing carpetAreaSqft contactNumber parkingSlots openingBalance openingPrincipal openingInterest advanceCredit",
         )
         .sort({ wing: 1, flatNo: 1 })
         .lean(),
@@ -72,7 +72,6 @@ export async function GET(request) {
         const periodId = `${year}-${String(month).padStart(2, "0")}`;
         const row = {
           "Wing-FlatNo": `${m.wing || ""}-${m.flatNo || ""}`,
-          OwnerName: m.ownerName,
           Period: periodId,
           CurrentCharges: 0, // placeholder — filled after subtotal is computed
         };
@@ -278,8 +277,7 @@ export async function GET(request) {
 
     const instructions = [
       {
-        "Wing-FlatNo": "⚠ DO NOT change Wing-FlatNo, OwnerName, Period columns",
-        OwnerName: "Fill AmountPaid + PaymentMethod + PaymentDate to record payments. Leave blank to skip.",
+        "Wing-FlatNo": "⚠ DO NOT change Wing-FlatNo, Period columns",
         Period: "",
         CurrentCharges: "READ ONLY",
         OpeningPrincipal: "READ ONLY",

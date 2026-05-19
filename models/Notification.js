@@ -55,7 +55,7 @@ const NotificationSchema = new mongoose.Schema(
 
     actionUrl: { type: String, default: null },
 
-    expiresAt: { type: Date, index: true, default: null },
+    expiresAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },
