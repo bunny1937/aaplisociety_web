@@ -478,7 +478,7 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
     try {
       const res = await fetch("/api/superadmin/bill-history-import", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ societyId, bills: validatedBills, joinPeriodId }),
       });
@@ -1331,7 +1331,7 @@ export default function AdminSocietiesPage() {
                           if (!window.confirm(`Reset passwords for ALL members of "${society.name}"? They will need new credentials to login.`)) return;
                           const res = await fetch("/api/superadmin/reset-member-passwords", {
                             method: "POST",
-                            headers: { "Content-Type": "application/json", "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
+                            headers: { "Content-Type": "application/json" },
                             credentials: "include",
                             body: JSON.stringify({ societyId: society._id }),
                           });
@@ -1340,7 +1340,7 @@ export default function AdminSocietiesPage() {
                           if (!data.credentials?.length) { alert("No member accounts found."); return; }
                           const dlRes = await fetch("/api/members/download-credentials", {
                             method: "POST",
-                            headers: { "Content-Type": "application/json", "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
+                            headers: { "Content-Type": "application/json" },
                             credentials: "include",
                             body: JSON.stringify({ credentials: data.credentials }),
                           });
@@ -1355,6 +1355,27 @@ export default function AdminSocietiesPage() {
                         }}
                       >
                         🔑 Reset Creds
+                      </button>
+                      <button
+                        style={{ background: "#b45309", color: "#fff", border: "none", borderRadius: 4, fontSize: "0.72rem", padding: "3px 8px", cursor: "pointer" }}
+                        onClick={async () => {
+                          const custom = window.prompt(
+                            `Reset admin password for "${society.name}".\n\nEnter new password (min 8 chars), or leave blank to auto-generate:`
+                          );
+                          if (custom === null) return; // cancelled
+                          const res = await fetch("/api/superadmin/reset-admin-password", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify({ societyId: society._id, newPassword: custom || undefined }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) { alert(data.error || "Failed"); return; }
+                          alert(`✅ Admin password reset!\n\nEmail: ${data.adminEmail}\nNew Password: ${data.newPassword}\n\nSave this — it won't be shown again.`);
+                          queryClient.invalidateQueries(["admin-societies"]);
+                        }}
+                      >
+                        🔐 Reset Admin Pass
                       </button>
                       <button
                         style={{ background: "#0e7490", color: "#fff", border: "none", borderRadius: 4, fontSize: "0.72rem", padding: "3px 8px", cursor: "pointer" }}
@@ -1395,6 +1416,29 @@ export default function AdminSocietiesPage() {
                           ✓ History Done
                         </button>
                       )}
+                      <button
+                        style={{ background: "#92400e", color: "#fef3c7", border: "none", borderRadius: 4, fontSize: "0.72rem", padding: "3px 8px", cursor: "pointer" }}
+                        onClick={async () => {
+                          const joinPeriod = society.onboarding?.joinPeriodId;
+                          const confirmMsg = joinPeriod
+                            ? `Fix historical bill balances for "${society.name}"?\n\nWill zero out all bills before join period ${joinPeriod} AND all BulkImport bills.\n\nSafe to run multiple times.`
+                            : `Fix historical bill balances for "${society.name}"?\n\nNo join period detected — will only fix bills with importedFrom=BulkImport.\n\nTo fix by period too, set joinPeriodId first via Bill History Import.`;
+                          if (!confirm(confirmMsg)) return;
+                          const body = { societyId: society._id };
+                          if (joinPeriod) body.beforePeriodId = joinPeriod;
+                          const res = await fetch("/api/superadmin/fix-history-bills", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify(body),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) { alert(data.error || "Failed"); return; }
+                          alert(`✅ ${data.message}`);
+                        }}
+                      >
+                        🔧 Fix History Bills
+                      </button>
                       <button
                         style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: 4, fontSize: "0.72rem", padding: "3px 8px", cursor: "pointer" }}
                         onClick={() => setDeleteTarget(society)}
@@ -2481,7 +2525,7 @@ export default function AdminSocietiesPage() {
                     onClick={async () => {
                       const res = await fetch("/api/members/download-credentials", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
+                        headers: { "Content-Type": "application/json" },
                         credentials: "include",
                         body: JSON.stringify({ credentials: bulkResult.memberCredentials }),
                       });
@@ -2732,7 +2776,7 @@ export default function AdminSocietiesPage() {
                   onClick={async () => {
                     const dlRes = await fetch("/api/members/download-credentials", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json", "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
+                      headers: { "Content-Type": "application/json" },
                       credentials: "include",
                       body: JSON.stringify({ credentials: viewCreds.map((c) => ({ ...c, password: "(not reset)", isNewUser: false })) }),
                     });
@@ -2796,7 +2840,7 @@ export default function AdminSocietiesPage() {
                   if (typed?.trim() !== societyName) { alert("Name did not match. Deletion cancelled."); return; }
                   const res = await fetch("/api/superadmin/delete-society", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
+                    headers: { "Content-Type": "application/json" },
                     credentials: "include",
                     body: JSON.stringify({ societyId: deleteTarget._id }),
                   });

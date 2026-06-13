@@ -20,13 +20,20 @@ export async function GET(request, { params }) {
 
     const { id } = params;
 
+    if (!id || !id.match(/^[a-f\d]{24}$/i)) {
+      return NextResponse.json(
+        { error: "Invalid transaction id" },
+        { status: 400 },
+      );
+    }
+
     const transaction = await Transaction.findOne({
       _id: id,
       societyId: decoded.societyId,
     })
       .populate(
         "memberId",
-        "roomNo wing ownerName email mobile areaSqFt config"
+        "roomNo wing ownerName email mobile areaSqFt config",
       )
       .populate("createdBy", "name email role")
       .lean();
@@ -34,7 +41,7 @@ export async function GET(request, { params }) {
     if (!transaction) {
       return NextResponse.json(
         { error: "Transaction not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -98,7 +105,7 @@ export async function GET(request, { params }) {
     console.error("Transaction details error:", error);
     return NextResponse.json(
       { error: "Failed to fetch transaction details", details: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

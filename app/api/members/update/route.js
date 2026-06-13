@@ -3,23 +3,17 @@ import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
 import Bill from "@/models/Bill";
 import AuditLog from "@/models/AuditLog";
-import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { memberSchema } from "@/lib/validators";
 import cache from "@/lib/cache";
+import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
 
 export async function PUT(request) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const body = await request.json();
     const { memberId, ...updateData } = body;
@@ -107,22 +101,9 @@ export async function DELETE(request) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    if (decoded.role !== "Admin") {
-      return NextResponse.json(
-        { error: "Admin access required" },
-        { status: 403 },
-      );
-    }
+    const auth = requireRoles(request, ["Admin"]);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { searchParams } = new URL(request.url);
     const memberId = searchParams.get("memberId");

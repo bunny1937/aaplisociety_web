@@ -133,6 +133,14 @@ const BillSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isHistoricalArchive: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    importedFinancialYear: {
+      type: String, // e.g. "2024-2025"
+    },
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -3,7 +3,32 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
+import AuditLog from "@/models/AuditLog";
 import { signToken } from "@/lib/jwt";
+
+const MAX_ATTEMPTS = parseInt(process.env.RATE_LIMIT_LOGIN, 10) || 10;
+const WINDOW_MS = 15 * 60 * 1000;
+const loginAttempts = new Map();
+
+function checkLoginRateLimit(identifier) {
+  const key = identifier.toLowerCase();
+  const now = Date.now();
+  const entry = loginAttempts.get(key) || {
+    count: 0,
+    resetAt: now + WINDOW_MS,
+  };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + WINDOW_MS;
+  }
+  entry.count += 1;
+  loginAttempts.set(key, entry);
+  return entry.count > MAX_ATTEMPTS ? { blocked: true } : { blocked: false };
+}
+
+function clearLoginRateLimit(identifier) {
+  loginAttempts.delete(identifier.toLowerCase());
+}
 
 export async function POST(request) {
   try {
@@ -23,13 +48,29 @@ export async function POST(request) {
       );
     }
 
+    const rateCheck = checkLoginRateLimit(identifier);
+    if (rateCheck.blocked) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Try again later." },
+        { status: 429 },
+      );
+    }
+
     // Find by username  OR  email  (covers both Member and Admin flows)
     const user = await User.findOne({
       $or: [{ username: identifier }, { email: identifier }],
       isActive: true,
     });
 
+    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const ua = request.headers.get("user-agent") || "unknown";
+
     if (!user) {
+      await AuditLog.create({
+        action: "LOGIN_FAILURE",
+        newData: { identifier, reason: "user_not_found", ip, ua },
+        timestamp: new Date(),
+      }).catch(() => {});
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 },
@@ -38,6 +79,13 @@ export async function POST(request) {
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      await AuditLog.create({
+        userId: user._id,
+        societyId: user.societyId,
+        action: "LOGIN_FAILURE",
+        newData: { identifier, reason: "wrong_password", ip, ua },
+        timestamp: new Date(),
+      }).catch(() => {});
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 },
@@ -49,6 +97,7 @@ export async function POST(request) {
     if (
       ["Admin", "Secretary", "Accountant", "SOCIETY_ADMIN"].includes(user.role)
     ) {
+      clearLoginRateLimit(identifier);
       const token = signToken({
         userId: user._id,
         email: user.email,
@@ -72,7 +121,7 @@ export async function POST(request) {
       response.cookies.set("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: "strict",
         path: "/",
         maxAge: 60 * 60 * 8, // 8 hours
       });
@@ -87,6 +136,7 @@ export async function POST(request) {
 
     // CASE A: single profile → auto-login
     if (activeProfiles.length === 1) {
+      clearLoginRateLimit(identifier);
       const profile = activeProfiles[0];
 
       // Persist activeProfileId
@@ -123,7 +173,7 @@ export async function POST(request) {
       response.cookies.set("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: "strict",
         path: "/",
         maxAge: 60 * 60 * 8,
       });
@@ -133,11 +183,21 @@ export async function POST(request) {
 
     // CASE B: multiple profiles → return list, frontend shows selector
     if (activeProfiles.length > 1) {
+      clearLoginRateLimit(identifier);
+      const profileSelectToken = signToken(
+        {
+          userId: user._id,
+          purpose: "profile-select",
+        },
+        { expiresIn: "10m" },
+      );
+
       // No cookie yet — user must pick a society first
       return NextResponse.json({
         success: true,
         requiresProfileSelect: true,
         userId: user._id,
+        profileSelectToken,
         name: user.name,
         username: user.username,
         profiles: activeProfiles.map((p) => ({

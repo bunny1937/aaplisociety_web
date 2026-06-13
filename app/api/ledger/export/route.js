@@ -25,8 +25,10 @@ export async function GET(request) {
     const format = searchParams.get("format") || "xlsx";
 
     // Build query
+    if (!decoded.societyId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const query = { societyId: decoded.societyId };
-
     const memberId = searchParams.get("memberId");
     const category = searchParams.get("category");
     const txnType = searchParams.get("type");
@@ -226,7 +228,7 @@ export async function GET(request) {
             "Dec",
           ];
           filterInfo.push(
-            `Period: ${monthNames[parseInt(filterMonth) - 1]} ${filterYear}`
+            `Period: ${monthNames[parseInt(filterMonth) - 1]} ${filterYear}`,
           );
         } else if (filterYear) {
           filterInfo.push(`Year: ${filterYear}`);
@@ -259,13 +261,13 @@ export async function GET(request) {
         doc.text(
           `Total Debit: ₹${totalDebit.toLocaleString("en-IN")}`,
           15,
-          yPosition
+          yPosition,
         );
         yPosition += 5;
         doc.text(
           `Total Credit: ₹${totalCredit.toLocaleString("en-IN")}`,
           15,
-          yPosition
+          yPosition,
         );
         yPosition += 5;
         doc.text(
@@ -273,7 +275,7 @@ export async function GET(request) {
             netBalance >= 0 ? "DR" : "CR"
           }`,
           15,
-          yPosition
+          yPosition,
         );
         yPosition += 8;
 
@@ -335,7 +337,7 @@ export async function GET(request) {
               `Generated on ${new Date().toLocaleString("en-IN")}`,
               pageWidth / 2,
               pageHeight - 10,
-              { align: "center" }
+              { align: "center" },
             );
           },
         });
@@ -351,7 +353,7 @@ export async function GET(request) {
         console.error("PDF generation error:", error);
         return NextResponse.json(
           { error: "PDF generation failed", details: error.message },
-          { status: 500 }
+          { status: 500 },
         );
       }
     }
@@ -361,7 +363,7 @@ export async function GET(request) {
     console.error("Export error:", error);
     return NextResponse.json(
       { error: "Export failed", details: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

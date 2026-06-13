@@ -4,11 +4,16 @@ import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getAdminModels } from "@/lib/admin-models";
+import { getTokenFromRequest } from "@/lib/jwt";
 
 export async function GET(req) {
   try {
     const adminToken = req.cookies.get("admin_token")?.value;
-    const userToken = req.cookies.get("token")?.value;
+    const cookieToken = req.cookies.get("token")?.value;
+    const authHeader = req.headers.get("authorization");
+    const bearerToken =
+      authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+    const userToken = cookieToken || bearerToken;
 
     // ── SUPERADMIN ────────────────────────────────────────────────────────────
     if (adminToken) {
@@ -37,7 +42,7 @@ export async function GET(req) {
     }
 
     // ── ADMIN / SECRETARY / MEMBER ────────────────────────────────────────────
-    if (userToken) {
+    else if (userToken) {
       let decoded;
       try {
         decoded = jwt.verify(userToken, process.env.JWT_SECRET);

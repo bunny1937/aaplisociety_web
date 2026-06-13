@@ -14,7 +14,7 @@ const ACTION_COLOR = {
 async function fetchLogs(filter) {
   const res = await fetch(`/api/admin/logs?filter=${filter}`, {
     credentials: "include",
-    headers: { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY || "" },
+    headers: {},
   });
   if (!res.ok) throw new Error("Failed to fetch logs");
   return res.json();

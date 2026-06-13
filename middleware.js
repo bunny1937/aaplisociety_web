@@ -1,27 +1,45 @@
 // middleware.js
 import { NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 
-export function middleware(request) {
+const ALLOWED_ORIGIN =
+  process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+
+async function parseJwt(t, secretEnvKey = "JWT_SECRET") {
+  try {
+    const secret = new TextEncoder().encode(process.env[secretEnvKey]);
+    const { payload } = await jwtVerify(t, secret);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export async function middleware(request) {
   const { pathname } = request.nextUrl;
+  const method = request.method;
+
+  // API routes: only do CSRF check, then pass through — never redirect to login page
+  if (pathname.startsWith("/api/")) {
+    const isUnsafeMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+    if (isUnsafeMethod) {
+      const origin = request.headers.get("origin");
+      // Non-production only: allow Playwright APIRequestContext which sends no Origin.
+      // Double-gated: NODE_ENV check ensures this path is dead in production even if
+      // an attacker crafts x-test-mode header.
+      const isTestBypass =
+        process.env.NODE_ENV !== "production" &&
+        request.headers.get("x-test-mode") === "true";
+      if (!isTestBypass && (!origin || origin !== ALLOWED_ORIGIN)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+    return NextResponse.next();
+  }
 
   const token = request.cookies.get("token")?.value;
   const adminToken = request.cookies.get("admin_token")?.value;
-
-  function parseJwt(t) {
-    try {
-      const base64Url = t.split(".")[1];
-      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split("")
-          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-          .join(""),
-      );
-      return JSON.parse(jsonPayload);
-    } catch {
-      return null;
-    }
-  }
 
   // ── PUBLIC ROUTES ─────────────────────────────────────────────────────────
   const publicRoutes = [
@@ -38,7 +56,7 @@ export function middleware(request) {
   // ── ROOT REDIRECT ─────────────────────────────────────────────────────────
   if (pathname === "/") {
     if (adminToken) {
-      const adminPayload = parseJwt(adminToken);
+      const adminPayload = await parseJwt(adminToken, "ADMIN_JWT_SECRET");
       if (adminPayload?.role === "SuperAdmin") {
         return NextResponse.redirect(
           new URL("/superadmin/dashboard", request.url),
@@ -46,7 +64,7 @@ export function middleware(request) {
       }
     }
     if (token) {
-      const payload = parseJwt(token);
+      const payload = await parseJwt(token);
       if (
         payload?.role === "Admin" ||
         payload?.role === "Secretary" ||
@@ -68,7 +86,7 @@ export function middleware(request) {
     if (!adminToken) {
       return NextResponse.redirect(new URL("/superadmin/login", request.url));
     }
-    const adminPayload = parseJwt(adminToken);
+    const adminPayload = await parseJwt(adminToken, "ADMIN_JWT_SECRET");
     if (!adminPayload || adminPayload.role !== "SuperAdmin") {
       return NextResponse.redirect(new URL("/superadmin/login", request.url));
     }
@@ -80,7 +98,7 @@ export function middleware(request) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  const payload = parseJwt(token);
+  const payload = await parseJwt(token);
   if (!payload) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
@@ -113,5 +131,11 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/", "/admin/:path*", "/member/:path*", "/superadmin/:path*"],
+  matcher: [
+    "/",
+    "/admin/:path*",
+    "/member/:path*",
+    "/superadmin/:path*",
+    "/api/:path*",
+  ],
 };

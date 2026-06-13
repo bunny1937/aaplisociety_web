@@ -32,6 +32,23 @@ export async function POST(request) {
 
     const billPeriodId = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
 
+    // Block generation for periods that have locked historical bills
+    const historicalExists = await Bill.findOne({
+      societyId: decoded.societyId,
+      billPeriodId,
+      $or: [{ isHistoricalArchive: true }, { importedFrom: "BulkImport" }, { isLocked: true }],
+      isDeleted: { $ne: true },
+    });
+    if (historicalExists) {
+      return NextResponse.json(
+        {
+          error: `Cannot generate bills for ${billPeriodId} — this period has locked historical (imported) records. Historical bills are immutable audit records.`,
+          isHistoricalPeriod: true,
+        },
+        { status: 409 },
+      );
+    }
+
     // Check for duplicates
     const existing = await Bill.findOne({
       societyId: decoded.societyId,
@@ -270,8 +287,9 @@ export async function POST(request) {
       });
     }
 
-    // When a new bill absorbs prior unpaid balances into openingPrincipal,
-    // zero out those prior bills so get-previous-balances doesn't double-count them.
+    // Zero out historical BulkImport bills that were absorbed into openingPrincipal.
+    // Only target importedFrom=BulkImport — live Partial bills are real receivables
+    // and must NOT be zeroed (their balanceAmount is the source of truth for the next bill's openingPrincipal).
     for (const bill of createdBills) {
       if ((bill.openingPrincipal || 0) > 0 || (bill.openingInterest || 0) > 0) {
         await Bill.updateMany(
@@ -280,6 +298,7 @@ export async function POST(request) {
             societyId: decoded.societyId,
             billPeriodId: { $lt: billPeriodId },
             balanceAmount: { $gt: 0.005 },
+            importedFrom: "BulkImport",
             isDeleted: { $ne: true },
           },
           {

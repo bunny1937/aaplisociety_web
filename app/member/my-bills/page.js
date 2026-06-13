@@ -222,26 +222,35 @@ export default function MyBillsPage() {
                       </div>
                     )}
                   </div>
-                  <span
-                    style={{
-                      background: sc.bg,
-                      color: sc.color,
-                      padding: "4px 12px",
-                      borderRadius: "12px",
-                      fontSize: "12px",
-                      fontWeight: "700",
-                    }}
-                  >
-                    {bill.status}
-                  </span>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: "0.8rem", padding: "6px 12px" }}
-                      onClick={() => downloadBill(bill)}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                    <span
+                      style={{
+                        background: sc.bg,
+                        color: sc.color,
+                        padding: "4px 12px",
+                        borderRadius: "12px",
+                        fontSize: "12px",
+                        fontWeight: "700",
+                      }}
                     >
-                      ⬇️ Bill
-                    </button>
+                      {bill.status}
+                    </span>
+                    {(bill.isHistoricalArchive === true) && (
+                      <span style={{ background: "#F3F4F6", color: "#6B7280", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: "600" }}>
+                        📜 Historical
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {!bill.isHistoricalArchive && (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                        onClick={() => downloadBill(bill)}
+                      >
+                        ⬇️ Bill
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

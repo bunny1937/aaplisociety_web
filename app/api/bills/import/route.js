@@ -4,9 +4,9 @@ import Bill from "@/models/Bill";
 import Member from "@/models/Member";
 import Society from "@/models/Society";
 import BillingHead from "@/models/BillingHead";
-import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import * as XLSX from "xlsx";
 import { v4 as uuidv4 } from "uuid";
+import { requireRoles, BILLING_WRITE_ROLES } from "@/lib/authz";
 
 let tempStorage = {};
 
@@ -14,15 +14,9 @@ export async function POST(request) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    const auth = requireRoles(request, BILLING_WRITE_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
@@ -189,9 +183,13 @@ export async function POST(request) {
         });
       });
 
-      // Store in temp cache
+      // Store in temp cache — only keep what confirm step needs, not the full token
       const batchId = uuidv4();
-      tempStorage[batchId] = { rows, decoded };
+      tempStorage[batchId] = {
+        rows,
+        societyId: decoded.societyId,
+        userId: decoded.userId,
+      };
 
       return NextResponse.json({
         batchId,
@@ -215,12 +213,12 @@ export async function POST(request) {
         return NextResponse.json({ error: "Session expired" }, { status: 400 });
       }
 
-      const { rows, decoded: cachedDecoded } = cached;
+      const { rows, societyId: cachedSocietyId, userId: cachedUserId } = cached;
       const validRows = rows.filter((r) => r.status === "Valid");
 
       // Fetch members again
       const members = await Member.find({
-        societyId: cachedDecoded.societyId,
+        societyId: cachedSocietyId,
       }).lean();
       const memberMap = new Map(members.map((m) => [m._id.toString(), m]));
 
@@ -270,7 +268,7 @@ export async function POST(request) {
           billMonth,
           billYear,
           memberId,
-          societyId: cachedDecoded.societyId,
+          societyId: cachedSocietyId,
           charges: Object.fromEntries(charges),
           totalAmount,
           balanceAmount: totalAmount,
@@ -279,7 +277,7 @@ export async function POST(request) {
           status: "Unpaid",
           importedFrom: "Excel",
           notes: data["Notes"] || "",
-          generatedBy: cachedDecoded.userId,
+          generatedBy: cachedUserId,
           generatedAt: new Date(),
         };
       });

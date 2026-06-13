@@ -1,33 +1,20 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Member from "@/models/Member";
 import User from "@/models/User";
 import AuditLog from "@/models/AuditLog";
 import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
 import Receipt from "@/models/Receipt";
+import { requireRoles } from "@/lib/authz";
 
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: "alid token" }, { status: 401 });
-    }
-
-    if (decoded.role === "Accountant" || decoded.role === "Member") {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 },
-      );
-    }
+    const auth = requireRoles(request, ["Admin"]);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { entity } = await params;
     const { searchParams } = new URL(request.url);

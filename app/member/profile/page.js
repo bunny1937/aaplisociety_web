@@ -100,30 +100,14 @@ export default function MemberProfilePage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem" }}>
-          {editing ? (
-            <>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setEditing(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => saveMutation.mutate(form)}
-                disabled={saveMutation.isPending}
-              >
-                {saveMutation.isPending ? "Saving..." : "💾 Save Changes"}
-              </button>
-            </>
-          ) : (
-            <button
-              className="btn btn-secondary"
-              onClick={() => setEditing(true)}
-            >
-              ✏️ Edit Contact Info
-            </button>
-          )}
+          <button
+            className="btn btn-secondary"
+            disabled
+            title="Profile editing coming soon"
+            style={{ opacity: 0.5, cursor: "not-allowed" }}
+          >
+            ✏️ Edit Contact Info
+          </button>
         </div>
       </div>
 

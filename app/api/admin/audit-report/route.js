@@ -403,7 +403,7 @@ export async function POST(request) {
     });
   } catch (err) {
     console.error("audit-report POST error", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -424,6 +424,6 @@ export async function GET(request) {
 
     return NextResponse.json({ success: true, report: report || null });
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

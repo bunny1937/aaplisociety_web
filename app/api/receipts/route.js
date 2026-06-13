@@ -26,6 +26,6 @@ export async function GET(request) {
     return NextResponse.json({ success: true, receipts });
   } catch (err) {
     console.error("Receipts fetch error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Bill from "@/models/Bill";
+import mongoose from "mongoose";
 
 export async function GET(request) {
   try {
@@ -18,32 +19,50 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get("limit") || "50");
     const page = parseInt(searchParams.get("page") || "1");
 
+    const memberId = new mongoose.Types.ObjectId(decoded.memberId);
+    const societyId = new mongoose.Types.ObjectId(decoded.societyId);
     const query = {
-      memberId: decoded.memberId,
-      societyId: decoded.societyId,
+      memberId,
+      societyId,
       isDeleted: { $ne: true },
-      status: { $ne: "Scheduled" },
-      importedFrom: { $ne: "BulkImport" },
     };
-    if (status && status !== "all") query.status = status;
+    if (status && status !== "all") {
+      query.status = status;
+    } else {
+      query.status = { $ne: "Scheduled" };
+    }
 
-    const [bills, total] = await Promise.all([
+    const [bills, total, agg] = await Promise.all([
       Bill.find(query)
         .sort({ billYear: -1, billMonth: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
-        .select("-billHtml") // exclude heavy field for list
+        .select("-billHtml") // exclude heavy html for list
         .lean(),
       Bill.countDocuments(query),
+      Bill.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: "$totalAmount" },
+            totalPaid: { $sum: "$amountPaid" },
+            totalOutstanding: {
+              $sum: {
+                $cond: [{ $ne: ["$status", "Paid"] }, "$balanceAmount", 0],
+              },
+            },
+          },
+        },
+      ]),
     ]);
 
+    const aggRow = agg[0] || {};
     const summary = {
       total,
-      totalAmount: bills.reduce((s, b) => s + (b.totalAmount || 0), 0),
-      totalPaid: bills.reduce((s, b) => s + (b.amountPaid || 0), 0),
-      totalOutstanding: bills
-        .filter((b) => b.status !== "Paid")
-        .reduce((s, b) => s + (b.balanceAmount || 0), 0),
+      totalAmount: aggRow.totalAmount || 0,
+      totalPaid: aggRow.totalPaid || 0,
+      totalOutstanding: aggRow.totalOutstanding || 0,
     };
 
     return NextResponse.json({

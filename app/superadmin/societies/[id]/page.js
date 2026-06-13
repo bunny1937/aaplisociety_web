@@ -13,14 +13,14 @@ export default function SocietyDetail() {
   const queryClient = useQueryClient();
   const societyId = params.id;
 
-  // Superadmin auth check via cookie (no localStorage needed)
+  // Superadmin auth check via cookie
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
       .then((r) => r.json())
       .then((d) => {
-        if ((d.user || d)?.role !== "SuperAdmin") router.push("/superadmin/login");
+        if ((d.user || d)?.role !== "SuperAdmin") router.replace("/superadmin/login");
       })
-      .catch(() => router.push("/superadmin/login"));
+      .catch(() => router.replace("/superadmin/login"));
   }, [router]);
 
   // ✅ Fetch society (cached for 5 min)

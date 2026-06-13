@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/ViewBills.module.css";
@@ -15,6 +16,14 @@ const STATUS_COLOR = {
 
 function fmt(n) {
   return Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function chargesTotal(bill) {
+  if (bill.currentBillTotal != null) return bill.currentBillTotal;
+  if (bill.subtotal != null) return bill.subtotal;
+  if (bill.charges && typeof bill.charges === "object") {
+    return Object.values(bill.charges).reduce((s, v) => s + Number(v || 0), 0);
+  }
+  return 0;
 }
 function fmtDate(d) {
   if (!d) return "—";
@@ -52,9 +61,14 @@ function BillPdfTab({ bill }) {
       <p style={{ color: "#6b7280", marginTop: 8 }}>No bill content. Click Print to regenerate.</p>
     </div>
   );
+  const safeHtml = useMemo(
+    () => (typeof window !== "undefined" ? DOMPurify.sanitize(html) : ""),
+    [html],
+  );
+
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
-      <div dangerouslySetInnerHTML={{ __html: html }} />
+      <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
     </div>
   );
 }
@@ -213,12 +227,22 @@ export default function ViewBillsPage() {
             <tbody>
               {filteredBills.map((bill) => {
                 const colors = STATUS_COLOR[bill.status] || STATUS_COLOR.Scheduled;
+                const isHistorical = bill.isHistoricalArchive || bill.importedFrom === "BulkImport" || bill.isLocked;
                 return (
-                  <tr key={bill._id} className={styles.billRow} onClick={() => openBill(bill)}>
-                    <td><strong>{bill.memberId?.wing}-{bill.memberId?.flatNo}</strong></td>
+                  <tr key={bill._id} className={styles.billRow}
+                    style={isHistorical ? { background: "#fafaf7", opacity: 0.92 } : {}}
+                    onClick={() => openBill(bill)}>
+                    <td>
+                      <strong>{bill.memberId?.wing}-{bill.memberId?.flatNo}</strong>
+                      {isHistorical && (
+                        <span title="Historical imported record — immutable" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#e0e7ff", color: "#3730a3", borderRadius: 4, padding: "1px 5px", border: "1px solid #c7d2fe", verticalAlign: "middle" }}>
+                          HIST
+                        </span>
+                      )}
+                    </td>
                     <td>{bill.memberId?.ownerName}</td>
                     <td><span className={styles.periodTag}>{bill.billPeriodId}</span></td>
-                    <td>₹{fmt(bill.currentBillTotal ?? bill.subtotal)}</td>
+                    <td>₹{fmt(chargesTotal(bill))}</td>
                     <td style={{ color: (bill.previousBalance || 0) > 0 ? "#b91c1c" : "#15803d" }}>
                       {(bill.previousBalance || 0) > 0 ? `₹${fmt(bill.previousBalance)}` : "Clear"}
                     </td>
@@ -237,9 +261,10 @@ export default function ViewBillsPage() {
                       <span style={{ padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600, background: colors.bg, color: colors.text, border: `1px solid ${colors.border}` }}>
                         {bill.status}
                       </span>
+                      {isHistorical && <span title="Locked — immutable audit record" style={{ marginLeft: 4, fontSize: 13 }}>🔒</span>}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <button onClick={() => openBill(bill)} className={styles.actionBtn}>View</button>
                         <button onClick={() => downloadBill(bill)} className={styles.actionBtn} disabled={downloadingId === bill._id?.toString()}>
                           {downloadingId === bill._id?.toString() ? "..." : "Print"}
@@ -267,11 +292,23 @@ export default function ViewBillsPage() {
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{viewingBill.memberId?.ownerName}</div>
-                  <div style={{ color: "#6b7280", fontSize: 13 }}>Period: {viewingBill.billPeriodId} · Generated: {fmtDate(viewingBill.generatedAt || viewingBill.createdAt)}</div>
+                  <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    Period: {viewingBill.billPeriodId}
+                    {viewingBill.importedFinancialYear && <> · FY: {viewingBill.importedFinancialYear}</>}
+                    {!(viewingBill.isHistoricalArchive || viewingBill.importedFrom === "BulkImport") && <> · Generated: {fmtDate(viewingBill.generatedAt || viewingBill.createdAt)}</>}
+                  </div>
                 </div>
               </div>
               <button onClick={() => setViewingBill(null)} className={styles.closeBtn}>✕</button>
             </div>
+
+            {/* Historical bill notice */}
+            {(viewingBill.isHistoricalArchive || viewingBill.importedFrom === "BulkImport" || viewingBill.isLocked) && (
+              <div style={{ margin: "0 2rem", padding: "10px 16px", background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#3730a3" }}>
+                <span>🔒</span>
+                <span><strong>Historical Record</strong> — This bill was imported as an audit record and is immutable. It cannot be edited, deleted, or regenerated.</span>
+              </div>
+            )}
 
             {/* Tabs */}
             <div style={{ display: "flex", borderBottom: "2px solid #e5e7eb", padding: "0 2rem" }}>
@@ -296,7 +333,7 @@ export default function ViewBillsPage() {
                   {/* Amount cards */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
                     {[
-                      { label: "Current Bill", value: `₹${fmt(viewingBill.currentBillTotal ?? viewingBill.subtotal)}`, color: "#1f2937" },
+                      { label: "Current Bill", value: `₹${fmt(chargesTotal(viewingBill))}`, color: "#1f2937" },
                       { label: "Prev Balance", value: (viewingBill.previousBalance || 0) > 0 ? `₹${fmt(viewingBill.previousBalance)}` : "Clear", color: (viewingBill.previousBalance || 0) > 0 ? "#b91c1c" : "#15803d" },
                       { label: "Interest", value: (viewingBill.interestAmount || 0) > 0 ? `₹${fmt(viewingBill.interestAmount)}` : "—", color: (viewingBill.interestAmount || 0) > 0 ? "#92400e" : "#9ca3af" },
                       { label: "Total Due", value: `₹${fmt(viewingBill.totalAmount)}`, color: "#4f46e5", large: true },
@@ -324,7 +361,7 @@ export default function ViewBillsPage() {
                         ))}
                         <tr style={{ background: "#f0fdf4" }}>
                           <td colSpan={2} style={{ padding: "12px 16px", fontWeight: 700 }}>Current Month Total</td>
-                          <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#15803d" }}>₹{fmt(viewingBill.currentBillTotal ?? viewingBill.subtotal)}</td>
+                          <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#15803d" }}>₹{fmt(chargesTotal(viewingBill))}</td>
                         </tr>
                       </tbody>
                     </table>

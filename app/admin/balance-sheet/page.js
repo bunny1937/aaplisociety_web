@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 async function fetchBalanceSheet(fy) {
   const res = await fetch(`/api/billing/balance-sheet?fy=${fy}`, { credentials: "include" });
@@ -18,7 +18,7 @@ const fmt = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { minimumFract
 const pct = (n, d) => (d ? ((n / d) * 100).toFixed(1) : "0.0");
 const pctStr = (n, d) => pct(n, d) + "%";
 
-const ENTRY_TYPES = ["Maintenance", "Sinking Fund", "Repair & Maintenance", "Other Income", "Other Expense"];
+const ENTRY_TYPES = ["Maintenance", "Sinking Fund", "Repair & Maintenance", "Other Income", "Other Expense", "Auditor Fees", "Legal Fees", "Utilities", "Custom"];
 
 const S = {
   page: { padding: 0, maxWidth: 1500, margin: "0 auto", color: "#1e293b" },
@@ -429,16 +429,29 @@ function ClosingPanel({ closing, summary, fy, fyClosingOutstanding = 0 }) {
 }
 
 export default function BalanceSheetPage() {
+  const qc = useQueryClient();
   const [fy, setFy] = useState(currentFY());
-  const [entries, setEntries] = useState([]);
-  const [newEntry, setNewEntry] = useState({ name: "", type: "Maintenance", income: "", expenditure: "" });
+  const [newEntry, setNewEntry] = useState({ name: "", type: "Other Expense", income: "", expenditure: "" });
   const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["balance-sheet", fy],
     queryFn: () => fetchBalanceSheet(fy),
     staleTime: 2 * 60 * 1000,
   });
+
+  const { data: entriesData, isLoading: entriesLoading } = useQuery({
+    queryKey: ["society-entries", fy],
+    queryFn: async () => {
+      const res = await fetch(`/api/society-entries?fy=${fy}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+
+  const entries = entriesData?.entries || [];
 
   const summary = data?.summary || {};
   const closing = data?.closing || null;
@@ -455,20 +468,39 @@ export default function BalanceSheetPage() {
   const lastGenMonth = genMonths[genMonths.length - 1];
   const fyClosingOutstanding = lastGenMonth?.totalPending ?? 0;
 
-  const customIncome = entries.reduce((s, e) => s + (parseFloat(e.income) || 0), 0);
-  const customExpenditure = entries.reduce((s, e) => s + (parseFloat(e.expenditure) || 0), 0);
+  const customIncome = entries.reduce((s, e) => s + (e.entryKind === "income" ? (e.amount || 0) : 0), 0);
+  const customExpenditure = entries.reduce((s, e) => s + (e.entryKind === "expenditure" ? (e.amount || 0) : 0), 0);
 
-  const liabilityEntries = entries.filter((e) => parseFloat(e.income) > 0);
-  const assetEntries = entries.filter((e) => parseFloat(e.expenditure) > 0);
+  const liabilityEntries = entries.filter((e) => e.entryKind === "income");
+  const assetEntries = entries.filter((e) => e.entryKind === "expenditure");
 
-  const handleAddEntry = () => {
+  const handleAddEntry = async () => {
     if (!newEntry.name.trim()) return;
     if (!newEntry.income && !newEntry.expenditure) return;
-    setEntries([...entries, { ...newEntry, id: Date.now() }]);
-    setNewEntry({ name: "", type: "Maintenance", income: "", expenditure: "" });
-    setAddOpen(false);
+    setSaving(true);
+    try {
+      const entryKind = newEntry.income ? "income" : "expenditure";
+      const amount = parseFloat(newEntry.income || newEntry.expenditure);
+      const res = await fetch("/api/society-entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ fy, name: newEntry.name, type: newEntry.type, entryKind, amount }),
+      });
+      if (!res.ok) { const d = await res.json(); alert(d.error || "Failed to save"); return; }
+      qc.invalidateQueries(["society-entries", fy]);
+      setNewEntry({ name: "", type: "Other Expense", income: "", expenditure: "" });
+      setAddOpen(false);
+    } finally {
+      setSaving(false);
+    }
   };
-  const removeEntry = (id) => setEntries(entries.filter((e) => e.id !== id));
+
+  const removeEntry = async (id) => {
+    if (!confirm("Delete this entry?")) return;
+    await fetch(`/api/society-entries?id=${id}`, { method: "DELETE", credentials: "include" });
+    qc.invalidateQueries(["society-entries", fy]);
+  };
 
   return (
     <div style={S.page}>
@@ -572,11 +604,11 @@ export default function BalanceSheetPage() {
                 </div>
               ))}
               {liabilityEntries.map((e) => (
-                <div key={e.id} style={{ ...S.divRow("#bbf7d0") }}>
+                <div key={e._id} style={{ ...S.divRow("#bbf7d0") }}>
                   <span style={{ color: "#15803d" }}>{e.name} <span style={{ color: "#86efac", fontSize: "0.7rem" }}>[{e.type}]</span></span>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <span style={{ color: "#14532d", fontWeight: 700 }}>{fmt(e.income)}</span>
-                    <button onClick={() => removeEntry(e.id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>✕</button>
+                    <span style={{ color: "#14532d", fontWeight: 700 }}>{fmt(e.amount)}</span>
+                    <button onClick={() => removeEntry(e._id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>✕</button>
                   </div>
                 </div>
               ))}
@@ -597,11 +629,11 @@ export default function BalanceSheetPage() {
                 </div>
               ))}
               {assetEntries.map((e) => (
-                <div key={e.id} style={{ ...S.divRow("#fecaca") }}>
+                <div key={e._id} style={{ ...S.divRow("#fecaca") }}>
                   <span style={{ color: "#b91c1c" }}>{e.name} <span style={{ color: "#fca5a5", fontSize: "0.7rem" }}>[{e.type}]</span></span>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <span style={{ color: "#7f1d1d", fontWeight: 700 }}>{fmt(e.expenditure)}</span>
-                    <button onClick={() => removeEntry(e.id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>✕</button>
+                    <span style={{ color: "#7f1d1d", fontWeight: 700 }}>{fmt(e.amount)}</span>
+                    <button onClick={() => removeEntry(e._id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>✕</button>
                   </div>
                 </div>
               ))}
@@ -641,20 +673,20 @@ export default function BalanceSheetPage() {
                 </thead>
                 <tbody>
                   {entries.map((e, i) => {
-                    const isLiab = parseFloat(e.income) > 0;
+                    const isIncome = e.entryKind === "income";
                     return (
-                      <tr key={e.id} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                      <tr key={e._id} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc" }}>
                         <td style={{ ...S.td, fontWeight: 600, color: "#1e293b" }}>{e.name}</td>
                         <td style={{ ...S.td, color: "#64748b" }}>{e.type}</td>
-                        <td style={{ ...S.td, color: "#16a34a", fontWeight: 600 }}>{e.income ? fmt(e.income) : "—"}</td>
-                        <td style={{ ...S.td, color: "#dc2626", fontWeight: 600 }}>{e.expenditure ? fmt(e.expenditure) : "—"}</td>
+                        <td style={{ ...S.td, color: "#16a34a", fontWeight: 600 }}>{isIncome ? fmt(e.amount) : "—"}</td>
+                        <td style={{ ...S.td, color: "#dc2626", fontWeight: 600 }}>{!isIncome ? fmt(e.amount) : "—"}</td>
                         <td style={S.td}>
-                          <span style={S.badge(isLiab ? "#16a34a" : "#dc2626", isLiab ? "#dcfce7" : "#fee2e2")}>
-                            {isLiab ? "Liability" : "Asset"}
+                          <span style={S.badge(isIncome ? "#16a34a" : "#dc2626", isIncome ? "#dcfce7" : "#fee2e2")}>
+                            {isIncome ? "Income" : "Expenditure"}
                           </span>
                         </td>
                         <td style={S.td}>
-                          <button onClick={() => removeEntry(e.id)} style={{ background: "none", border: "1px solid #e2e8f0", color: "#94a3b8", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: "0.75rem" }}>
+                          <button onClick={() => removeEntry(e._id)} style={{ background: "none", border: "1px solid #e2e8f0", color: "#94a3b8", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: "0.75rem" }}>
                             Remove
                           </button>
                         </td>
@@ -699,14 +731,14 @@ export default function BalanceSheetPage() {
               <div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
                 <button
                   onClick={handleAddEntry}
-                  disabled={!newEntry.name.trim() || (!newEntry.income && !newEntry.expenditure)}
+                  disabled={saving || !newEntry.name.trim() || (!newEntry.income && !newEntry.expenditure)}
                   style={{
                     padding: "0.55rem 1.5rem", borderRadius: 6, border: "none",
-                    background: (newEntry.name.trim() && (newEntry.income || newEntry.expenditure)) ? "#16a34a" : "#cbd5e1",
+                    background: (!saving && newEntry.name.trim() && (newEntry.income || newEntry.expenditure)) ? "#16a34a" : "#cbd5e1",
                     color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "0.88rem",
                   }}
                 >
-                  Add Entry
+                  {saving ? "Saving..." : "Save Entry"}
                 </button>
                 <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>Income OR Expenditure — not both. Name required.</span>
               </div>

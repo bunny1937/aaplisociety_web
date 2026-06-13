@@ -57,7 +57,7 @@ export async function GET(request) {
   }
 
   await connectDB();
-  const sid = mongoose.Types.ObjectId.createFromHexString(societyId);
+  const sid = new mongoose.Types.ObjectId(societyId);
   const members = await Member.find({ societyId: sid, isDeleted: { $ne: true } })
     .select("flatNo wing")
     .sort({ wing: 1, flatNo: 1 })

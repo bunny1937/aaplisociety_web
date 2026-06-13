@@ -27,7 +27,10 @@ export async function POST(request) {
 
   await connectDB();
 
-  const sid = mongoose.Types.ObjectId.createFromHexString(societyId.toString());
+  if (!mongoose.Types.ObjectId.isValid(societyId)) {
+    return NextResponse.json({ error: "Invalid societyId" }, { status: 400 });
+  }
+  const sid = new mongoose.Types.ObjectId(societyId);
   const society = await Society.findById(sid).lean();
   if (!society) return NextResponse.json({ error: "Society not found" }, { status: 404 });
 
@@ -73,6 +76,9 @@ export async function POST(request) {
 
     const [billYear, billMonthStr] = b.periodId.split("-").map(Number);
     const billMonth = billMonthStr - 1; // 0-indexed
+    // Indian FY: Apr(4)–Mar(3); month >= 4 → FY starts this year, else previous year
+    const fyStart = billMonthStr >= 4 ? billYear : billYear - 1;
+    const importedFinancialYear = `${fyStart}-${fyStart + 1}`;
 
     const dueDate = new Date(billYear, billMonth + 1, 0); // last day of month
 
@@ -100,18 +106,12 @@ export async function POST(request) {
     const remainingDue = parseFloat(b.RemainingDue || 0);
     const alreadyPaid = parseFloat(b.AlreadyPaid || 0);
 
-    // Determine status from remaining due
-    let status = "Paid";
-    if (remainingDue > 0.01) {
-      status = amountPaid > 0 || alreadyPaid > 0 ? "Partial" : "Unpaid";
-    }
-
-    // Closing balances: remaining = closingPrincipal + closingInterest (simplified split)
-    // Interest paid first, then principal
-    const interestPaidThisPeriod = Math.min(amountPaid + alreadyPaid, billInterest);
-    const principalPaidThisPeriod = Math.max(0, (amountPaid + alreadyPaid) - interestPaidThisPeriod);
-    const closingInterest = Math.max(0, billInterest - interestPaidThisPeriod);
-    const closingPrincipal = Math.max(0, billPrincipal - principalPaidThisPeriod - advanceCredit);
+    // Historical bills are ALWAYS marked Paid with zero live balances.
+    // Actual unpaid debt at system entry is captured in Member.openingPrincipal / openingInterest.
+    // Keeping these as Unpaid/Partial would cause bill generation to double-count the debt.
+    const status = "Paid";
+    const closingPrincipal = 0;
+    const closingInterest = 0;
 
     try {
       const bill = new Bill({
@@ -135,16 +135,19 @@ export async function POST(request) {
         previousInterest: openingInterest,
         monthInterest: currentInterest,
         interestAmount: currentInterest,
-        principalBalance: billPrincipal,
-        interestBalance: billInterest,
+        principalBalance: 0,
+        interestBalance: 0,
         totalAmount: totalBillDue,
-        amountPaid: amountPaid + alreadyPaid,
+        amountPaid: totalBillDue, // treat as fully settled — debt is in openingPrincipal
         advanceApplied: advanceCredit,
-        balanceAmount: remainingDue,
+        balanceAmount: 0,
         charges,
         status,
         dueDate,
         importedFrom: "BulkImport",
+        isLocked: true,
+        isHistoricalArchive: true,
+        importedFinancialYear,
         importBatchId: batchId,
         importMetadata: {
           fileName: "BillHistory",
@@ -229,7 +232,10 @@ export async function GET(request) {
   if (!societyId) return NextResponse.json({ error: "societyId required" }, { status: 400 });
 
   await connectDB();
-  const sid = mongoose.Types.ObjectId.createFromHexString(societyId.toString());
+  if (!mongoose.Types.ObjectId.isValid(societyId)) {
+    return NextResponse.json({ error: "Invalid societyId" }, { status: 400 });
+  }
+  const sid = new mongoose.Types.ObjectId(societyId);
 
   // First bill = earliest billYear+billMonth
   const firstBill = await Bill.findOne({ societyId: sid, isDeleted: { $ne: true } })
@@ -259,7 +265,10 @@ export async function PATCH(request) {
     return NextResponse.json({ error: "societyId and joinPeriodId required" }, { status: 400 });
   }
   await connectDB();
-  const sid = mongoose.Types.ObjectId.createFromHexString(societyId.toString());
+  if (!mongoose.Types.ObjectId.isValid(societyId)) {
+    return NextResponse.json({ error: "Invalid societyId" }, { status: 400 });
+  }
+  const sid = new mongoose.Types.ObjectId(societyId);
   await Society.findByIdAndUpdate(sid, { "onboarding.joinPeriodId": joinPeriodId });
   return NextResponse.json({ success: true });
 }

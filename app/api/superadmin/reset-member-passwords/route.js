@@ -5,14 +5,11 @@ import Member from "@/models/Member";
 import Society from "@/models/Society";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { generateUniqueUsername } from "@/lib/username-generator";
 
 function generatePassword() {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$!";
-  let pwd = "";
-  for (let i = 0; i < 10; i++)
-    pwd += chars[Math.floor(Math.random() * chars.length)];
-  return pwd;
+  return randomBytes(8).toString("base64url");
 }
 
 // POST /api/superadmin/reset-member-passwords
@@ -70,6 +67,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true, credentials });
   } catch (err) {
     console.error("reset-member-passwords error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

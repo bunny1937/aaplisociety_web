@@ -1,36 +1,27 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Member from "@/models/Member";
 import User from "@/models/User";
 import ExcelJS from "exceljs";
 import bcrypt from "bcryptjs";
 import AuditLog from "@/models/AuditLog";
 import { readFile, unlink } from "fs/promises";
+import { randomBytes } from "crypto";
+import { resolve, sep } from "path";
 import cache from "@/lib/cache";
+import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
 
 function generatePassword() {
-  return Math.random().toString(36).substring(2, 10).toUpperCase();
+  return randomBytes(6).toString("base64url").toUpperCase();
 }
 
 export async function POST(request) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const decoded = verifyToken(token);
-    if (!decoded)
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
-    if (decoded.role === "Accountant") {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 },
-      );
-    }
+    const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { tempFilePath } = await request.json();
 
@@ -41,8 +32,15 @@ export async function POST(request) {
       );
     }
 
+    // Guard: only allow files inside the designated temp directory
+    const tempDir = resolve(process.cwd(), "temp");
+    const resolvedPath = resolve(tempFilePath);
+    if (!resolvedPath.startsWith(tempDir + sep)) {
+      return NextResponse.json({ error: "Invalid file path" }, { status: 400 });
+    }
+
     // Read temp file
-    const buffer = await readFile(tempFilePath);
+    const buffer = await readFile(resolvedPath);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
 
@@ -57,7 +55,7 @@ export async function POST(request) {
     }
 
     // Delete temp file
-    await unlink(tempFilePath);
+    await unlink(resolvedPath);
 
     // Audit log
     await AuditLog.create({

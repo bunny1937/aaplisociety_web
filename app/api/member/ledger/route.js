@@ -16,7 +16,10 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const limit = Math.min(
+      100,
+      parseInt(searchParams.get("limit") || "50", 10),
+    );
     const financialYear = searchParams.get("financialYear");
 
     const query = {

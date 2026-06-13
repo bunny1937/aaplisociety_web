@@ -218,6 +218,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true, count: created.length });
   } catch (err) {
     console.error("generate-from-excel error", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

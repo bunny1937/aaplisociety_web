@@ -7,6 +7,16 @@ import { signToken } from "@/lib/jwt";
 
 export async function POST(request) {
   try {
+    if (
+      process.env.NODE_ENV === "production" &&
+      process.env.ALLOW_PUBLIC_SIGNUP !== "true"
+    ) {
+      return NextResponse.json(
+        { error: "Public signup is disabled. Contact the platform administrator." },
+        { status: 403 },
+      );
+    }
+
     await connectDB();
 
     const body = await request.json();

@@ -29,7 +29,6 @@ async function adminFetch(url, opts = {}) {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY || "",
       ...(opts.headers || {}),
     },
   });
@@ -66,9 +65,7 @@ export default function SuperAdminAuditReportsPage() {
       `/api/superadmin/audit-reports?societyId=${societyId}&download=true`,
       {
         credentials: "include",
-        headers: {
-          "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY || "",
-        },
+        headers: {},
       },
     );
     if (!res.ok) return alert("Download failed");

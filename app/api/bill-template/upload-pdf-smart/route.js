@@ -4,21 +4,15 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { PDFDocument } from 'pdf-lib';
 import connectDB from '@/lib/mongodb';
-import { getTokenFromRequest, verifyToken } from '@/lib/jwt';
+import { requireRoles, SOCIETY_ADMIN_ROLES } from '@/lib/authz';
 
 export async function POST(request) {
   try {
     await connectDB();
     
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const formData = await request.formData();
     const file = formData.get('file');
@@ -40,6 +34,12 @@ export async function POST(request) {
     // Convert to buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // Magic-byte validation — PDF must start with %PDF
+    const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+    if (!isPdf) {
+      return NextResponse.json({ error: 'File is not a valid PDF' }, { status: 400 });
+    }
 
     // Load PDF and detect form fields
     const pdfDoc = await PDFDocument.load(buffer);

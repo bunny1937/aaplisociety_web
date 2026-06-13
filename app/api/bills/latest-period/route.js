@@ -7,9 +7,11 @@ export async function GET(request) {
   try {
     await connectDB();
     const token = getTokenFromRequest(request);
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!token)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const decoded = verifyToken(token);
-    if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    if (!decoded)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const now = new Date();
     const currentPeriodId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -26,8 +28,8 @@ export async function GET(request) {
     const latestPeriodId = latestBill?.billPeriodId || null;
 
     // Is current month generated? Also true if a future month is already generated.
-    const currentGenerated = !!latestPeriodId && latestPeriodId >= currentPeriodId;
-
+    const currentGenerated =
+      !!latestPeriodId && String(latestPeriodId) >= String(currentPeriodId);
     // Next period = one month after latest (or current if nothing generated)
     let nextPeriodId = null;
     if (latestPeriodId) {
@@ -59,6 +61,6 @@ export async function GET(request) {
     });
   } catch (err) {
     console.error("latest-period error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

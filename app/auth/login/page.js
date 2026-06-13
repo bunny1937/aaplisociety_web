@@ -55,6 +55,7 @@ export default function LoginPage() {
       if (data.requiresProfileSelect) {
         // Store profiles in sessionStorage for selector screen
         sessionStorage.setItem("pendingUserId", data.userId);
+        sessionStorage.setItem("profileSelectToken", data.profileSelectToken);
         sessionStorage.setItem(
           "pendingProfiles",
           JSON.stringify(data.profiles),

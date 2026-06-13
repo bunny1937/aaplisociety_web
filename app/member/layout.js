@@ -5,7 +5,7 @@ export default function MemberLayout({ children }) {
   const navigation = [
     {
       title: "Overview",
-      items: [{ name: "Dashboard", path: "/member", icon: "📊" }],
+      items: [{ name: "Dashboard", path: "/member/dashboard", icon: "📊" }],
     },
     {
       title: "My Account",

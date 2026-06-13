@@ -94,7 +94,7 @@ export async function GET(request) {
     return NextResponse.json({ success: true, reports, total: reports.length });
   } catch (err) {
     console.error("superadmin audit-reports GET error", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -126,6 +126,6 @@ export async function PUT(request) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     return NextResponse.json({ success: true, report });
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

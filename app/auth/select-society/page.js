@@ -25,12 +25,12 @@ export default function SelectSocietyPage() {
     setLoading(true);
     setError("");
     try {
-      const userId = sessionStorage.getItem("pendingUserId");
+      const profileSelectToken = sessionStorage.getItem("profileSelectToken");
       const res = await fetch("/api/auth/switch-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ profileId, userId }),
+        body: JSON.stringify({ profileId, profileSelectToken }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to select society");
@@ -38,6 +38,7 @@ export default function SelectSocietyPage() {
       // Clear pending state
       sessionStorage.removeItem("pendingProfiles");
       sessionStorage.removeItem("pendingUserId");
+      sessionStorage.removeItem("profileSelectToken");
       sessionStorage.removeItem("pendingName");
 
       router.replace("/member/dashboard");

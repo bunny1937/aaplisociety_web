@@ -22,8 +22,8 @@ export async function GET(request) {
 
     const [minDoc, maxDoc] = await Promise.all([
       Bill.findOne({ societyId: decoded.societyId })
-        .sort({ billYear: 1 })
-        .select("billYear")
+        .sort({ billYear: 1, billMonth: 1 })
+        .select("billYear billMonth")
         .lean(),
       Bill.findOne({ societyId: decoded.societyId })
         .sort({ billYear: -1 })
@@ -34,12 +34,13 @@ export async function GET(request) {
     const now = new Date();
     const responseData = {
       minYear: minDoc?.billYear || now.getFullYear(),
-      maxYear: now.getFullYear() + 1,
+      minMonth: minDoc ? minDoc.billMonth + 1 : 1, // billMonth is 0-indexed → convert to 1-12
+      maxYear: maxDoc?.billYear || now.getFullYear(),
     };
 
     await cache.set(cacheKey, responseData, 300);
     return NextResponse.json(responseData);
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

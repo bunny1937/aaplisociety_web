@@ -10,6 +10,12 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
+    const start = Date.now();
+    res.on("finish", () => {
+      const ms = Date.now() - start;
+      const color = res.statusCode >= 500 ? "\x1b[31m" : res.statusCode >= 400 ? "\x1b[33m" : "\x1b[32m";
+      console.log(`${color}${res.statusCode}\x1b[0m ${req.method} ${req.url} \x1b[90m${ms}ms\x1b[0m`);
+    });
     handle(req, res, parsedUrl);
   });
 

@@ -569,15 +569,9 @@ export default function GenerateBillsPage() {
     if (!latestPeriodId) {
       // No bills ever — generate current month
       targetPeriod = currentPeriodId;
-    } else if (!currentGenerated) {
-      // Nothing generated yet for current month
-      targetPeriod = currentPeriodId;
-    } else if (allPaid) {
-      // Latest period fully paid — move to next period for generation
-      targetPeriod = nextPeriodId || latestPeriodId;
     } else {
-      // Latest period generated but payments pending — stay on it for payment collection
-      targetPeriod = latestPeriodId;
+      // Always move to next period after latest — partial payments carry as openingPrincipal
+      targetPeriod = nextPeriodId || currentPeriodId;
     }
 
     const [y, m] = targetPeriod.split("-").map(Number);
@@ -745,8 +739,9 @@ export default function GenerateBillsPage() {
     const nextYear = nextDate.getFullYear();
     const nextPeriodLabel = `${nextYear}-${String(nextMonth + 1).padStart(2, "0")}`;
     const currentPeriodLabel = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
-    const _nextDueDay = societyData?.society?.config?.interestAfterDays || 15;
-    const nextDueDate = `${nextYear}-${String(nextMonth + 1).padStart(2, "0")}-${String(_nextDueDay).padStart(2, "0")}`;
+    const interestAfterDays = societyData?.society?.config?.interestAfterDays || 15;
+    const dueDateObj = new Date(nextYear, nextMonth, 1 + interestAfterDays);
+    const nextDueDate = `${dueDateObj.getFullYear()}-${String(dueDateObj.getMonth() + 1).padStart(2, "0")}-${String(dueDateObj.getDate()).padStart(2, "0")}`;
 
     setAutoGenState({
       status: "running",
@@ -1535,9 +1530,11 @@ ${
                     if (!latestPeriodId)
                       return `No bills generated yet — starting with ${periodLabel}`;
                     if (!currentGenerated)
-                      return `Current period ${periodLabel} not yet generated`;
+                      return `${latestPeriodId} bills exist — generating ${periodLabel}`;
                     if (allPaid)
                       return `Payments collected — ready for ${periodLabel}`;
+                    if (latestPeriodId < (latestPeriodData?.currentPeriodId || ""))
+                      return `${latestPeriodId} has partial payments — generating next period ${periodLabel}`;
                     return `Bills generated for ${latestPeriodId} — collect payments or generate ${periodLabel}`;
                   })()
                 : "Detecting billing period..."}
@@ -2576,6 +2573,17 @@ ${
                   >
                     Upload Another Batch
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Auto-generate next month — always visible once a period is loaded */}
+            {billMonth !== null && billYear && (
+              <div style={{ marginTop: "1.5rem", padding: "1rem", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8 }}>
+                <div style={{ fontSize: "0.82rem", color: "#1e40af", fontWeight: 600, marginBottom: "0.75rem" }}>
+                  Next Month Generation
+                </div>
+                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
                   <button
                     className="btn btn-primary"
                     disabled={autoGenState?.status === "running"}
@@ -2587,29 +2595,17 @@ ${
                   >
                     {autoGenState?.status === "running"
                       ? "Generating..."
-                      : billMonth !== null && billYear
-                        ? `Auto-Generate ${new Date(billYear, billMonth + 1, 1).toLocaleString("en-IN", { month: "short", year: "numeric" })} Bills`
-                        : "Auto-Generate Next Month Bills"}
+                      : `Auto-Generate ${new Date(billYear, billMonth + 1, 1).toLocaleString("en-IN", { month: "short", year: "numeric" })} Bills`}
                   </button>
                   {autoGenState?.status === "done" && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        color: "#16a34a",
-                        fontWeight: 600,
-                        fontSize: 14,
-                      }}
-                    >
-                      ✅ {autoGenState.count} bills generated for{" "}
-                      {autoGenState.label}
-                    </div>
+                    <span style={{ color: "#16a34a", fontWeight: 600, fontSize: 14 }}>
+                      ✅ {autoGenState.count} bills generated for {autoGenState.label}
+                    </span>
                   )}
                   {autoGenState?.status === "error" && (
-                    <div
-                      style={{ marginTop: 8, color: "#dc2626", fontSize: 13 }}
-                    >
+                    <span style={{ color: "#dc2626", fontSize: 13 }}>
                       ❌ {autoGenState.error}
-                    </div>
+                    </span>
                   )}
                 </div>
               </div>

@@ -2,22 +2,17 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import User from "@/models/User";
-import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { exportToAdminDB, logAdminActivity } from "@/lib/export-to-admin-db";
+import Transaction from "@/models/Transaction";
+import { requireRoles } from "@/lib/authz";
 
 export async function POST(request) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    const auth = requireRoles(request, ["Admin"]);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { billIds, reason } = await request.json();
 
@@ -51,6 +46,20 @@ export async function POST(request) {
       );
     }
 
+    // Block deletion of locked historical bills
+    const lockedBills = billsToDelete.filter(
+      (b) => b.isHistoricalArchive || b.isLocked || b.importedFrom === "BulkImport"
+    );
+    if (lockedBills.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Cannot delete ${lockedBills.length} historical bill(s) — they are locked audit records and immutable.`,
+          lockedBillIds: lockedBills.map((b) => b._id),
+        },
+        { status: 403 },
+      );
+    }
+
     // ✅ STEP 2: EXPORT TO ADMIN.EXPORTS COLLECTION (BEFORE DELETING)
     const exportResult = await exportToAdminDB(billsToDelete, {
       collection: "bills",
@@ -75,7 +84,7 @@ export async function POST(request) {
     // ✅ Also reverse/delete the system Debit transactions created for these bills
     await Transaction.updateMany(
       {
-        societyId,
+          societyId: decoded.societyId,
         referenceId: { $in: billIds },
         referenceModel: "Bill",
         type: "Debit",

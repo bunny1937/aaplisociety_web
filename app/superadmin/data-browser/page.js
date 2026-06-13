@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-const H = { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY || "" };
+const H = {};
 
 async function adminGet(url) {
   const res = await fetch(url, { credentials: "include", headers: H });

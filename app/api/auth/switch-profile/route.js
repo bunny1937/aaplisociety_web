@@ -10,13 +10,13 @@ export async function POST(request) {
     await connectDB();
 
     const body = await request.json();
-    const { profileId, userId: bodyUserId } = body;
+    const { profileId, profileSelectToken } = body;
 
     if (!profileId) {
       return NextResponse.json({ error: "profileId is required" }, { status: 400 });
     }
 
-    // Auth: existing token (profile switch) OR userId from body (post-login society select)
+    // Auth: existing session cookie OR short-lived profile-select token from login
     const userToken = request.cookies.get("token")?.value;
     let resolvedUserId;
 
@@ -28,8 +28,17 @@ export async function POST(request) {
         return NextResponse.json({ error: "Invalid token" }, { status: 401 });
       }
       resolvedUserId = decoded.userId;
-    } else if (bodyUserId) {
-      resolvedUserId = bodyUserId;
+    } else if (profileSelectToken) {
+      let decoded;
+      try {
+        decoded = jwt.verify(profileSelectToken, process.env.JWT_SECRET);
+      } catch {
+        return NextResponse.json({ error: "Invalid or expired profile-select token" }, { status: 401 });
+      }
+      if (decoded.purpose !== "profile-select") {
+        return NextResponse.json({ error: "Invalid token purpose" }, { status: 401 });
+      }
+      resolvedUserId = decoded.userId;
     } else {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

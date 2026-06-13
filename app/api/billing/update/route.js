@@ -3,32 +3,16 @@ import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
 import AuditLog from "@/models/AuditLog";
-import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
+import { requireRoles, BILLING_WRITE_ROLES } from "@/lib/authz";
 
 import { getFinancialYear } from "@/lib/date-utils";
 
 export async function PUT(request) {
   try {
     await connectDB();
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    if (decoded.role === "Accountant") {
-      return NextResponse.json(
-        {
-          error:
-            "Insufficient permissions. Only Admin and Secretary can update bills.",
-        },
-        { status: 403 }
-      );
-    }
+    const auth = requireRoles(request, BILLING_WRITE_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { billId, updates } = await request.json();
 
@@ -172,24 +156,9 @@ export async function DELETE(request) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    if (decoded.role !== "Admin") {
-      return NextResponse.json(
-        {
-          error: "Only Admin can delete bills",
-        },
-        { status: 403 }
-      );
-    }
+    const auth = requireRoles(request, ["Admin"]);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { searchParams } = new URL(request.url);
     const billPeriodId = searchParams.get("billPeriodId");

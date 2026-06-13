@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { verifyToken, getTokenFromRequest } from '@/lib/jwt';
 import Society from '@/models/Society';
 import Member from '@/models/Member';
 import Transaction from '@/models/Transaction';
@@ -9,6 +8,7 @@ import User from '@/models/User';
 import AuditLog from '@/models/AuditLog';
 import BillingHead from '@/models/BillingHead';
 import Receipt from '@/models/Receipt';
+import { requireRoles } from '@/lib/authz';
 
 const modelMap = {
   society: Society,
@@ -25,13 +25,9 @@ export async function DELETE(request, { params }) {
   try {
     await connectDB();
     
-    const token = getTokenFromRequest(request);
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const auth = requireRoles(request, ['Admin']);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { entity } =  await params;
     const Model = modelMap[entity];

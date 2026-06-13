@@ -1,36 +1,31 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { verifyToken, getTokenFromRequest } from '@/lib/jwt';
-import Society from '@/models/Society';
 import Member from '@/models/Member';
 import Transaction from '@/models/Transaction';
 import Bill from '@/models/Bill';
-import User from '@/models/User';
 import AuditLog from '@/models/AuditLog';
 import BillingHead from '@/models/BillingHead';
 import ExcelJS from 'exceljs';
+import { requireRoles, SOCIETY_ADMIN_ROLES } from '@/lib/authz';
 
+// Restrict importable entities — never allow writing to users/auditlogs directly
 const modelMap = {
-  society: Society,
   members: Member,
   transactions: Transaction,
   bills: Bill,
-  users: User,
-  auditlogs: AuditLog,
-  billingheads: BillingHead
+  billingheads: BillingHead,
 };
+
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_IMPORT_ROWS = 5000;
 
 export async function POST(request, { params }) {
   try {
     await connectDB();
     
-    const token = getTokenFromRequest(request);
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { entity } =   await params;
     const Model = modelMap[entity];
@@ -44,6 +39,10 @@ export async function POST(request, { params }) {
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    if (file.size > MAX_IMPORT_BYTES) {
+      return NextResponse.json({ error: 'File too large. Max 5MB.' }, { status: 400 });
     }
 
     const bytes = await file.arrayBuffer();
@@ -85,6 +84,10 @@ export async function POST(request, { params }) {
 
     if (!Array.isArray(dataToImport) || dataToImport.length === 0) {
       return NextResponse.json({ error: 'No data found in file' }, { status: 400 });
+    }
+
+    if (dataToImport.length > MAX_IMPORT_ROWS) {
+      return NextResponse.json({ error: `Too many rows. Max ${MAX_IMPORT_ROWS} per import.` }, { status: 400 });
     }
 
     // Add societyId to each record if not society entity

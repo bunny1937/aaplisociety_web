@@ -58,6 +58,7 @@ export default function AdminLayout({ children }) {
       items: [
         { name: "Ledger",        path: "/admin/ledger",        icon: <BookOpen size={16} /> },
         { name: "Payments",      path: "/admin/payments",      icon: <CreditCard size={16} /> },
+        { name: "Receipts",      path: "/admin/receipts",      icon: <FileText size={16} /> },
         { name: "Late Payments", path: "/admin/late-payments", icon: <AlertTriangle size={16} /> },
         { name: "Balance Sheet", path: "/admin/balance-sheet", icon: <BarChart3 size={16} /> },
       ],

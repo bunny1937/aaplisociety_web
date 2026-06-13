@@ -1,3 +1,4 @@
+.playwright-mcp/
 node_modules/
 .next/
 .env.local
@@ -8,8 +9,8 @@ node_modules/
 out/
 build/
 dist/
-BillHistory_*.xlsx
-BulkImport_Template.xlsx
+# BillHistory_*.xlsx
+# BulkImport_Template.xlsx
 transactions_*.xlsx
 .vercel
 .claude
@@ -20,20 +21,28 @@ REPO_CONTEXT.txt
 changes.txt
 project-structure.txt
 
-
-AapliSociety.zip
+                                     
+a02301d4-8205-4459-bb3b-5def6b79e308.jpg                          
+AapliSociety.zip                           
 admin_DEBUG.txt
-auth_DEBUG.txt
-billing-context.txt
-billing-lifecycle-report.html
-billing_DEBUG.txt
+auth_DEBUG.txt                                             
+bef92b81-101a-4eee-ab23-14fb627e649e.jpg                         
+BillHistory_Gurukrupa_Society.xlsx                           
+BillHistory_Gurukrupa_Society_fixed.xlsx                         
+BillHistory_Gurukrupa_Society_updated.xlsx
+billing-context.txt                           
+billing-lifecycle-report.html                              
+billing_DEBUG.txt                                      
 Bills-all (10).xlsx
 bills_2026-05-10T13_04_11.499Z.xlsx
 bills_2026-05-11T19_36_03.114Z.json
-BillTemplate_2026-05 (27).xlsx
-debug.config.js
+BillTemplate_2026-05 (27).xlsx                                     
+BulkImport_Template.xlsx
+creative-bento-grid-layouts-geometric-shapes-compositions-trendy-ui-frame-template-modern-card-tiles-brutal-shape-pattern-web-comics-grids-vector-set_229548-5106.avif                                   
+slnx.sqlite
+548d43c4-418f-4311-9ee8-12b467da55e9.vsidx
+.wsuo
 DEBUG_SMART.txt
-graph.png
 intro_block_v4 (1).html
 ledger___payments_DEBUG.txt
 lib___models_DEBUG.txt
@@ -42,22 +51,23 @@ megha_sgr_2flats.xlsx
 megha_sgr_flat504B.xlsx
 memberDashboard_DEBUG.txt
 members_DEBUG.txt
+member_DEBUG.txt
 member_import_template.xlsx
-member_import_template_detailed.xlsx
+member_import_template_detailed.xlsx                               
 migrateusers.js
-new.pdf
+new.pdf                                                   
+original-9ec176124bebb5723027310a24451b2b.webp
 patch-usernames.mjs
 PaymentTemplate_2026-05 (13).xlsx
 PaymentTemplate_2026-05.xlsx
 PaymentTemplate_2026-05_filled.xlsx
 receipts_2026-05-11T19_36_08.292Z.json
-scripts
 shopify-plan-guide.html
+skills-lock.json
 society_DEBUG.txt
 society_upload_template.xlsx
 structure.txt
 superadmin_DEBUG.txt
-temp
 test-billing.js
 test-cache.mjs
 test.bills.json
@@ -65,6 +75,24 @@ test.members.json
 test.receipts.json
 test.transactions.json
 test.users.json
-tests
 transactions_2026-05-11T19_35_56.670Z.json
 ~$megha_sgr_2flats.xlsx
+soceity_DEBUG.txt
+                                                            
+aaplisocietyy.html
+brand-intro.html
+Skyline-Arc.png                                                    
+skyline1.jpg
+skyline2.jpg                                                       
+smart-bill.jpeg
+tap.webp                                                           
+workreduced.jpeg
+brand-intro-new.html
+
+.vs
+.claude
+allure-results
+playwright-report
+test-results
+tests
+*.tsbuildinfo

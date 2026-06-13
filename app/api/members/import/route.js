@@ -1,7 +1,6 @@
 // app/api/members/import/route.js
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Member from "@/models/Member";
 import User from "@/models/User";
 import Society from "@/models/Society";
@@ -11,10 +10,12 @@ import mongoose from "mongoose";
 import AuditLog from "@/models/AuditLog";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { randomBytes } from "crypto";
 import { generateUniqueUsername } from "@/lib/username-generator";
+import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
 
 function generatePassword() {
-  return Math.random().toString(36).substring(2, 10).toUpperCase();
+  return randomBytes(6).toString("base64url").toUpperCase();
 }
 
 async function upsertMemberUser({
@@ -100,20 +101,9 @@ export async function POST(request) {
   try {
     await connectDB();
 
-    const token = getTokenFromRequest(request);
-    if (!token)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const decoded = verifyToken(token);
-    if (!decoded)
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
-    if (decoded.role === "Accountant") {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 },
-      );
-    }
+    const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const formData = await request.formData();
     const file = formData.get("file");

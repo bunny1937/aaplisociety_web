@@ -19,16 +19,12 @@ import { validateAdminRequest } from "@/lib/admin-middleware";
 import { calculateMemberCharges } from "@/lib/calculate-member-bill";
 import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
 import { generateUniqueUsername } from "@/lib/username-generator";
+import { randomBytes } from "crypto";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function generatePassword() {
-  const chars =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$!";
-  let pwd = "";
-  for (let i = 0; i < 10; i++)
-    pwd += chars[Math.floor(Math.random() * chars.length)];
-  return pwd;
+  return randomBytes(10).toString("base64url");
 }
 
 function generateSocietyId(name) {
@@ -148,7 +144,12 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
     if (flatNo.toUpperCase().startsWith("INSTRUCTION") || flatNo === "flatNo*")
       continue;
     if (!flatNo || !wing) {
-      errors.push({ label: `Row ${i + 2}`, errors: [`Missing required field(s): ${!wing ? "'wing'" : ""}${!wing && !flatNo ? ", " : ""}${!flatNo ? "'flatNo*'" : ""}`.trim()] });
+      errors.push({
+        label: `Row ${i + 2}`,
+        errors: [
+          `Missing required field(s): ${!wing ? "'wing'" : ""}${!wing && !flatNo ? ", " : ""}${!flatNo ? "'flatNo*'" : ""}`.trim(),
+        ],
+      });
       continue;
     }
 
@@ -360,9 +361,10 @@ export async function POST(request) {
   }
 
   if (validMembers.length === 0) {
-    const hint = basicInfoRows.length > 0
-      ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that 'wing' and 'flatNo*' columns are filled and not renamed.`
-      : "Sheet '1. Basic Info (Required)' is empty.";
+    const hint =
+      basicInfoRows.length > 0
+        ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that 'wing' and 'flatNo*' columns are filled and not renamed.`
+        : "Sheet '1. Basic Info (Required)' is empty.";
     return NextResponse.json(
       {
         validationFailed: true,
@@ -431,6 +433,8 @@ export async function POST(request) {
   let membersCreated = 0;
   const memberCreateErrors = [];
   const memberCredentials = [];
+  const createdMemberUserIds = [];
+  const appendedProfiles = [];
 
   for (const memberData of validMembers) {
     try {
@@ -447,9 +451,11 @@ export async function POST(request) {
         });
 
         if (existingUser) {
+          const profileId = new mongoose.Types.ObjectId();
+
           existingUser.profiles = existingUser.profiles || [];
           existingUser.profiles.push({
-            profileId: new mongoose.Types.ObjectId(),
+            profileId,
             societyId: society._id,
             memberId: member._id,
             flatNo: memberData.flatNo,
@@ -459,6 +465,12 @@ export async function POST(request) {
             joinedAt: new Date(),
           });
           await existingUser.save();
+
+          appendedProfiles.push({
+            userId: existingUser._id,
+            profileId,
+          });
+
           memberCredentials.push({
             flatNo: memberData.flatNo,
             wing: memberData.wing,
@@ -473,7 +485,7 @@ export async function POST(request) {
             memberData.ownerName,
             memberData.flatNo,
           );
-          await User.create({
+          const newUser = await User.create({
             name: memberData.ownerName,
             email: memberData.emailPrimary,
             username,
@@ -495,6 +507,9 @@ export async function POST(request) {
             ],
             isActive: true,
           });
+
+          createdMemberUserIds.push(newUser._id);
+
           memberCredentials.push({
             flatNo: memberData.flatNo,
             wing: memberData.wing,
@@ -518,11 +533,24 @@ export async function POST(request) {
   if (memberCreateErrors.length > 0) {
     try {
       await Member.deleteMany({ societyId: society._id });
+
+      if (createdMemberUserIds.length > 0) {
+        await User.deleteMany({ _id: { $in: createdMemberUserIds } });
+      }
+
+      for (const { userId, profileId } of appendedProfiles) {
+        await User.updateOne(
+          { _id: userId },
+          { $pull: { profiles: { profileId } } },
+        );
+      }
+
       await User.deleteOne({ email: societyPayload.email });
       await Society.findByIdAndDelete(society._id);
     } catch (cleanupErr) {
       console.error("Rollback error:", cleanupErr.message);
     }
+
     return NextResponse.json(
       {
         validationFailed: true,
@@ -724,16 +752,18 @@ export async function POST(request) {
 
         billsGenerated++;
       } catch (err) {
-        console.error(`[bulk-import] bill error for ${member.wing}-${member.flatNo}:`, err.message, err.stack?.split("\n")[1]);
+        console.error(
+          `[bulk-import] bill error for ${member.wing}-${member.flatNo}:`,
+          err.message,
+          err.stack?.split("\n")[1],
+        );
         billErrors.push(`${member.wing}-${member.flatNo}: ${err.message}`);
       }
     }
   } else if (validMembers.length === 0) {
     warnings.push("No bills generated — no members were imported.");
   } else if (billingHeads.length === 0) {
-    warnings.push(
-      "No bills generated — billing heads could not be created.",
-    );
+    warnings.push("No bills generated — billing heads could not be created.");
   }
 
   // ── ROLLBACK if bills failed for any member that was expected ────────
@@ -744,7 +774,7 @@ export async function POST(request) {
       await Transaction.deleteMany({ societyId: society._id });
       await BillingHead.deleteMany({ societyId: society._id });
       await Member.deleteMany({ societyId: society._id });
-      await User.deleteOne({ email: societyPayload.email });
+      await User.deleteMany({ societyId: society._id });
       await Society.findByIdAndDelete(society._id);
     } catch (cleanupErr) {
       // best-effort cleanup; log but don't mask the real error

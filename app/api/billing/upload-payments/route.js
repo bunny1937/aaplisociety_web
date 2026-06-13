@@ -332,12 +332,14 @@ export async function POST(request) {
           const member = await Member.findById(row.memberId).lean();
           if (!member) throw new Error("Member not found");
 
-          // CHANGE TO:
           const unpaidBills = await Bill.find({
             memberId: row.memberId,
             societyId: dec.societyId,
-            billPeriodId: row.billPeriodId, // ← scope to the period being paid
+            billPeriodId: row.billPeriodId,
             status: { $in: ["Unpaid", "Partial", "Overdue"] },
+            isHistoricalArchive: { $ne: true }, // never touch historical audit records
+            importedFrom: { $ne: "BulkImport" },
+            isLocked: { $ne: true },
             isDeleted: { $ne: true },
           }).sort({ billYear: 1, billMonth: 1 });
 
@@ -412,9 +414,8 @@ export async function POST(request) {
             bill.lastModifiedBy = dec.userId;
             await bill.save();
 
-            // When a bill is fully paid and it absorbed prior-period outstanding,
-            // mark those prior bills' balanceAmount=0 so they don't double-count
-            // in future get-previous-balances calls.
+            // Zero out historical BulkImport bills absorbed into openingPrincipal.
+            // Only target importedFrom=BulkImport — live Partial bills are real receivables.
             if (upd.newStatus === "Paid" && (bill.openingPrincipal > 0 || bill.openingInterest > 0)) {
               await Bill.updateMany(
                 {
@@ -422,6 +423,7 @@ export async function POST(request) {
                   societyId: dec.societyId,
                   billPeriodId: { $lt: bill.billPeriodId },
                   balanceAmount: { $gt: 0.005 },
+                  importedFrom: "BulkImport",
                   isDeleted: { $ne: true },
                 },
                 {

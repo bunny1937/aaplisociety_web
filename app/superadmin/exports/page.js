@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 
-const H = { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY || "" };
+const H = {};
 
 async function adminGet(url) {
   const res = await fetch(url, { credentials: "include", headers: H });

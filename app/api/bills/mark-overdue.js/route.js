@@ -7,9 +7,18 @@ import Bill from "@/models/Bill";
  * This is SEPARATE from interest calculation
  */
 export async function POST(request) {
+  const token = request.cookies.get("admin_token")?.value;
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     await connectDB();
+    const decoded = verifyToken(token);
+    if (!decoded || decoded.role !== "SuperAdmin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
+    // existing overdue update logic
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -22,7 +31,7 @@ export async function POST(request) {
     });
 
     // ✅ Explicit bulk update
-    const updatePromises = overdueBills.map(bill => {
+    const updatePromises = overdueBills.map((bill) => {
       bill.status = "Overdue";
       bill.lastModifiedAt = new Date();
       return bill.save();
@@ -37,7 +46,6 @@ export async function POST(request) {
       message: `${overdueBills.length} bills marked as overdue`,
       count: overdueBills.length,
     });
-
   } catch (error) {
     console.error("Mark overdue error:", error);
     return NextResponse.json(
@@ -45,7 +53,7 @@ export async function POST(request) {
         error: "Internal server error",
         details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

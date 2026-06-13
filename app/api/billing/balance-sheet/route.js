@@ -44,7 +44,10 @@ export async function GET(request) {
   })());
 
   await connectDB();
-  const sid = mongoose.Types.ObjectId.createFromHexString(societyId.toString());
+  if (!societyId || !mongoose.Types.ObjectId.isValid(societyId)) {
+    return NextResponse.json({ error: "Invalid society context" }, { status: 400 });
+  }
+  const sid = new mongoose.Types.ObjectId(societyId);
 
   // All bills for this FY
   const bills = await Bill.find({

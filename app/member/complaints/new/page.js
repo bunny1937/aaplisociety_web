@@ -149,8 +149,11 @@ export default function CreateComplaintPage() {
             Max 2 per day, 15 min cooldown.
           </div>
 
-          <button type="submit" className={styles.submitBtn} disabled={loading}>
-            {loading ? "Submitting..." : "Submit Complaint"}
+          <div style={{ background: "#FEF3C7", border: "1px solid #F59E0B", borderRadius: "8px", padding: "12px 16px", fontSize: "0.85rem", color: "#92400E", marginBottom: "1rem" }}>
+            🔒 Complaint submission is currently disabled. Contact your society admin directly.
+          </div>
+          <button type="submit" className={styles.submitBtn} disabled style={{ opacity: 0.5, cursor: "not-allowed" }}>
+            Submit Complaint
           </button>
         </form>
       </div>

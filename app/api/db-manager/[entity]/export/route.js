@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { verifyToken, getTokenFromRequest } from '@/lib/jwt';
 import Society from '@/models/Society';
 import Member from '@/models/Member';
 import Transaction from '@/models/Transaction';
@@ -10,6 +9,9 @@ import AuditLog from '@/models/AuditLog';
 import BillingHead from '@/models/BillingHead';
 import Receipt from '@/models/Receipt';
 import ExcelJS from 'exceljs';
+import { requireRoles, SOCIETY_ADMIN_ROLES } from '@/lib/authz';
+
+const MAX_EXPORT_ROWS = 10000;
 
 const modelMap = {
   society: Society,
@@ -26,13 +28,9 @@ export async function GET(request, { params }) {
   try {
     await connectDB();
     
-    const token = getTokenFromRequest(request);
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
+    if (!auth.valid) return auth;
+    const decoded = auth.user;
 
     const { entity } =  await params;
     const Model = modelMap[entity];
@@ -51,7 +49,23 @@ export async function GET(request, { params }) {
       query._id = decoded.societyId;
     }
 
+    const total = await Model.countDocuments(query);
+    if (total > MAX_EXPORT_ROWS) {
+      return NextResponse.json({
+        error: `Export too large (${total} rows). Max ${MAX_EXPORT_ROWS}. Use date filters to narrow the export.`
+      }, { status: 400 });
+    }
+
     const data = await Model.find(query).lean();
+
+    // Audit log — record every export
+    await AuditLog.create({
+      userId: decoded.userId,
+      societyId: decoded.societyId,
+      action: 'EXPORT_DATA',
+      newData: { entity, format, rowCount: data.length },
+      timestamp: new Date(),
+    });
 
     // JSON Export
     if (format === 'json') {
