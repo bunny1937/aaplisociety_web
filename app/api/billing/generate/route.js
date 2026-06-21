@@ -26,7 +26,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    if (decoded.role === "Accountant") {
+    if (["Accountant", "Member"].includes(decoded.role)) {
       return NextResponse.json(
         { error: "Insufficient permissions" },
         { status: 403 },
@@ -41,6 +41,12 @@ export async function POST(request) {
     if (!year || !month) {
       return NextResponse.json(
         { error: "Year and month are required" },
+        { status: 400 },
+      );
+    }
+    if (month < 1 || month > 12) {
+      return NextResponse.json(
+        { error: "Month must be between 1 and 12" },
         { status: 400 },
       );
     }

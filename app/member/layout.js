@@ -17,6 +17,7 @@ export default function MemberLayout({ children }) {
         { name: "Receipts", path: "/member/receipts", icon: "🧾" },
         { name: "Notices", path: "/member/notices", icon: "📢" },
         { name: "Complaints", path: "/member/complaints", icon: "📝" },
+        { name: "Visitors", path: "/member/visitors", icon: "🚪" },
       ],
     },
   ];

@@ -47,7 +47,6 @@ const UserSchema = new mongoose.Schema(
       type: String,
       lowercase: true,
       trim: true,
-      sparse: true,
     },
 
     email: {
@@ -72,7 +71,14 @@ const UserSchema = new mongoose.Schema(
     // Member accounts: role="Member", societyId/memberId live inside profiles[]
     role: {
       type: String,
-      enum: ["SuperAdmin", "Admin", "Secretary", "Accountant", "Member"],
+      enum: [
+        "SuperAdmin",
+        "Admin",
+        "Secretary",
+        "Accountant",
+        "Member",
+        "Security",
+      ],
       default: "Member",
     },
     societyId: {
@@ -81,7 +87,9 @@ const UserSchema = new mongoose.Schema(
       ref: "Society",
     },
     societyCode: { type: String }, // kept for SOCIETY_ADMIN compat
-
+    // Security guard fields (only populated when role === 'Security')
+    gateLabel: { type: String, trim: true, default: "Main Gate" }, // e.g. "Main Gate", "Rear Gate"
+    pin: { type: String }, // store hashed PIN only, never raw PIN
     // ── Member multi-society profiles ──────────────────────────────────────
     profiles: {
       type: [ProfileSchema],

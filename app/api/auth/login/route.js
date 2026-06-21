@@ -36,10 +36,16 @@ export async function POST(request) {
 
     const body = await request.json();
 
-    // Accept either "username" or legacy "email" field from body
-    // (Admin login still sends email; Member login sends username)
-    const identifier = (body.username || body.email || "").trim().toLowerCase();
-    const { password } = body;
+    const rawIdentifier = body.username || body.email || "";
+    const rawPassword = body.password;
+    if (typeof rawIdentifier !== "string" || typeof rawPassword !== "string") {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 400 },
+      );
+    }
+    const identifier = rawIdentifier.trim().toLowerCase();
+    const password = rawPassword;
 
     if (!identifier || !password) {
       return NextResponse.json(
@@ -95,7 +101,13 @@ export async function POST(request) {
     // ── ADMIN / SECRETARY / ACCOUNTANT ───────────────────────────────────────
     // These still carry root-level role + societyId — unchanged flow.
     if (
-      ["Admin", "Secretary", "Accountant", "SOCIETY_ADMIN"].includes(user.role)
+      [
+        "Admin",
+        "Secretary",
+        "Accountant",
+        "Security",
+        "SOCIETY_ADMIN",
+      ].includes(user.role)
     ) {
       clearLoginRateLimit(identifier);
       const token = signToken({

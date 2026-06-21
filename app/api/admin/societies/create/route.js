@@ -51,6 +51,17 @@ export async function POST(request) {
     config,
   } = body;
 
+  if (!societyName || !email || !fullName) {
+    return NextResponse.json({ error: "societyName, email, and fullName are required" }, { status: 400 });
+  }
+
+  if (registrationNo) {
+    const dupe = await Society.findOne({ registrationNo, isDeleted: { $ne: true } });
+    if (dupe) {
+      return NextResponse.json({ error: "Registration number already exists" }, { status: 409 });
+    }
+  }
+
   // Generate unique societyId
   let societyId,
     attempts = 0;

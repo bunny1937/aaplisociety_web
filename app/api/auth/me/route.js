@@ -11,8 +11,9 @@ export async function GET(req) {
     const adminToken = req.cookies.get("admin_token")?.value;
     const cookieToken = req.cookies.get("token")?.value;
     const authHeader = req.headers.get("authorization");
-    const bearerToken =
-      authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+    const bearerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.substring(7)
+      : null;
     const userToken = cookieToken || bearerToken;
 
     // ── SUPERADMIN ────────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ export async function GET(req) {
         decoded.role === "Admin" ||
         decoded.role === "Secretary" ||
         decoded.role === "Accountant" ||
+        decoded.role === "Security" ||
         decoded.role === "SOCIETY_ADMIN"
       ) {
         const user = await User.findById(decoded.userId).select(

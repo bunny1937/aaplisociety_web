@@ -1,0 +1,96 @@
+// app/api/admin/visitors/route.js
+// GET — Society-wide visitor management for Admin/Secretary (filters + summary).
+import { NextResponse } from "next/server";
+import mongoose from "mongoose";
+import connectDB from "@/lib/mongodb";
+import Visitor from "@/models/Visitor";
+import { requireRoles } from "@/lib/authz";
+import { VISITOR_STATUSES, VISITOR_PURPOSES } from "@/lib/visitor-config";
+
+export async function GET(request) {
+  const auth = requireRoles(request, ["Admin", "Secretary"]);
+  if (!auth.valid) return auth;
+
+  try {
+    await connectDB();
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+    const purpose = searchParams.get("purpose");
+    const offline = searchParams.get("offline"); // "1" => offline entries only
+    const confirm = searchParams.get("confirm"); // Pending | Acknowledged | Flagged
+    const q = String(searchParams.get("q") || "").trim();
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(
+      100,
+      parseInt(searchParams.get("limit") || "25", 10),
+    );
+
+    const query = { societyId: auth.user.societyId };
+    if (status && VISITOR_STATUSES.includes(status)) query.status = status;
+    if (purpose && VISITOR_PURPOSES.includes(purpose)) query.purpose = purpose;
+    if (offline === "1") query.entryMethod = "OfflineEntry";
+    if (["Pending", "Acknowledged", "Flagged"].includes(confirm))
+      query["offlineMeta.confirmation.status"] = confirm;
+    if (from || to) {
+      query.createdAt = {};
+      if (from) query.createdAt.$gte = new Date(from);
+      if (to) {
+        const end = new Date(to);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+    if (q) {
+      query.$or = [
+        { name: { $regex: q, $options: "i" } },
+        { phone: { $regex: q, $options: "i" } },
+        { vehicleNumber: { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const [visitors, total, summary] = await Promise.all([
+      Visitor.find(query)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .populate("enteredBy", "name gateLabel phone")
+        .lean(),
+      Visitor.countDocuments(query),
+      Visitor.aggregate([
+        {
+          $match: {
+            societyId: new mongoose.Types.ObjectId(String(auth.user.societyId)),
+          },
+        },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+      Visitor.countDocuments({
+        societyId: auth.user.societyId,
+        entryMethod: "OfflineEntry",
+      }),
+      Visitor.countDocuments({
+        societyId: auth.user.societyId,
+        entryMethod: "OfflineEntry",
+        "offlineMeta.confirmation.status": "Flagged",
+      }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      visitors,
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+      summary: summary.reduce((a, r) => ((a[r._id] = r.count), a), {}),
+    });
+  } catch (err) {
+    console.error("Admin visitors error", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}

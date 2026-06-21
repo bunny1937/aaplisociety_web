@@ -5,6 +5,12 @@ import { jwtVerify } from "jose";
 const ALLOWED_ORIGIN =
   process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+// Extra CSRF-allowed origins (comma-separated). Use for tunnels like ngrok.
+// e.g. ALLOWED_ORIGINS="https://nguyet-diffusible-madonna.ngrok-free.dev"
+const EXTRA_ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
 
 async function parseJwt(t, secretEnvKey = "JWT_SECRET") {
   try {
@@ -31,7 +37,27 @@ export async function middleware(request) {
       const isTestBypass =
         process.env.NODE_ENV !== "production" &&
         request.headers.get("x-test-mode") === "true";
-      if (!isTestBypass && (!origin || origin !== ALLOWED_ORIGIN)) {
+
+      // Allowed origins: the canonical app URL + any explicit extras.
+      const allowedOrigins = [ALLOWED_ORIGIN, ...EXTRA_ALLOWED_ORIGINS];
+
+      // DEV ONLY: also accept same-origin requests (Origin host === Host header).
+      // Lets you tunnel via ngrok / LAN IP on mobile without hardcoding URLs.
+      // Hard-disabled in production.
+      let isSameOriginDev = false;
+      if (process.env.NODE_ENV !== "production" && origin) {
+        try {
+          isSameOriginDev =
+            new URL(origin).host === request.headers.get("host");
+        } catch {
+          isSameOriginDev = false;
+        }
+      }
+
+      const originOk =
+        !!origin && (allowedOrigins.includes(origin) || isSameOriginDev);
+
+      if (!isTestBypass && !originOk) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
@@ -46,6 +72,7 @@ export async function middleware(request) {
     "/auth/login",
     "/auth/signup",
     "/admin/login",
+    "/security/login",
     "/member/login",
     "/superadmin/login",
   ];
@@ -65,6 +92,11 @@ export async function middleware(request) {
     }
     if (token) {
       const payload = await parseJwt(token);
+      if (payload?.role === "Security") {
+        return NextResponse.redirect(
+          new URL("/security/dashboard", request.url),
+        );
+      }
       if (
         payload?.role === "Admin" ||
         payload?.role === "Secretary" ||
@@ -72,6 +104,7 @@ export async function middleware(request) {
       ) {
         return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       }
+
       // Member token: new shape has activeProfileId, no role
       // Old shape: role === "Member"
       if (payload?.activeProfileId || payload?.role === "Member") {
@@ -95,11 +128,17 @@ export async function middleware(request) {
 
   // ── ADMIN + MEMBER PROTECTED ROUTES ──────────────────────────────────────
   if (!token) {
+    if (pathname.startsWith("/security")) {
+      return NextResponse.redirect(new URL("/auth/login", request.url));
+    }
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
   const payload = await parseJwt(token);
   if (!payload) {
+    if (pathname.startsWith("/security")) {
+      return NextResponse.redirect(new URL("/auth/login", request.url));
+    }
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
@@ -113,12 +152,14 @@ export async function middleware(request) {
     payload.role === "Accountant" ||
     payload.role === "SOCIETY_ADMIN";
   const isMember = payload.role === "Member" || !!payload.activeProfileId;
+  const isSecurity = payload.role === "Security";
 
   // /admin exact → redirect to dashboard
   if (pathname === "/admin") {
     return NextResponse.redirect(new URL("/admin/dashboard", request.url));
   }
-
+  if (pathname === "/security")
+    return NextResponse.redirect(new URL("/security/dashboard", request.url));
   if (pathname.startsWith("/admin") && !isAdmin) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
@@ -126,7 +167,9 @@ export async function middleware(request) {
   if (pathname.startsWith("/member") && !isMember) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
-
+  if (pathname.startsWith("/security") && !isSecurity) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
   return NextResponse.next();
 }
 
@@ -135,6 +178,7 @@ export const config = {
     "/",
     "/admin/:path*",
     "/member/:path*",
+    "/security/:path*",
     "/superadmin/:path*",
     "/api/:path*",
   ],

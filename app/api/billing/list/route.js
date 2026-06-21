@@ -23,9 +23,15 @@ export async function GET(request) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
+    if (decoded.role === "Member") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const billPeriodId = searchParams.get("billPeriodId");
-    const status = searchParams.get("status");
+    const rawStatus = searchParams.get("status");
+    const ALLOWED_STATUSES = ["Paid", "Unpaid", "Overdue", "Partial"];
+    const status = rawStatus && ALLOWED_STATUSES.includes(rawStatus) ? rawStatus : null;
     const memberId = searchParams.get("memberId");
 
     const query = { societyId: decoded.societyId };

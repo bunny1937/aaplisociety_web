@@ -298,6 +298,14 @@ const MemberSchema = new mongoose.Schema(
     },
 
     isDeleted: { type: Boolean, default: false },
+
+    // === CONTACTABILITY (Visitor module — zero-dead-end escalation) ===
+    // Set when a visitor-approval notification could not reach this flat
+    // (e.g. phone disconnected / permanently off). Surfaces a "please update
+    // your number" banner to the resident and a HIGH ALERT to admins.
+    contactInvalid: { type: Boolean, default: false },
+    contactInvalidReason: { type: String, trim: true, default: "" },
+    contactInvalidAt: { type: Date, default: null },
   },
   {
     timestamps: true,

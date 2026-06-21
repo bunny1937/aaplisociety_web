@@ -13,12 +13,13 @@ const NotificationSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    createdByName: { type: String, default: "Admin" },
+    createdByName: { type: String, default: "System" },
 
     type: {
       type: String,
       required: true,
       enum: [
+        // ── existing ──
         "BILL_GENERATED",
         "PAYMENT_RECEIVED",
         "PAYMENT_FAILED",
@@ -29,6 +30,15 @@ const NotificationSchema = new mongoose.Schema(
         "MAINTENANCE_ALERT",
         "ADMIN_MESSAGE",
         "CUSTOM",
+        // ── visitor management ──
+        "VISITOR_APPROVAL", // resident: someone is at the gate, approve/deny
+        "VISITOR_DECISION", // guard: resident approved/denied
+        "VISITOR_ENTERED", // resident: visitor has entered
+        "VISITOR_EXITED", // resident: visitor has left
+        "VISITOR_ESCALATION", // resident/admin: approval is being escalated
+        "VISITOR_PASS", // resident: a pass was used
+        "VISITOR_SOS", // everyone: panic/SOS raised
+        "SECURITY_ALERT", // admin: contact unreachable / watchlist hit
       ],
       index: true,
     },
@@ -36,16 +46,25 @@ const NotificationSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 150 },
     message: { type: String, required: true, trim: true, maxlength: 500 },
 
+    priority: {
+      type: String,
+      enum: ["normal", "high", "critical"],
+      default: "normal",
+      index: true,
+    },
+
     // Targeting
     recipientType: {
       type: String,
       required: true,
-      enum: ["all", "member", "wing", "flats"],
+      enum: ["all", "member", "wing", "flats", "role", "user"],
     },
-    // For member: [memberId], wing: [wingName], flats: [flatIds], all: []
+    // member:[memberId] · wing:[wingName] · flats:[memberId] · role:[roleName] · user:[userId]
     recipientIds: [{ type: String }],
 
-    // Read tracking — array of userIds who read it
+    // Arbitrary structured payload (visitorId, photo, flatNo, action, …)
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
+
     readBy: [
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -54,19 +73,18 @@ const NotificationSchema = new mongoose.Schema(
     ],
 
     actionUrl: { type: String, default: null },
-
     expiresAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },
 );
 
-// TTL for auto-expiry (expiresAt set per notification)
 NotificationSchema.index(
   { expiresAt: 1 },
   { expireAfterSeconds: 0, sparse: true },
 );
 NotificationSchema.index({ societyId: 1, isDeleted: 1, createdAt: -1 });
+NotificationSchema.index({ societyId: 1, recipientType: 1, createdAt: -1 });
 
 export default mongoose.models.Notification ||
   mongoose.model("Notification", NotificationSchema);

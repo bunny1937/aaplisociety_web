@@ -24,6 +24,10 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get("limit")) || 1000;
     const search = searchParams.get("search");
 
+    if (decoded.role === "Member") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const societyId = decoded.societyId;
 
     // ✅ UNIQUE CACHE KEY (VERY IMPORTANT)

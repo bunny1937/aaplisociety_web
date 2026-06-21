@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
+import mongoose from "mongoose";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Complaint from "@/models/Complaint";
 import ComplaintReply from "@/models/ComplaintReply";
@@ -16,6 +17,14 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const { id } = await params;
+
+    // Reject malformed ObjectIds before querying (avoids Mongoose CastError → 500)
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { error: "Invalid complaint id" },
+        { status: 400 },
+      );
+    }
 
     const isAdmin = ["Admin", "Secretary"].includes(decoded.role);
     const isMember = decoded.role === "Member";

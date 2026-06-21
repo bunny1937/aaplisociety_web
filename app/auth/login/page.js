@@ -34,10 +34,38 @@ export default function LoginPage() {
     setApiError("");
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const resolveRoleRes = await fetch("/api/auth/resolve-role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // ← IMPORTANT for cookies
+        credentials: "include",
+        body: JSON.stringify({
+          username: formData.username,
+        }),
+      });
+
+      const resolveRoleData = await resolveRoleRes.json().catch(() => ({}));
+      console.log(
+        "RESOLVE ROLE RESPONSE:",
+        resolveRoleRes.status,
+        resolveRoleData,
+      );
+
+      if (!resolveRoleRes.ok) {
+        throw new Error(
+          resolveRoleData.error ||
+            `Unable to resolve role (${resolveRoleRes.status})`,
+        );
+      }
+
+      const loginEndpoint =
+        resolveRoleData.role === "Security"
+          ? "/api/security/auth/login"
+          : "/api/auth/login";
+
+      const res = await fetch(loginEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           username: formData.username,
           password: formData.password,
@@ -51,16 +79,25 @@ export default function LoginPage() {
         throw new Error(data.error || `Login failed (${res.status})`);
       }
 
-      // Multi-profile: show society selector (no user field in this response)
+      if (
+        resolveRoleData.role === "Security" ||
+        data.user?.role === "Security"
+      ) {
+        router.replace("/security/dashboard");
+        return;
+      }
+
       if (data.requiresProfileSelect) {
-        // Store profiles in sessionStorage for selector screen
-        sessionStorage.setItem("pendingUserId", data.userId);
-        sessionStorage.setItem("profileSelectToken", data.profileSelectToken);
+        sessionStorage.setItem("pendingUserId", data.userId || "");
+        sessionStorage.setItem(
+          "profileSelectToken",
+          data.profileSelectToken || "",
+        );
         sessionStorage.setItem(
           "pendingProfiles",
-          JSON.stringify(data.profiles),
+          JSON.stringify(data.profiles || []),
         );
-        sessionStorage.setItem("pendingName", data.name);
+        sessionStorage.setItem("pendingName", data.name || "");
         router.replace("/auth/select-society");
         return;
       }
@@ -74,6 +111,8 @@ export default function LoginPage() {
         role === "Accountant"
       ) {
         router.replace("/admin/dashboard");
+      } else if (role === "Security") {
+        router.replace("/security/dashboard");
       } else {
         router.replace("/member/dashboard");
       }

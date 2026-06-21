@@ -122,9 +122,20 @@ export async function POST(request) {
     return response;
   } catch (error) {
     console.error("❌ Admin login error:", error);
+
+    const isDbUnavailable =
+      error?.code === "ECONNREFUSED" ||
+      error?.message?.includes("querySrv") ||
+      error?.name === "MongooseServerSelectionError" ||
+      error?.message?.includes("MongoServerSelectionError");
+
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
+      {
+        error: isDbUnavailable
+          ? "Admin database is temporarily unavailable. Please try again in a moment."
+          : "Internal server error",
+      },
+      { status: isDbUnavailable ? 503 : 500 },
     );
   }
 }
