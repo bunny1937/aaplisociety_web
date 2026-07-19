@@ -70,16 +70,6 @@ function BillPdfTab({ bill }) {
       <p style={{ color: "#6b7280", marginTop: 8 }}>No bill content. Click Print to regenerate.</p>
     </div>
   );
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-  const safeHtml = useMemo(
-    () => (typeof window !== "undefined" ? DOMPurify.sanitize(html) : ""),
-    [html],
-  );
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>

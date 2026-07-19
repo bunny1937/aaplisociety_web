@@ -10,26 +10,10 @@ import mongoose from "mongoose";
 import AuditLog from "@/models/AuditLog";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-import { randomBytes } from "crypto";
-import { generateUniqueUsername } from "@/lib/username-generator";
-import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
-
-function generatePassword() {
-  return randomBytes(6).toString("base64url").toUpperCase();
-}
-=======
-=======
->>>>>>> Stashed changes
 import { generatePassword } from "@/lib/password-generator";
 import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
 import { ensureSocietyCode } from "@/lib/society-code";
 import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
 async function upsertMemberUser({
   memberDoc,

@@ -26,16 +26,6 @@ export async function GET(request, { params }) {
         { status: 400 },
       );
     }
-<<<<<<< Updated upstream
-
-    if (!id || !id.match(/^[a-f\d]{24}$/i)) {
-      return NextResponse.json(
-        { error: "Invalid transaction id" },
-        { status: 400 },
-      );
-    }
-=======
->>>>>>> Stashed changes
 
     const transaction = await Transaction.findOne({
       _id: id,

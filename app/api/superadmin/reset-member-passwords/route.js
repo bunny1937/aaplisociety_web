@@ -5,24 +5,9 @@ import Member from "@/models/Member";
 import Society from "@/models/Society";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 import bcrypt from "bcryptjs";
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-import { randomBytes } from "crypto";
-import { generateUniqueUsername } from "@/lib/username-generator";
-
-function generatePassword() {
-  return randomBytes(8).toString("base64url");
-}
-=======
 import { generatePassword } from "@/lib/password-generator";
 import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
 import { ensureSocietyCode } from "@/lib/society-code";
->>>>>>> Stashed changes
-=======
-import { generatePassword } from "@/lib/password-generator";
-import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
-import { ensureSocietyCode } from "@/lib/society-code";
->>>>>>> Stashed changes
 
 // POST /api/superadmin/reset-member-passwords
 // Body: { societyId }

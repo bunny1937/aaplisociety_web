@@ -9,8 +9,10 @@ node_modules/
 out/
 build/
 dist/
-BillHistory_*.xlsx
-BulkImport_Template.xlsx
+docs/
+.vscode
+# BillHistory_*.xlsx
+# BulkImport_Template.xlsx
 transactions_*.xlsx
 .vercel
 .claude

@@ -30,33 +30,6 @@ function checkLoginRateLimit(identifier) {
 function clearLoginRateLimit(identifier) {
   loginAttempts.delete(identifier.toLowerCase());
 }
-<<<<<<< Updated upstream
-
-const MAX_ATTEMPTS = parseInt(process.env.RATE_LIMIT_LOGIN, 10) || 10;
-const WINDOW_MS = 15 * 60 * 1000;
-const loginAttempts = new Map();
-
-function checkLoginRateLimit(identifier) {
-  const key = identifier.toLowerCase();
-  const now = Date.now();
-  const entry = loginAttempts.get(key) || {
-    count: 0,
-    resetAt: now + WINDOW_MS,
-  };
-  if (now > entry.resetAt) {
-    entry.count = 0;
-    entry.resetAt = now + WINDOW_MS;
-  }
-  entry.count += 1;
-  loginAttempts.set(key, entry);
-  return entry.count > MAX_ATTEMPTS ? { blocked: true } : { blocked: false };
-}
-
-function clearLoginRateLimit(identifier) {
-  loginAttempts.delete(identifier.toLowerCase());
-}
-=======
->>>>>>> Stashed changes
 
 export async function POST(request) {
   try {

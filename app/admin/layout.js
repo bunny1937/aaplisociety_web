@@ -62,11 +62,6 @@ export default function AdminLayout({ children }) {
           path: "/admin/view-members",
           icon: <Users size={16} />,
         },
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
         {
           name: "Tenant Requests",
           path: "/admin/tenant-requests",
@@ -77,10 +72,6 @@ export default function AdminLayout({ children }) {
           path: "/admin/profile-edit-requests",
           icon: <FileEdit size={16} />,
         },
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
       ],
     },
     {
