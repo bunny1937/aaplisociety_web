@@ -9,12 +9,8 @@ node_modules/
 out/
 build/
 dist/
-<<<<<<< Updated upstream
-=======
-docs/
->>>>>>> Stashed changes
-# BillHistory_*.xlsx
-# BulkImport_Template.xlsx
+BillHistory_*.xlsx
+BulkImport_Template.xlsx
 transactions_*.xlsx
 .vercel
 .claude

@@ -19,6 +19,7 @@ import { validateAdminRequest } from "@/lib/admin-middleware";
 import { calculateMemberCharges } from "@/lib/calculate-member-bill";
 import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 import { generateUniqueUsername } from "@/lib/username-generator";
 import { randomBytes } from "crypto";
 
@@ -28,6 +29,16 @@ function generatePassword() {
   return randomBytes(10).toString("base64url");
 }
 
+=======
+import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
+import { generateUniqueSocietyCode } from "@/lib/society-code";
+import { generatePassword } from "@/lib/password-generator";
+import { sendEmail, onboardingEmailHtml } from "@/lib/brevo-email";
+import { signToken } from "@/lib/jwt";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+>>>>>>> Stashed changes
 =======
 import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
 import { generateUniqueSocietyCode } from "@/lib/society-code";
@@ -162,6 +173,7 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
     if (flatNo.toUpperCase().startsWith("INSTRUCTION") || flatNo === "flatNo*")
       continue;
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     if (!flatNo || !wing) {
       errors.push({
         label: `Row ${i + 2}`,
@@ -169,10 +181,15 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
           `Missing required field(s): ${!wing ? "'wing'" : ""}${!wing && !flatNo ? ", " : ""}${!flatNo ? "'flatNo*'" : ""}`.trim(),
         ],
 =======
+=======
+>>>>>>> Stashed changes
     if (!flatNo) {
       errors.push({
         label: `Row ${i + 2}`,
         errors: ["Missing required field(s): 'flatNo*'"],
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       });
       continue;
@@ -392,7 +409,11 @@ export async function POST(request) {
     const hint =
       basicInfoRows.length > 0
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that 'wing' and 'flatNo*' columns are filled and not renamed.`
+=======
+        ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that the 'flatNo*' column is filled and not renamed.`
+>>>>>>> Stashed changes
 =======
         ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that the 'flatNo*' column is filled and not renamed.`
 >>>>>>> Stashed changes
@@ -471,6 +492,10 @@ export async function POST(request) {
   const createdMemberUserIds = [];
   const appendedProfiles = [];
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+  const usernameBloom = await buildUsernameBloomFilter();
+>>>>>>> Stashed changes
 =======
   const usernameBloom = await buildUsernameBloomFilter();
 >>>>>>> Stashed changes
@@ -520,11 +545,15 @@ export async function POST(request) {
           });
         } else {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
           const username = await generateUniqueUsername(
             societyPayload.societyName,
             memberData.ownerName,
             memberData.flatNo,
           );
+=======
+          const username = await generateSimpleUsername(societyCode, memberData.flatNo, usernameBloom);
+>>>>>>> Stashed changes
 =======
           const username = await generateSimpleUsername(societyCode, memberData.flatNo, usernameBloom);
 >>>>>>> Stashed changes

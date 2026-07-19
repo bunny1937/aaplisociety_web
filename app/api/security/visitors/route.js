@@ -1,4 +1,5 @@
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Visitor from "@/models/Visitor";
@@ -137,6 +138,8 @@ export async function POST(request) {
   }
 }
 =======
+=======
+>>>>>>> Stashed changes
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Visitor from "@/models/Visitor";
@@ -274,4 +277,7 @@ export async function POST(request) {
     );
   }
 }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes

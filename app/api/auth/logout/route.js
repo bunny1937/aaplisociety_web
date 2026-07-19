@@ -33,6 +33,10 @@ export async function POST(request) {
     secure: process.env.NODE_ENV === "production",
   });
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+  clearRefreshCookie(res);
+>>>>>>> Stashed changes
 =======
   clearRefreshCookie(res);
 >>>>>>> Stashed changes

@@ -30,6 +30,7 @@ function checkLoginRateLimit(identifier) {
 function clearLoginRateLimit(identifier) {
   loginAttempts.delete(identifier.toLowerCase());
 }
+<<<<<<< Updated upstream
 
 const MAX_ATTEMPTS = parseInt(process.env.RATE_LIMIT_LOGIN, 10) || 10;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -54,6 +55,8 @@ function checkLoginRateLimit(identifier) {
 function clearLoginRateLimit(identifier) {
   loginAttempts.delete(identifier.toLowerCase());
 }
+=======
+>>>>>>> Stashed changes
 
 export async function POST(request) {
   try {

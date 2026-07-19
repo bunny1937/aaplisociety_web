@@ -1,4 +1,5 @@
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 // app/api/security/auth/login/route.js
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
@@ -90,6 +91,8 @@ export async function POST(request) {
   }
 }
 =======
+=======
+>>>>>>> Stashed changes
 // app/api/security/auth/login/route.js
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
@@ -182,4 +185,7 @@ export async function POST(request) {
     );
   }
 }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes

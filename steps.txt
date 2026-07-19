@@ -1,0 +1,35 @@
+What I fixed (bugs from your logs)
+
+1. Rent payment "Invalid datetime" (400) — rent_payment_page.dart sent a local timestamp with no UTC marker; the backend's Zod validator requires one. Fixed to send .toUtc().toIso8601String().
+2. Add-tenant "Invalid datetime" + "documents: Required" (400) — same datetime bug on leaseStartDate/leaseEndDate, plus the app was sending document keys as contract/signature/... but the backend expects contractKey/signatureKey/etc. Fixed both in add_tenant_page.dart.
+3. Same latent datetime bug existed in security_shell.dart's visitor-queue queuedAt — fixed pre-emptively since it's the identical defect, not yet reported by you.
+4. The AVC/binder log lines were unrelated SELinux noise (a vendor face-auth proc node), not an app bug — explained, no code change.
+
+What I built (profile restructure + approval workflow)
+
+Mobile app (AapliSociety_App): profile page split into 5 tiles → 5 new pages under lib/features/member/profile/ (Flat details, Contact, Parking, Family members, Emergency contact). Contact/Family/Emergency are now editable, but submission creates a Pending request instead of writing directly — shown with a "pending approval" badge until resolved.
+
+Mobile-backend: new ProfileEditRequest collection + /v1/profile-edit-requests API (owner-only, blocks duplicate pending requests), plus a new emergencyContact field and an _id fix on familyMembers in the Member schema.
+
+Web app (aaplisoceity_web, found at C:\projects\aaplisoceity_web): the actual admin approval side — ProfileEditRequest model, approve/reject API routes (apply the change to the real Member doc, notify the owner), and a new /admin/profile-edit-requests page. Also fixed: neither this new page nor the existing Tenant Requests page were linked in the admin sidebar — added both.
+
+Corrections I had to make along the way
+
+- The web app's Member.emergencyContact already existed with shape {name, relation, phoneNumber, address} — different from what I'd first designed ({name, phone, relation}). I fixed mobile-backend, the shared Zod schema, and the Flutter form to match the real shape, before it caused a silent field mismatch in production.
+- I initially thought family members needed a migration to get stable IDs. Turned out the real production data already has them (the web app's schema always defaulted to auto-_id; only mobile-backend's own local mirror had incorrectly disabled it). The backfill script I wrote is harmless but not actually necessary.
+
+Not done / not verified
+
+- No runtime testing. Everything was verified via tsc/turbo build, flutter analyze, and a Babel syntax-check on the web app — none of it has actually been run in an emulator/device or a live web server.
+- No commits anywhere, per your instruction — everything is sitting as uncommitted changes.
+- aaplisoceity_web isn't a git repo (git status there returns "not a git repository") — worth knowing if you want to track these changes at all there.
+
+Your workflow from here
+
+1. Restart the backend (cd apps/mobile-backend, restart your tsx watch / dev process) so the new model fields and /v1/profile-edit-requests route are live.
+2. Restart the web app (cd /c/projects/aaplisoceity_web, npm run dev or restart if already running) so the new API routes, Notification enum, and nav links load.
+3. Hot-restart the Flutter app (not just hot-reload — new routes need a full restart) with your usual adb reverse tcp:5001 tcp:5001 + flutter run setup. Given this machine's earlier RAM thrashing, close other heavy apps first if this is the first build since a while.
+4. Re-test the 2 original bugs: record a rent payment, submit an add-tenant request — both should succeed now.
+5. Test the new profile flow: Profile tab → tap into Contact/Family members/Emergency contact → edit → submit → confirm it shows "pending approval" instead of applying immediately.
+6. Test the approval side: log into the web app as Admin/Secretary → sidebar → "Profile Changes" (and "Tenant Requests", now also reachable) → approve or reject → confirm the mobile app reflects it and a notification arrives.
+7. Once you've verified it end-to-end, let me know if you want me to commit — in either or both repos.

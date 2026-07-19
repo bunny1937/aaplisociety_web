@@ -1,4 +1,5 @@
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 // app/api/admin/visitors/audit/route.js
 // GET — Admin/Secretary read-only view of the offline visitor-entry audit trail.
 //   ?action=VISITOR_ENTRY_FLAGGED  ?from=YYYY-MM-DD  ?to=YYYY-MM-DD  ?page=1
@@ -72,6 +73,8 @@ export async function GET(request) {
   }
 }
 =======
+=======
+>>>>>>> Stashed changes
 // app/api/admin/visitors/audit/route.js
 // GET — Admin/Secretary read-only view of the offline visitor-entry audit trail.
 //   ?action=VISITOR_ENTRY_FLAGGED  ?from=YYYY-MM-DD  ?to=YYYY-MM-DD  ?page=1
@@ -144,4 +147,7 @@ export async function GET(request) {
     );
   }
 }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes

@@ -71,10 +71,13 @@ function BillPdfTab({ bill }) {
     </div>
   );
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   const safeHtml = useMemo(
     () => (typeof window !== "undefined" ? DOMPurify.sanitize(html) : ""),
     [html],
   );
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 
