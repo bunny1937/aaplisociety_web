@@ -17,7 +17,7 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     const head = await BillingHead.findOneAndUpdate(
       { _id: id, societyId: decoded.societyId },

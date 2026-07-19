@@ -48,6 +48,15 @@ function BillPdfTab({ bill }) {
       .catch((e) => { setError(e.message); setLoading(false); });
   }, [bill._id]);
 
+  // Must run unconditionally, before any early return below - a hook called
+  // only on some renders (e.g. skipped while `loading` is true on first
+  // render, then reached once `html` resolves) violates the Rules of Hooks
+  // and crashes with "Rendered more hooks than during the previous render."
+  const safeHtml = useMemo(
+    () => (html && typeof window !== "undefined" ? DOMPurify.sanitize(html) : ""),
+    [html],
+  );
+
   if (loading) return <div style={{ padding: 60, textAlign: "center", color: "#6b7280" }}>Loading bill...</div>;
   if (error) return (
     <div style={{ padding: 40, textAlign: "center" }}>
@@ -61,10 +70,13 @@ function BillPdfTab({ bill }) {
       <p style={{ color: "#6b7280", marginTop: 8 }}>No bill content. Click Print to regenerate.</p>
     </div>
   );
+<<<<<<< Updated upstream
   const safeHtml = useMemo(
     () => (typeof window !== "undefined" ? DOMPurify.sanitize(html) : ""),
     [html],
   );
+=======
+>>>>>>> Stashed changes
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>

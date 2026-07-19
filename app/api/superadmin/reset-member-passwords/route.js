@@ -5,12 +5,18 @@ import Member from "@/models/Member";
 import Society from "@/models/Society";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 import bcrypt from "bcryptjs";
+<<<<<<< Updated upstream
 import { randomBytes } from "crypto";
 import { generateUniqueUsername } from "@/lib/username-generator";
 
 function generatePassword() {
   return randomBytes(8).toString("base64url");
 }
+=======
+import { generatePassword } from "@/lib/password-generator";
+import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
+import { ensureSocietyCode } from "@/lib/society-code";
+>>>>>>> Stashed changes
 
 // POST /api/superadmin/reset-member-passwords
 // Body: { societyId }
@@ -25,14 +31,16 @@ export async function POST(request) {
     const { societyId } = await request.json();
     if (!societyId) return NextResponse.json({ error: "societyId required" }, { status: 400 });
 
-    const society = await Society.findById(societyId).select("name").lean();
-    const societyName = society?.name || "Society";
+    const society = await Society.findById(societyId).select("societyCode");
+    if (!society) return NextResponse.json({ error: "Society not found" }, { status: 404 });
+    const societyCode = await ensureSocietyCode(society);
 
     const members = await Member.find({
       societyId,
       isDeleted: { $ne: true },
     }).select("_id flatNo wing ownerName emailPrimary").lean();
 
+    const bloom = await buildUsernameBloomFilter();
     const credentials = [];
 
     for (const member of members) {
@@ -43,11 +51,11 @@ export async function POST(request) {
 
       // Generate username if user doesn't have one yet
       const existingUser = await User.findOne({ email: member.emailPrimary, societyId }).lean();
-      const username = existingUser?.username || await generateUniqueUsername(societyName, member.ownerName, member.flatNo);
+      const username = existingUser?.username || await generateSimpleUsername(societyCode, member.flatNo, bloom);
 
       const user = await User.findOneAndUpdate(
         { email: member.emailPrimary, societyId },
-        { $set: { password: newHash, isActive: true, username } },
+        { $set: { password: newHash, isActive: true, username, mustChangePassword: true } },
         { new: true },
       );
 

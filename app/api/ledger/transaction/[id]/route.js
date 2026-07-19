@@ -18,7 +18,14 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
+
+    if (!id || !id.match(/^[a-f\d]{24}$/i)) {
+      return NextResponse.json(
+        { error: "Invalid transaction id" },
+        { status: 400 },
+      );
+    }
 
     if (!id || !id.match(/^[a-f\d]{24}$/i)) {
       return NextResponse.json(

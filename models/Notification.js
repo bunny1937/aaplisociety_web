@@ -39,6 +39,15 @@ const NotificationSchema = new mongoose.Schema(
         "VISITOR_PASS", // resident: a pass was used
         "VISITOR_SOS", // everyone: panic/SOS raised
         "SECURITY_ALERT", // admin: contact unreachable / watchlist hit
+<<<<<<< Updated upstream
+=======
+        // ── tenant onboarding ──
+        "TENANT_REQUEST_APPROVED", // owner: their tenant request was approved
+        "TENANT_REQUEST_REJECTED", // owner: their tenant request was rejected
+        // ── profile edit requests ──
+        "PROFILE_EDIT_REQUEST_APPROVED", // owner: their Contact/Family/EmergencyContact change was approved
+        "PROFILE_EDIT_REQUEST_REJECTED", // owner: their Contact/Family/EmergencyContact change was rejected
+>>>>>>> Stashed changes
       ],
       index: true,
     },

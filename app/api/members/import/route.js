@@ -10,6 +10,7 @@ import mongoose from "mongoose";
 import AuditLog from "@/models/AuditLog";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+<<<<<<< Updated upstream
 import { randomBytes } from "crypto";
 import { generateUniqueUsername } from "@/lib/username-generator";
 import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
@@ -17,12 +18,20 @@ import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
 function generatePassword() {
   return randomBytes(6).toString("base64url").toUpperCase();
 }
+=======
+import { generatePassword } from "@/lib/password-generator";
+import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
+import { ensureSocietyCode } from "@/lib/society-code";
+import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
+>>>>>>> Stashed changes
 
 async function upsertMemberUser({
   memberDoc,
   basic,
   societyId,
   societyName,
+  societyCode,
+  bloom,
   plainPassword,
 }) {
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
@@ -73,11 +82,7 @@ async function upsertMemberUser({
   } else {
     // New user → create with first profile
     newProfile.isPrimary = true;
-    const username = await generateUniqueUsername(
-      societyName,
-      basic.ownerName,
-      basic.flatNo,
-    );
+    const username = await generateSimpleUsername(societyCode, basic.flatNo, bloom);
     targetUser = await User.create({
       name: basic.ownerName,
       username,
@@ -88,6 +93,7 @@ async function upsertMemberUser({
       profiles: [newProfile],
       activeProfileId: newProfile.profileId,
       isActive: true,
+      mustChangePassword: true,
     });
   }
 
@@ -1382,6 +1388,13 @@ async function handleEnhancedImport(workbook, decoded) {
     let tenantHistoryCount = 0;
     let familyMembersCount = 0;
 
+    // Fetched once, not per-member (see the equivalent hoist further up in
+    // this file for the other import path) - avoids re-querying every
+    // username in the DB on each iteration of a potentially large import.
+    const societyForDetailedImport = await Society.findById(decoded.societyId).select("name societyCode");
+    const societyCodeForDetailedImport = await ensureSocietyCode(societyForDetailedImport);
+    const usernameBloomDetailed = await buildUsernameBloomFilter();
+
     // ✅ CREATE MEMBERS ONE BY ONE WITH SEQUENTIAL MEMBERSHIP NUMBERS
     for (const [flatNo, basic] of Object.entries(basicData)) {
       const flatKey = `${basic.wing || ""}-${flatNo}`;
@@ -1447,9 +1460,6 @@ async function handleEnhancedImport(workbook, decoded) {
       const member = await Member.create(memberData); // ✅ ONE AT A TIME
       nextNumber++; // ✅ INCREMENT
 
-      // 1. Fetch society for username generation
-      const society = await Society.findById(decoded.societyId).select("name");
-
       // 2. Check existing user by email OR contact
       const existingUser = await User.findOne({
         $or: [
@@ -1465,7 +1475,7 @@ async function handleEnhancedImport(workbook, decoded) {
         role: "Member",
         flatNo: basic.flatNo,
         wing: basic.wing,
-        societyName: society.name,
+        societyName: societyForDetailedImport.name,
         isPrimary: false,
         status: "Active",
         joinedAt: new Date(),
@@ -1491,10 +1501,10 @@ async function handleEnhancedImport(workbook, decoded) {
         // New user — generate password only when needed
         const password = generatePassword();
         const hashedPassword = await bcrypt.hash(password, 10);
-        const username = await generateUniqueUsername(
-          society.name,
-          basic.ownerName,
+        const username = await generateSimpleUsername(
+          societyCodeForDetailedImport,
           basic.flatNo,
+          usernameBloomDetailed,
         );
         newProfile.isPrimary = true;
         targetUser = await User.create({
@@ -1507,6 +1517,7 @@ async function handleEnhancedImport(workbook, decoded) {
           profiles: [newProfile],
           activeProfileId: newProfile.profileId,
           isActive: true,
+          mustChangePassword: true,
         });
         credentialPassword = password;
         isNewUser = true;
@@ -1739,6 +1750,13 @@ async function handleSimpleImport(workbook, decoded) {
     const createdMembers = [];
     const userCredentials = [];
 
+    // Fetched once, not per-member: the society doesn't change across this
+    // loop, and re-querying every username in the DB (buildUsernameBloomFilter)
+    // for every single member would be wasteful on a large import.
+    const societyForImport = await Society.findById(decoded.societyId).select("name societyCode");
+    const societyCodeForImport = await ensureSocietyCode(societyForImport);
+    const usernameBloom = await buildUsernameBloomFilter();
+
     // ✅ CREATE ONE BY ONE
     for (let i = 0; i < members.length; i++) {
       const memberData = members[i];
@@ -1750,14 +1768,13 @@ async function handleSimpleImport(workbook, decoded) {
       nextNumber++; // ✅ INCREMENT
 
       const password = generatePassword();
-      const society = await Society.findById(decoded.societyId)
-        .select("name")
-        .lean();
       const { user: memberUser, isNew } = await upsertMemberUser({
         memberDoc: member,
         basic,
         societyId: decoded.societyId,
-        societyName: society?.name ?? "",
+        societyName: societyForImport?.name ?? "",
+        societyCode: societyCodeForImport,
+        bloom: usernameBloom,
         plainPassword: password,
       });
 

@@ -7,7 +7,7 @@ const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
     const start = Date.now();
@@ -20,7 +20,7 @@ app.prepare().then(() => {
   });
 
   // Init Socket.IO attached to same HTTP server
-  initSocketServer(server);
+  await initSocketServer(server);
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {

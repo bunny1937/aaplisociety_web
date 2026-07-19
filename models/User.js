@@ -104,6 +104,14 @@ const UserSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    // True for members created via bulk-import until they complete the
+    // onboarding "set your own credentials" flow (auto-generated username
+    // and temp password aren't meant to be permanent).
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );

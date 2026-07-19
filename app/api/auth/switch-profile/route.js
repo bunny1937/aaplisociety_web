@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { signToken } from "@/lib/jwt";
+import { issueRefreshToken, setRefreshCookie } from "@/lib/refresh-token";
 
 export async function POST(request) {
   try {
@@ -100,6 +101,7 @@ export async function POST(request) {
       path: "/",
       maxAge: 60 * 60 * 8,
     });
+    setRefreshCookie(response, await issueRefreshToken(user._id));
 
     return response;
   } catch (error) {

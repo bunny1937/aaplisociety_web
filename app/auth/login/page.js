@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import styles from "@/styles/Auth.module.css";
 
 export default function LoginPage() {
@@ -10,6 +11,16 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [onboardedMessage, setOnboardedMessage] = useState("");
+
+  // Avoids useSearchParams (which would require wrapping this page in a
+  // Suspense boundary) for a one-off, low-stakes success banner.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("onboarded") === "1") {
+      setOnboardedMessage("Account set up — sign in with your new username and password.");
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -134,6 +145,21 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} autoComplete="off">
+          {onboardedMessage && (
+            <div
+              style={{
+                padding: "12px",
+                backgroundColor: "#dcfce7",
+                color: "#166534",
+                borderRadius: "var(--radius-md)",
+                marginBottom: "var(--spacing-lg)",
+                fontSize: "var(--font-sm)",
+                fontWeight: "500",
+              }}
+            >
+              {onboardedMessage}
+            </div>
+          )}
           {apiError && (
             <div
               style={{
@@ -172,15 +198,28 @@ export default function LoginPage() {
             <label className="label" htmlFor="password">
               Password
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              className={`input ${errors.password ? "input-error" : ""}`}
-              value={formData.password}
-              onChange={handleChange}
-              disabled={isLoading}
-            />
+            <div className={styles.passwordWrapper}>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                className={`input ${errors.password ? "input-error" : ""}`}
+                value={formData.password}
+                onChange={handleChange}
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                className={styles.passwordToggle}
+                onClick={() => setShowPassword((prev) => !prev)}
+                disabled={isLoading}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {errors.password && <p className="error-text">{errors.password}</p>}
           </div>
 

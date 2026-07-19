@@ -41,4 +41,8 @@
     "tests/**/*.unit.test.ts",
     "tests/**/*.unit.test.js"
   ]
+<<<<<<< Updated upstream
 }
+=======
+}
+>>>>>>> Stashed changes

@@ -18,6 +18,8 @@ import {
   BarChart3,
   Megaphone,
   MessageSquare,
+  UserCheck,
+  FileEdit,
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -60,6 +62,19 @@ export default function AdminLayout({ children }) {
           path: "/admin/view-members",
           icon: <Users size={16} />,
         },
+<<<<<<< Updated upstream
+=======
+        {
+          name: "Tenant Requests",
+          path: "/admin/tenant-requests",
+          icon: <UserCheck size={16} />,
+        },
+        {
+          name: "Profile Changes",
+          path: "/admin/profile-edit-requests",
+          icon: <FileEdit size={16} />,
+        },
+>>>>>>> Stashed changes
       ],
     },
     {

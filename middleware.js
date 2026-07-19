@@ -75,6 +75,7 @@ export async function middleware(request) {
     "/security/login",
     "/member/login",
     "/superadmin/login",
+    "/onboarding",
   ];
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next();

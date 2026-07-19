@@ -18,6 +18,7 @@ import * as XLSX from "xlsx";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 import { calculateMemberCharges } from "@/lib/calculate-member-bill";
 import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
+<<<<<<< Updated upstream
 import { generateUniqueUsername } from "@/lib/username-generator";
 import { randomBytes } from "crypto";
 
@@ -27,6 +28,16 @@ function generatePassword() {
   return randomBytes(10).toString("base64url");
 }
 
+=======
+import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
+import { generateUniqueSocietyCode } from "@/lib/society-code";
+import { generatePassword } from "@/lib/password-generator";
+import { sendEmail, onboardingEmailHtml } from "@/lib/brevo-email";
+import { signToken } from "@/lib/jwt";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+>>>>>>> Stashed changes
 function generateSocietyId(name) {
   const parts = name.trim().split(" ");
   const first = parts[0]?.slice(0, 4).toLowerCase() || "soc";
@@ -137,18 +148,32 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
 
   for (let i = 0; i < basicInfoRows.length; i++) {
     const row = basicInfoRows[i];
+
+    // The template separates real data from the trailing instructions/notes
+    // block with one fully blank row. Stop here — everything below is notes,
+    // not member data (e.g. "* = Required fields", "RULE: ...").
+    if (Object.values(row).every((v) => v === "" || v == null)) break;
+
     const flatNo = String(row["flatNo*"] || row["flatNo"] || "").trim();
     const wing = String(row["wing"] || "").trim();
 
-    // Skip instruction / header echo rows
+    // Skip instruction / header echo rows (defense in depth, in case the
+    // blank separator row above is missing)
     if (flatNo.toUpperCase().startsWith("INSTRUCTION") || flatNo === "flatNo*")
       continue;
+<<<<<<< Updated upstream
     if (!flatNo || !wing) {
       errors.push({
         label: `Row ${i + 2}`,
         errors: [
           `Missing required field(s): ${!wing ? "'wing'" : ""}${!wing && !flatNo ? ", " : ""}${!flatNo ? "'flatNo*'" : ""}`.trim(),
         ],
+=======
+    if (!flatNo) {
+      errors.push({
+        label: `Row ${i + 2}`,
+        errors: ["Missing required field(s): 'flatNo*'"],
+>>>>>>> Stashed changes
       });
       continue;
     }
@@ -267,7 +292,10 @@ export async function POST(request) {
   // Member sheet (index 1 = "1. Basic Info (Required)")
   const basicInfoSheetName = wb.SheetNames[1];
   const basicInfoRows = basicInfoSheetName
-    ? XLSX.utils.sheet_to_json(wb.Sheets[basicInfoSheetName], { defval: "" })
+    ? XLSX.utils.sheet_to_json(wb.Sheets[basicInfoSheetName], {
+        defval: "",
+        blankrows: true,
+      })
     : [];
 
   // Parking sheet (index 3 = "3. Parking Slots")
@@ -363,7 +391,11 @@ export async function POST(request) {
   if (validMembers.length === 0) {
     const hint =
       basicInfoRows.length > 0
+<<<<<<< Updated upstream
         ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that 'wing' and 'flatNo*' columns are filled and not renamed.`
+=======
+        ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that the 'flatNo*' column is filled and not renamed.`
+>>>>>>> Stashed changes
         : "Sheet '1. Basic Info (Required)' is empty.";
     return NextResponse.json(
       {
@@ -385,6 +417,8 @@ export async function POST(request) {
     if (!(await Society.findOne({ societyId }))) break;
   } while (++attempts < 10);
 
+  const societyCode = await generateUniqueSocietyCode();
+
   const plainPassword = generatePassword();
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
@@ -393,6 +427,7 @@ export async function POST(request) {
     society = await Society.create({
       name: societyPayload.societyName,
       societyId,
+      societyCode,
       registrationNo: societyPayload.registrationNo,
       address: societyPayload.address,
       panNo: societyPayload.panNo,
@@ -435,6 +470,10 @@ export async function POST(request) {
   const memberCredentials = [];
   const createdMemberUserIds = [];
   const appendedProfiles = [];
+<<<<<<< Updated upstream
+=======
+  const usernameBloom = await buildUsernameBloomFilter();
+>>>>>>> Stashed changes
 
   for (const memberData of validMembers) {
     try {
@@ -480,11 +519,15 @@ export async function POST(request) {
             isNewUser: false,
           });
         } else {
+<<<<<<< Updated upstream
           const username = await generateUniqueUsername(
             societyPayload.societyName,
             memberData.ownerName,
             memberData.flatNo,
           );
+=======
+          const username = await generateSimpleUsername(societyCode, memberData.flatNo, usernameBloom);
+>>>>>>> Stashed changes
           const newUser = await User.create({
             name: memberData.ownerName,
             email: memberData.emailPrimary,
@@ -493,6 +536,7 @@ export async function POST(request) {
             password: memberHash,
             role: "Member",
             societyId: society._id,
+            mustChangePassword: true,
             profiles: [
               {
                 profileId: new mongoose.Types.ObjectId(),
@@ -511,6 +555,7 @@ export async function POST(request) {
           createdMemberUserIds.push(newUser._id);
 
           memberCredentials.push({
+            userId: newUser._id,
             flatNo: memberData.flatNo,
             wing: memberData.wing,
             ownerName: memberData.ownerName,
@@ -792,12 +837,39 @@ export async function POST(request) {
     );
   }
 
+  // Send onboarding emails only now that every rollback checkpoint above has
+  // passed — sending earlier risked emailing a member whose account then got
+  // deleted by a later rollback (e.g. a billing-setup failure). Best-effort:
+  // a failed send doesn't undo the real DB writes, since the admin still has
+  // memberCredentials in this response to share manually as a fallback.
+  const onboardingEmailErrors = [];
+  for (const cred of memberCredentials) {
+    if (!cred.isNewUser || !cred.email) continue;
+    try {
+      const onboardingToken = signToken({ userId: cred.userId, purpose: "onboarding" }, { expiresIn: "7d" });
+      const setCredentialsUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/onboarding/set-credentials?token=${onboardingToken}`;
+      await sendEmail({
+        to: cred.email,
+        subject: `Set up your account — ${societyPayload.societyName}`,
+        html: onboardingEmailHtml({
+          memberName: cred.ownerName,
+          societyName: societyPayload.societyName,
+          setCredentialsUrl,
+        }),
+      });
+    } catch (err) {
+      console.error(`Onboarding email failed for ${cred.email}:`, err.message);
+      onboardingEmailErrors.push(`${cred.wing}-${cred.flatNo}: ${err.message}`);
+    }
+  }
+
   return NextResponse.json({
     success: true,
     society: {
       id: society._id,
       name: society.name,
       societyId: society.societyId,
+      societyCode: society.societyCode,
       activeChargesCount: activeCharges.length,
       chargesSummary: activeCharges.map((c) => `${c.label}: ₹${c.value}`),
     },
@@ -808,6 +880,7 @@ export async function POST(request) {
     membersCreated,
     memberCreateErrors,
     memberCredentials,
+    onboardingEmailErrors,
     totalMemberRows: validMembers.length,
     billingHeadsCreated: billingHeads.length,
     billsGenerated,

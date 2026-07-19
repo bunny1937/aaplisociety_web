@@ -190,6 +190,11 @@ const SocietySchema = new mongoose.Schema(
       ],
     },
     societyId: { type: String, unique: true, sparse: true }, // e.g. green_valley_andheri_2018_47
+    // 3-digit code assigned at creation (e.g. "482") - combined with a
+    // member's flat number, this is all that's needed to build a short,
+    // collision-free auto-generated username (see lib/username-generator.js).
+    // Members replace this during onboarding, so it only needs to work once.
+    societyCode: { type: String, unique: true, sparse: true, trim: true },
     area: { type: String },
     buildDate: { type: Date },
     credentials: {
