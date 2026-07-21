@@ -1,5 +1,4 @@
 import { createServer } from "http";
-import { parse } from "url";
 import next from "next";
 import { initSocketServer } from "./lib/socket-server.js";
 const dev = process.env.NODE_ENV !== "production";
@@ -7,8 +6,14 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 app.prepare().then(async () => {
   const server = createServer((req, res) => {
-    const parsedUrl = parse(req.url, true);
-    const start = Date.now();
+const u = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+const parsedUrl = {
+  pathname: u.pathname,
+  search: u.search,
+  searchParams: u.searchParams,
+  query: Object.fromEntries(u.searchParams),
+  href: u.href,
+};    const start = Date.now();
     res.on("finish", () => {
       const ms = Date.now() - start;
       const color = res.statusCode >= 500 ? "\x1b[31m" : res.statusCode >= 400 ? "\x1b[33m" : "\x1b[32m";

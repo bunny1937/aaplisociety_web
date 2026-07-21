@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
-    "start": "cross-env NODE_ENV=production node server.js",
+    "dev": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON server.js",
+"start": "cross-env NODE_ENV=production node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON server.js",
     "build": "next build",
     "lint": "next lint",
     "debug": "node scripts/debug.js",
