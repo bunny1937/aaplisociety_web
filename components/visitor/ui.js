@@ -5,7 +5,6 @@
 // named style objects instead of inline style=... to keep JSX clean.
 import { useRef, useState } from "react";
 import { STATUS_COLOR, PURPOSE_ICON } from "@/lib/visitor-config";
-
 export const tokens = {
   radius: 14,
   radiusSm: 10,
@@ -21,7 +20,6 @@ export const tokens = {
   danger: "#ef4444",
   success: "#10b981",
 };
-
 export function Card({ children, style, pad = 20, ...rest }) {
   const s = {
     background: tokens.card,
@@ -37,7 +35,6 @@ export function Card({ children, style, pad = 20, ...rest }) {
     </div>
   );
 }
-
 export function PageHeader({ title, subtitle, actions }) {
   const wrap = {
     display: "flex",
@@ -60,7 +57,6 @@ export function PageHeader({ title, subtitle, actions }) {
     </div>
   );
 }
-
 export function Button({
   children,
   variant = "primary",
@@ -130,7 +126,6 @@ export function Button({
     </button>
   );
 }
-
 export function StatusBadge({ status }) {
   const color = STATUS_COLOR[status] || "#6b7280";
   const s = {
@@ -152,7 +147,6 @@ export function StatusBadge({ status }) {
     </span>
   );
 }
-
 export function Badge({ children, color = "#6b7280" }) {
   const s = {
     background: color + "1a",
@@ -164,7 +158,6 @@ export function Badge({ children, color = "#6b7280" }) {
   };
   return <span style={s}>{children}</span>;
 }
-
 export function PurposeTag({ purpose }) {
   const s = { fontSize: 13, color: tokens.text };
   const ic = { marginRight: 6 };
@@ -175,7 +168,6 @@ export function PurposeTag({ purpose }) {
     </span>
   );
 }
-
 export function Field({ label, hint, children, required }) {
   const wrap = { display: "block" };
   const lab = {
@@ -197,7 +189,6 @@ export function Field({ label, hint, children, required }) {
     </label>
   );
 }
-
 const inputBase = {
   width: "100%",
   padding: "10px 12px",
@@ -209,7 +200,6 @@ const inputBase = {
   background: "#fff",
   boxSizing: "border-box",
 };
-
 export function Input(props) {
   const { style, ...rest } = props;
   const s = { ...inputBase, ...(style || {}) };
@@ -222,7 +212,6 @@ export function Input(props) {
     />
   );
 }
-
 export function Select({ children, style, ...props }) {
   const s = { ...inputBase, ...(style || {}) };
   return (
@@ -231,7 +220,6 @@ export function Select({ children, style, ...props }) {
     </select>
   );
 }
-
 export function Textarea(props) {
   const { style, ...rest } = props;
   const s = {
@@ -242,7 +230,6 @@ export function Textarea(props) {
   };
   return <textarea {...rest} style={s} />;
 }
-
 export function StatCard({ label, value, color = tokens.primary, icon }) {
   const body = { display: "flex", flexDirection: "column", gap: 6 };
   const top = {
@@ -263,7 +250,6 @@ export function StatCard({ label, value, color = tokens.primary, icon }) {
     </Card>
   );
 }
-
 export function Avatar({ src, name, size = 44 }) {
   if (src) {
     const s = {
@@ -289,7 +275,6 @@ export function Avatar({ src, name, size = 44 }) {
   };
   return <div style={s}>{(name || "?").charAt(0).toUpperCase()}</div>;
 }
-
 export function EmptyState({ icon = "📭", title, subtitle }) {
   const wrap = { textAlign: "center", padding: "48px 20px", color: tokens.sub };
   const ic = { fontSize: 40, marginBottom: 10 };
@@ -303,7 +288,6 @@ export function EmptyState({ icon = "📭", title, subtitle }) {
     </div>
   );
 }
-
 export function Spinner({ size = 22 }) {
   const s = {
     display: "inline-block",
@@ -320,7 +304,6 @@ export function Spinner({ size = 22 }) {
     </span>
   );
 }
-
 export function Toast({ message, type = "info", onClose }) {
   if (!message) return null;
   const colors = {
@@ -351,7 +334,6 @@ export function Toast({ message, type = "info", onClose }) {
     </div>
   );
 }
-
 export function Modal({ open, title, onClose, children, footer, width = 480 }) {
   if (!open) return null;
   const overlay = {
@@ -406,7 +388,6 @@ export function Modal({ open, title, onClose, children, footer, width = 480 }) {
     </div>
   );
 }
-
 export function grid(min = 220) {
   return {
     display: "grid",
@@ -414,7 +395,6 @@ export function grid(min = 220) {
     gap: 14,
   };
 }
-
 export function timeAgo(date) {
   if (!date) return "";
   const d = new Date(date);
@@ -424,7 +404,6 @@ export function timeAgo(date) {
   if (s < 86400) return Math.floor(s / 3600) + "h ago";
   return d.toLocaleDateString();
 }
-
 export function fmtTime(date) {
   if (!date) return "—";
   return new Date(date).toLocaleString("en-IN", {
@@ -434,7 +413,6 @@ export function fmtTime(date) {
     minute: "2-digit",
   });
 }
-
 // ─── PhotoCapture ─────────────────────────────────────────────────────────────
 // A guard-friendly photo field. On phones/tablets it opens the rear camera
 // directly (capture="environment"); on desktop it opens the file picker.
@@ -451,7 +429,6 @@ export function PhotoCapture({
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-
   const pick = () => {
     if (disabled || uploading) return;
     setError("");
@@ -460,7 +437,6 @@ export function PhotoCapture({
       inputRef.current.click();
     }
   };
-
   async function compress(file) {
     // Downscale to max 900px on the long edge and re-encode as JPEG (~0.8) so
     // uploads stay small on weak gate Wi-Fi. Falls back to the raw file if the
@@ -504,7 +480,6 @@ export function PhotoCapture({
       return file;
     }
   }
-
   async function handleFile(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -532,7 +507,6 @@ export function PhotoCapture({
       setUploading(false);
     }
   }
-
   const hiddenInput = { display: "none" };
   const previewRow = { display: "flex", alignItems: "center", gap: 14 };
   const previewActions = { display: "flex", gap: 8 };
@@ -568,7 +542,6 @@ export function PhotoCapture({
     fontSize: 14,
     color: tokens.sub,
   };
-
   return (
     <Field label={label} hint={hint} required={required}>
       <input
@@ -635,7 +608,6 @@ export function PhotoCapture({
 export function ZoomableAvatar({ src, name, size = 44 }) {
   const [open, setOpen] = useState(false);
   if (!src) return <Avatar src={src} name={name} size={size} />;
-
   const trigger = {
     cursor: "zoom-in",
     display: "inline-flex",
@@ -687,7 +659,6 @@ export function ZoomableAvatar({ src, name, size = 44 }) {
     color: "#fff",
     fontSize: 14,
   };
-
   return (
     <>
       <button

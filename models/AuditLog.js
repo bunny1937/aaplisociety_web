@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 /**
  * Immutable audit trail.
  *
@@ -69,13 +68,11 @@ const AuditLogSchema = new mongoose.Schema(
         "MEMBER_CONTACT_CLEARED",
       ],
     },
-
     oldData: { type: mongoose.Schema.Types.Mixed },
     newData: { type: mongoose.Schema.Types.Mixed },
     timestamp: { type: Date, default: Date.now, index: true },
   },
   { timestamps: true },
 );
-
 export default mongoose.models.AuditLog ||
   mongoose.model("AuditLog", AuditLogSchema);

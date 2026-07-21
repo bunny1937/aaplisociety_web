@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const TransactionSchema = new mongoose.Schema(
   {
     transactionId: {
@@ -121,16 +120,13 @@ const TransactionSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
-
 TransactionSchema.index({ societyId: 1, memberId: 1, date: -1 });
 TransactionSchema.index({ societyId: 1, category: 1, date: -1 });
 TransactionSchema.index({ societyId: 1, financialYear: 1 });
-
 TransactionSchema.statics.generateTransactionId = function () {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `TXN${timestamp}${random}`;
 };
-
 export default mongoose.models.Transaction ||
   mongoose.model("Transaction", TransactionSchema);

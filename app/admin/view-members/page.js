@@ -1,15 +1,12 @@
 'use client';
-
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import styles from '@/styles/ViewMembers.module.css';
-
 export default function ViewMembersPage() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterOwnership, setFilterOwnership] = useState('all');
-
   const { data, isLoading } = useQuery({
     queryKey: ['members-detailed'],
     queryFn: async () => {
@@ -20,9 +17,7 @@ export default function ViewMembersPage() {
       return response.json();
     }
   });
-
   const members = data?.members || [];
-
   // Filter members
   const filteredMembers = members.filter(member => {
     const matchesSearch = 
@@ -31,13 +26,10 @@ export default function ViewMembersPage() {
       member.ownerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.contactNumber?.includes(searchTerm) ||
       member.emailPrimary?.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesStatus = filterStatus === 'all' || member.membershipStatus === filterStatus;
     const matchesOwnership = filterOwnership === 'all' || member.ownershipType === filterOwnership;
-    
     return matchesSearch && matchesStatus && matchesOwnership;
   });
-
   if (isLoading) {
     return (
       <div className={styles.container}>
@@ -48,14 +40,12 @@ export default function ViewMembersPage() {
       </div>
     );
   }
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <h1 className={styles.title}>👥 View All Members</h1>
         <p className={styles.subtitle}>Complete member directory with detailed information</p>
       </div>
-
       {/* Filters */}
       <div className={styles.filters}>
         <input
@@ -65,7 +55,6 @@ export default function ViewMembersPage() {
           onChange={(e) => setSearchTerm(e.target.value)}
           className={styles.searchInput}
         />
-
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
@@ -77,7 +66,6 @@ export default function ViewMembersPage() {
           <option value="Suspended">Suspended</option>
           <option value="Blocked">Blocked</option>
         </select>
-
         <select
           value={filterOwnership}
           onChange={(e) => setFilterOwnership(e.target.value)}
@@ -89,12 +77,10 @@ export default function ViewMembersPage() {
           <option value="Vacant">Vacant</option>
           <option value="Under-Dispute">Under-Dispute</option>
         </select>
-
         <div className={styles.resultCount}>
           {filteredMembers.length} of {members.length} members
         </div>
       </div>
-
       {/* Members Grid */}
       <div className={styles.membersGrid}>
         {filteredMembers.map(member => (
@@ -111,9 +97,7 @@ export default function ViewMembersPage() {
                 {member.membershipStatus}
               </div>
             </div>
-
             <h3 className={styles.memberName}>{member.ownerName}</h3>
-            
             <div className={styles.cardDetails}>
               <div className={styles.detailRow}>
                 <span className={styles.icon}>📞</span>
@@ -132,20 +116,17 @@ export default function ViewMembersPage() {
                 <span>{member.ownershipType}</span>
               </div>
             </div>
-
             <button className={styles.viewButton}>
               View Full Details →
             </button>
           </div>
         ))}
       </div>
-
       {filteredMembers.length === 0 && (
         <div className={styles.emptyState}>
           <p>No members found matching your filters</p>
         </div>
       )}
-
       {/* Detailed Dialog */}
       {selectedMember && (
         <div className={styles.dialogOverlay} onClick={() => setSelectedMember(null)}>
@@ -162,7 +143,6 @@ export default function ViewMembersPage() {
                 ✕
               </button>
             </div>
-
             <div className={styles.dialogContent}>
               {/* Basic Info */}
               <section className={styles.section}>
@@ -202,7 +182,6 @@ export default function ViewMembersPage() {
                   </div>
                 </div>
               </section>
-
               {/* Owner Info */}
               <section className={styles.section}>
                 <h3 className={styles.sectionTitle}>👤 Owner Information</h3>
@@ -241,7 +220,6 @@ export default function ViewMembersPage() {
                   </div>
                 </div>
               </section>
-
               {/* Family Members */}
               {selectedMember.familyMembers && selectedMember.familyMembers.length > 0 && (
                 <section className={styles.section}>
@@ -257,7 +235,6 @@ export default function ViewMembersPage() {
                   </div>
                 </section>
               )}
-
               {/* Parking Slots */}
               {selectedMember.parkingSlots && selectedMember.parkingSlots.length > 0 && (
                 <section className={styles.section}>
@@ -269,12 +246,10 @@ export default function ViewMembersPage() {
                   ))}
                 </section>
               )}
-
 {/* Owner History - FIXED */}
 {selectedMember.ownerHistory && selectedMember.ownerHistory.length > 0 && (
   <section className={styles.section}>
     <h3 className={styles.sectionTitle}>📜 Ownership Timeline</h3>
-    
     <div className={styles.infoBox}>
       <strong>Current Owner:</strong> {selectedMember.ownerName} 
       <span style={{ 
@@ -285,7 +260,6 @@ export default function ViewMembersPage() {
         ● Active
       </span>
     </div>
-    
     {selectedMember.ownerHistory.length > 0 && (
       <>
         <h4 style={{ 
@@ -299,14 +273,12 @@ export default function ViewMembersPage() {
         }}>
           Previous Owners
         </h4>
-        
         <div className={styles.timeline}>
           {selectedMember.ownerHistory
             .sort((a, b) => (b.ownerSequence || 0) - (a.ownerSequence || 0))
             .map((owner, idx) => (
               <div key={idx} className={styles.timelineItem}>
                 <div className={styles.timelineDot} />
-                
                 <div className={styles.timelineContent}>
                   {/* Header */}
                   <div className={styles.timelineHeader}>
@@ -317,7 +289,6 @@ export default function ViewMembersPage() {
                       {owner.ownerName}
                     </strong>
                   </div>
-                  
                   {/* Dates */}
                   <div className={styles.timelineDate} style={{ marginTop: '0.5rem' }}>
                     {owner.ownershipStartDate && (
@@ -355,7 +326,6 @@ export default function ViewMembersPage() {
                       </span>
                     )}
                   </div>
-                  
                   {/* Contact & ID Details */}
                   <div className={styles.ownerDetails} style={{ marginTop: '1rem' }}>
                     {owner.contactNumber && (
@@ -379,7 +349,6 @@ export default function ViewMembersPage() {
                       </div>
                     )}
                   </div>
-                  
                   {/* Financial Details */}
                   {(owner.purchaseAmount || owner.saleAmount) && (
                     <div style={{
@@ -413,7 +382,6 @@ export default function ViewMembersPage() {
                             </div>
                           </div>
                         )}
-                        
                         {owner.saleAmount && (
                           <div>
                             <div style={{ 
@@ -433,7 +401,6 @@ export default function ViewMembersPage() {
                             </div>
                           </div>
                         )}
-                        
                         {owner.purchaseAmount && owner.saleAmount && (
                           <div>
                             <div style={{ 
@@ -465,8 +432,6 @@ export default function ViewMembersPage() {
     )}
   </section>
 )}
-
-
              {/* Tenant History */}
 {selectedMember.tenantHistory && selectedMember.tenantHistory.length > 0 && (
   <section className={styles.section}>
@@ -595,7 +560,6 @@ export default function ViewMembersPage() {
                   </div>
                 </div>
               </section>
-
               {/* System Info */}
               <section className={styles.section}>
                 <h3 className={styles.sectionTitle}>⚙️ System Information</h3>

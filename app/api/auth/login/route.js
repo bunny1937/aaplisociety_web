@@ -6,11 +6,9 @@ import User from "@/models/User";
 import AuditLog from "@/models/AuditLog";
 import { signToken } from "@/lib/jwt";
 import { issueRefreshToken, setRefreshCookie } from "@/lib/refresh-token";
-
 const MAX_ATTEMPTS = parseInt(process.env.RATE_LIMIT_LOGIN, 10) || 10;
 const WINDOW_MS = 15 * 60 * 1000;
 const loginAttempts = new Map();
-
 function checkLoginRateLimit(identifier) {
   const key = identifier.toLowerCase();
   const now = Date.now();
@@ -26,17 +24,13 @@ function checkLoginRateLimit(identifier) {
   loginAttempts.set(key, entry);
   return entry.count > MAX_ATTEMPTS ? { blocked: true } : { blocked: false };
 }
-
 function clearLoginRateLimit(identifier) {
   loginAttempts.delete(identifier.toLowerCase());
 }
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const body = await request.json();
-
     const rawIdentifier = body.username || body.email || "";
     const rawPassword = body.password;
     if (typeof rawIdentifier !== "string" || typeof rawPassword !== "string") {
@@ -47,14 +41,12 @@ export async function POST(request) {
     }
     const identifier = rawIdentifier.trim().toLowerCase();
     const password = rawPassword;
-
     if (!identifier || !password) {
       return NextResponse.json(
         { error: "Username/email and password are required" },
         { status: 400 },
       );
     }
-
     const rateCheck = checkLoginRateLimit(identifier);
     if (rateCheck.blocked) {
       return NextResponse.json(
@@ -62,16 +54,13 @@ export async function POST(request) {
         { status: 429 },
       );
     }
-
     // Find by username  OR  email  (covers both Member and Admin flows)
     const user = await User.findOne({
       $or: [{ username: identifier }, { email: identifier }],
       isActive: true,
     });
-
     const ip = request.headers.get("x-forwarded-for") || "unknown";
     const ua = request.headers.get("user-agent") || "unknown";
-
     if (!user) {
       await AuditLog.create({
         action: "LOGIN_FAILURE",
@@ -83,7 +72,6 @@ export async function POST(request) {
         { status: 401 },
       );
     }
-
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       await AuditLog.create({
@@ -98,7 +86,6 @@ export async function POST(request) {
         { status: 401 },
       );
     }
-
     // ── ADMIN / SECRETARY / ACCOUNTANT ───────────────────────────────────────
     // These still carry root-level role + societyId — unchanged flow.
     if (
@@ -118,7 +105,6 @@ export async function POST(request) {
         societyId: user.societyId,
         societyCode: user.societyCode,
       });
-
       const response = NextResponse.json({
         success: true,
         message: "Login successful",
@@ -130,7 +116,6 @@ export async function POST(request) {
           societyId: user.societyId,
         },
       });
-
       response.cookies.set("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -139,26 +124,21 @@ export async function POST(request) {
         maxAge: 60 * 60 * 8, // 8 hours
       });
       setRefreshCookie(response, await issueRefreshToken(user._id));
-
       return response;
     }
-
     // ── MEMBER — multi-profile logic ─────────────────────────────────────────
     const activeProfiles = (user.profiles ?? []).filter(
       (p) => p.status === "Active",
     );
-
     // CASE A: single profile → auto-login
     if (activeProfiles.length === 1) {
       clearLoginRateLimit(identifier);
       const profile = activeProfiles[0];
-
       // Persist activeProfileId
       await User.updateOne(
         { _id: user._id },
         { activeProfileId: profile.profileId },
       );
-
       const token = signToken({
         userId: user._id,
         activeProfileId: profile.profileId,
@@ -166,7 +146,6 @@ export async function POST(request) {
         societyId: profile.societyId,
         role: profile.role,
       });
-
       const response = NextResponse.json({
         success: true,
         requiresProfileSelect: false,
@@ -183,7 +162,6 @@ export async function POST(request) {
           activeProfile: profile,
         },
       });
-
       response.cookies.set("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -192,10 +170,8 @@ export async function POST(request) {
         maxAge: 60 * 60 * 8,
       });
       setRefreshCookie(response, await issueRefreshToken(user._id));
-
       return response;
     }
-
     // CASE B: multiple profiles → return list, frontend shows selector
     if (activeProfiles.length > 1) {
       clearLoginRateLimit(identifier);
@@ -206,7 +182,6 @@ export async function POST(request) {
         },
         { expiresIn: "10m" },
       );
-
       // No cookie yet — user must pick a society first
       return NextResponse.json({
         success: true,
@@ -225,7 +200,6 @@ export async function POST(request) {
         })),
       });
     }
-
     // CASE C: Member with zero active profiles (edge case / misconfigured)
     return NextResponse.json(
       { error: "No active society profiles found for this account" },

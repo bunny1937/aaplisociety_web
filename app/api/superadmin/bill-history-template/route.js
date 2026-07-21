@@ -4,7 +4,6 @@ import Member from "@/models/Member";
 import mongoose from "mongoose";
 import * as XLSX from "xlsx";
 import { validateAdminRequest } from "@/lib/admin-middleware";
-
 const HEADERS = [
   "Wing-FlatNo", "Period",
   "CurrentCharges", "OpeningPrincipal", "OpeningInterest",
@@ -16,7 +15,6 @@ const HEADERS = [
   "Open Parking - Two Wheeler", "Open Parking - Four Wheeler",
   "Covered Parking - Two Wheeler", "Covered Parking - Four Wheeler",
 ];
-
 // Generate months from prevApril to one month before joinMonth (inclusive)
 function getHistoryMonths(joinPeriodId) {
   // joinPeriodId = "YYYY-MM" (1-indexed) e.g. "2026-05"
@@ -26,7 +24,6 @@ function getHistoryMonths(joinPeriodId) {
   // Feb 2027 → Apr 2026 … Jan 2027 (10 months)
   const [joinYear, joinMonthStr] = joinPeriodId.split("-").map(Number);
   const joinMonth0 = joinMonthStr - 1; // 0-indexed
-
   const months = [];
   let y = joinYear - 1;
   let m0 = 3; // April
@@ -39,41 +36,32 @@ function getHistoryMonths(joinPeriodId) {
   }
   return months;
 }
-
 function periodIdFromYM(year, month0) {
   return `${year}-${String(month0 + 1).padStart(2, "0")}`;
 }
-
 export async function GET(request) {
   const authResult = validateAdminRequest(request);
   if (!authResult?.valid) return authResult;
-
   const { searchParams } = new URL(request.url);
   const societyId = searchParams.get("societyId");
   const joinPeriodId = searchParams.get("joinPeriod"); // e.g. "2026-05"
-
   if (!societyId || !joinPeriodId) {
     return NextResponse.json({ error: "societyId and joinPeriod required" }, { status: 400 });
   }
-
   await connectDB();
   const sid = new mongoose.Types.ObjectId(societyId);
   const members = await Member.find({ societyId: sid, isDeleted: { $ne: true } })
     .select("flatNo wing")
     .sort({ wing: 1, flatNo: 1 })
     .lean();
-
   if (!members.length) {
     return NextResponse.json({ error: "No members found for this society" }, { status: 400 });
   }
-
   const months = getHistoryMonths(joinPeriodId);
   if (!months.length) {
     return NextResponse.json({ error: "No history months to generate (society joined in April?)" }, { status: 400 });
   }
-
   const wb = XLSX.utils.book_new();
-
   // Instructions sheet
   const instrData = [
     ["BILL HISTORY IMPORT TEMPLATE"],
@@ -97,7 +85,6 @@ export async function GET(request) {
   const instrWs = XLSX.utils.aoa_to_sheet(instrData);
   instrWs["!cols"] = [{ wch: 40 }, { wch: 30 }];
   XLSX.utils.book_append_sheet(wb, instrWs, "Instructions");
-
   // One sheet per month
   for (const { year, month0 } of months) {
     const pid = periodIdFromYM(year, month0);
@@ -117,16 +104,13 @@ export async function GET(request) {
     }
     const ws = XLSX.utils.aoa_to_sheet(dataRows);
     ws["!cols"] = HEADERS.map((h) => ({ wch: Math.max(h.length + 2, 14) }));
-
     // Bold header row
     HEADERS.forEach((_, ci) => {
       const ref = XLSX.utils.encode_cell({ r: 0, c: ci });
       if (ws[ref]) ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: "D6E4FF" } } };
     });
-
     XLSX.utils.book_append_sheet(wb, ws, pid);
   }
-
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
   return new NextResponse(buf, {
     headers: {

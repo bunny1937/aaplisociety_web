@@ -9,7 +9,6 @@ import AuditLog from '@/models/AuditLog';
 import BillingHead from '@/models/BillingHead';
 import Receipt from '@/models/Receipt';
 import { requireRoles, SOCIETY_ADMIN_ROLES } from '@/lib/authz';
-
 const modelMap = {
   society: Society,
   members: Member,
@@ -20,39 +19,30 @@ const modelMap = {
   auditlogs: AuditLog,
   billingheads: BillingHead
 };
-
 // GET - Fetch data with filters
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    
     const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { entity } = await params; // ← AWAIT HERE
-
     const Model = modelMap[entity];
-    
     if (!Model) {
       return NextResponse.json({ error: 'Invalid entity' }, { status: 400 });
     }
-
     const searchParams = new URL(request.url).searchParams;
     const query = {};
-
     // Add societyId filter for all entities except society itself
     if (entity !== 'society') {
       query.societyId = decoded.societyId;
     } else {
       query._id = decoded.societyId;
     }
-
     // Apply filters based on search params
     if (searchParams.get('name')) {
       query.ownerName = { $regex: searchParams.get('name'), $options: 'i' };
     }
-    
     if (searchParams.get('status')) {
       if (entity === 'members') {
         query.membershipStatus = searchParams.get('status');
@@ -60,21 +50,17 @@ export async function GET(request, { params }) {
         query.status = searchParams.get('status');
       }
     }
-
     if (searchParams.get('startDate') && searchParams.get('endDate')) {
       query.date = {
         $gte: new Date(searchParams.get('startDate')),
         $lte: new Date(searchParams.get('endDate'))
       };
     }
-
     if (searchParams.get('category')) {
       query.category = searchParams.get('category');
     }
-
     const data = await Model.find(query).lean();
     const total = await Model.countDocuments(query);
-
     return NextResponse.json({ success: true, data, total });
   } catch (error) {
     console.error('DB Manager GET error:', error);

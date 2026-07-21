@@ -1,5 +1,4 @@
 "use client";
-
 import DashboardLayout from "components/DashboardLayout";
 import {
   LayoutDashboard,
@@ -21,7 +20,6 @@ import {
   UserCheck,
   FileEdit,
 } from "lucide-react";
-
 export default function AdminLayout({ children }) {
   const navigation = [
     {
@@ -162,7 +160,6 @@ export default function AdminLayout({ children }) {
       ],
     },
   ];
-
   return (
     <DashboardLayout
       role="Admin"

@@ -14,7 +14,6 @@ import { generatePassword } from "@/lib/password-generator";
 import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
 import { ensureSocietyCode } from "@/lib/society-code";
 import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
-
 async function upsertMemberUser({
   memberDoc,
   basic,
@@ -28,7 +27,6 @@ async function upsertMemberUser({
   const email = basic.emailPrimary?.trim().toLowerCase() || null;
   const phone = String(basic.contactNumber || "").trim() || null;
   const whatsapp = String(basic.whatsappNumber || "").trim() || null;
-
   const newProfile = {
     profileId: new mongoose.Types.ObjectId(),
     societyId,
@@ -41,19 +39,15 @@ async function upsertMemberUser({
     status: "Active",
     joinedAt: new Date(),
   };
-
   // Check existing user by email OR phone
   const lookupConditions = [];
   if (email) lookupConditions.push({ email });
   if (phone) lookupConditions.push({ phone });
   if (whatsapp) lookupConditions.push({ phone: whatsapp });
-
   const existingUser = lookupConditions.length
     ? await User.findOne({ $or: lookupConditions })
     : null;
-
   let targetUser;
-
   if (existingUser) {
     // Existing user → append profile only (keep their password)
     newProfile.isPrimary = false;
@@ -86,38 +80,28 @@ async function upsertMemberUser({
       mustChangePassword: true,
     });
   }
-
   // Backlink member → user
   await Member.updateOne({ _id: memberDoc._id }, { userId: targetUser._id });
-
   return { user: targetUser, profile: newProfile, isNew: !existingUser };
 }
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const formData = await request.formData();
     const file = formData.get("file");
     const confirmImport = formData.get("confirmImport"); // ← NEW: Check if confirm
-
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
-
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
-
     const firstSheet = workbook.worksheets[0];
     const isEnhancedTemplate = firstSheet.name.includes("Basic Info");
-
     // ========== MODE 1: PREVIEW (Default) ==========
     if (confirmImport !== "true") {
       // Save temp file for later
@@ -125,17 +109,14 @@ export async function POST(request) {
       try {
         await mkdir(tempDir, { recursive: true });
       } catch (e) {}
-
       const tempFilePath = join(tempDir, `temp-import-${Date.now()}.xlsx`);
       await writeFile(tempFilePath, buffer);
-
       // Parse and validate
       const validation = await validateImportData(
         workbook,
         decoded.societyId,
         isEnhancedTemplate,
       );
-
       // Parse sheets for preview
       const sheets = {};
       workbook.worksheets.forEach((sheet) => {
@@ -154,7 +135,6 @@ export async function POST(request) {
         });
         sheets[sheet.name] = rows;
       });
-
       return NextResponse.json({
         mode: "preview",
         tempFilePath,
@@ -163,7 +143,6 @@ export async function POST(request) {
         isEnhancedTemplate,
       });
     }
-
     // ========== MODE 2: CONFIRM & IMPORT ==========
     if (confirmImport === "true") {
       if (isEnhancedTemplate) {
@@ -183,16 +162,13 @@ export async function POST(request) {
     );
   }
 }
-
 // ========== VALIDATION FUNCTION ==========
 async function validateImportData(workbook, societyId, isEnhanced) {
   const issues = [];
   const validCount = { valid: 0, errors: 0, warnings: 0, duplicates: 0 };
-
   const basicSheet = workbook.getWorksheet(
     isEnhanced ? "1. Basic Info (Required)" : workbook.worksheets[0].name,
   );
-
   if (!basicSheet) {
     return {
       issues: [{ type: "CRITICAL", message: "Basic Info sheet not found" }],
@@ -200,7 +176,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       summary: { canImport: false },
     };
   }
-
   // Get existing members for duplicate check
   const existingMembers = await Member.find({ societyId }).lean();
   const existingFlats = new Set(
@@ -213,7 +188,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
   const existingPhones = new Set(existingMembers.map((m) => String(m.contactNumber || "")));
   const existingPANOwner = new Map(existingMembers.filter(m => m.panCard).map((m) => [m.panCard, m.ownerName]));
   const existingAadhaarOwner = new Map(existingMembers.filter(m => m.aadhaar).map((m) => [m.aadhaar, m.ownerName]));
-
   // Build parking slots lookup
   const existingParkingSlots = new Set();
   existingMembers.forEach((m) => {
@@ -221,7 +195,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       if (ps && ps.slotNumber) existingParkingSlots.add(ps.slotNumber);
     });
   });
-
   // Build family members lookup
   const existingFamilyMembers = new Set();
   existingMembers.forEach((m) => {
@@ -231,7 +204,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         existingFamilyMembers.add(`${flatKey}|||${fm.name.toLowerCase()}`);
     });
   });
-
   // Build owner history lookup
   const existingOwnerHistory = new Set();
   existingMembers.forEach((m) => {
@@ -244,7 +216,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       }
     });
   });
-
   // Build tenant history lookup
   const existingTenantHistory = new Set();
   existingMembers.forEach((m) => {
@@ -259,7 +230,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       }
     });
   });
-
   // Parse headers
   const headerRow = basicSheet.getRow(1);
   const headers = [];
@@ -270,7 +240,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         .replace(/\*/g, ""),
     );
   });
-
   // Build flatNo to wing mapping from Sheet 1
   const flatWingMap = {};
   basicSheet.eachRow((row, rowNumber) => {
@@ -286,7 +255,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       flatWingMap[flatNo] = wing;
     }
   });
-
   // Track duplicates within file — Maps store email/phone → ownerName to allow same person multi-flat
   const fileFlats = new Set();
   const fileEmailOwnerFile = new Map();
@@ -298,11 +266,9 @@ async function validateImportData(workbook, societyId, isEnhanced) {
   const fileFamilyMembers = new Set();
   const fileOwnerHistory = new Set();
   const fileTenantHistory = new Set();
-
   // ========== VALIDATE SHEET 1: BASIC INFO ==========
   basicSheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
-
     const rowData = {};
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       const header = headers[colNumber - 1];
@@ -310,7 +276,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         rowData[header] = cell.value;
       }
     });
-
     const flatNo = String(rowData["flatNo"] || "").trim();
     const wing = String(rowData["wing"] || "").trim();
     const floor = rowData["floor"];
@@ -323,12 +288,9 @@ async function validateImportData(workbook, societyId, isEnhanced) {
     const openingPrincipal = rowData["openingPrincipal"];
     const openingInterest = rowData["openingInterest"];
     if (!flatNo || flatNo === "INSTRUCTIONS:") return;
-
     // Track flatNo → ownerName for sheet 2 PAN/Aadhaar same-person check
     if (ownerName) flatOwnerMap.set(flatNo, ownerName);
-
     const cellIssues = {};
-
     // 1. flatNo validation
     if (!flatNo) {
       cellIssues["flatNo"] = {
@@ -354,7 +316,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         fileFlats.add(flatKey);
       }
     }
-
     // 2. wing validation
     if (!wing) {
       cellIssues["wing"] = {
@@ -363,7 +324,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       };
       validCount.warnings++;
     }
-
     // 3. floor validation
     // if (!floor && floor !== 0) {
     //   cellIssues["floor"] = {
@@ -378,7 +338,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
     //   };
     //   validCount.errors++;
     // }
-
     // 4. ownerName validation
     if (!ownerName) {
       cellIssues["ownerName"] = {
@@ -399,7 +358,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       };
       validCount.errors++;
     }
-
     // 5. contactNumber validation
     if (!contactNumber) {
       cellIssues["contactNumber"] = {
@@ -431,7 +389,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         filePhoneOwnerFile.set(contactNumber, ownerName);
       }
     }
-
     // 6. emailPrimary validation
     if (!emailPrimary) {
       cellIssues["emailPrimary"] = {
@@ -460,7 +417,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
     } else {
       fileEmailOwnerFile.set(emailPrimary, ownerName);
     }
-
     // 7. carpetAreaSqft validation
     if (!carpetAreaSqft || carpetAreaSqft <= 0) {
       cellIssues["carpetAreaSqft"] = {
@@ -475,7 +431,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       };
       validCount.warnings++;
     }
-
     // 8. flatType validation
     // const validFlatTypes = [
     //   "1RK",
@@ -500,7 +455,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
     //   };
     //   validCount.errors++;
     // }
-
     // 9. ownershipType validation
     const validOwnershipTypes = [
       "Owner-Occupied",
@@ -508,7 +462,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       "Vacant",
       "Under-Dispute",
     ];
-
     if (!ownershipType) {
       cellIssues["ownershipType"] = {
         type: "WARNING",
@@ -522,7 +475,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       };
       validCount.errors++;
     }
-
     // 10. openingPrincipal validation
     if (
       openingPrincipal !== null &&
@@ -550,7 +502,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         validCount.warnings++;
       }
     }
-
     // 11. openingInterest validation
     if (
       openingInterest !== null &&
@@ -578,11 +529,9 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         validCount.warnings++;
       }
     }
-
     if (Object.keys(cellIssues).length === 0) {
       validCount.valid++;
     }
-
     if (Object.keys(cellIssues).length > 0) {
       issues.push({
         sheet: basicSheet.name,
@@ -592,17 +541,14 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       });
     }
   });
-
   // ========== VALIDATE SHEET 2: ADDITIONAL DETAILS ==========
   if (isEnhanced) {
     const detailsSheet = workbook.getWorksheet("2. Additional Details");
     if (detailsSheet) {
       detailsSheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-
         const flatNo = String(row.getCell(1).value || "").trim();
         if (!flatNo || flatNo === "INSTRUCTIONS:") return;
-
         const panCard = String(row.getCell(2).value || "").trim();
         const aadhaar = String(row.getCell(3).value || "").trim();
         const alternateContact = String(row.getCell(4).value || "").trim();
@@ -611,7 +557,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         const builtUpAreaSqft = row.getCell(7).value;
         const possessionDate = row.getCell(8).value;
         const cellIssues = {};
-
         // 1. PAN validation
         const rowOwnerName = flatOwnerMap.get(flatNo) ?? "";
         if (panCard) {
@@ -637,7 +582,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             filePANs.set(panCard, rowOwnerName);
           }
         }
-
         // 2. Aadhaar validation
         if (aadhaar) {
           const aadhaarClean = aadhaar.replace(/\s/g, "");
@@ -663,7 +607,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             fileAadhaars.set(aadhaarClean, rowOwnerName);
           }
         }
-
         // 3. alternateContact validation
         if (alternateContact) {
           const altPhoneDigits = alternateContact.replace(/\D/g, "");
@@ -675,7 +618,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.errors++;
           }
         }
-
         // 4. whatsappNumber validation
         if (whatsappNumber) {
           const whatsappDigits = whatsappNumber.replace(/\D/g, "");
@@ -687,7 +629,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.errors++;
           }
         }
-
         // 5. emailSecondary validation
         if (
           emailSecondary &&
@@ -699,7 +640,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 6. builtUpAreaSqft validation
         if (
           builtUpAreaSqft &&
@@ -711,13 +651,11 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         // 7. possessionDate validation
         if (possessionDate) {
           const possDate = new Date(possessionDate);
           const today = new Date();
           const minDate = new Date("2000-01-01");
-
           if (possDate > today) {
             cellIssues["possessionDate"] = {
               type: "WARNING",
@@ -732,7 +670,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.warnings++;
           }
         }
-
         if (Object.keys(cellIssues).length > 0) {
           issues.push({
             sheet: detailsSheet.name,
@@ -743,24 +680,18 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         }
       });
     }
-
     // ========== VALIDATE SHEET 3: PARKING SLOTS ==========
     const parkingSheet = workbook.getWorksheet("3. Parking Slots");
     if (parkingSheet) {
       const fileFlatParkingCount = {};
-
       parkingSheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-
         const flatNo = String(row.getCell(1).value || "").trim();
         const slotNumber = String(row.getCell(2).value || "").trim();
         const type = String(row.getCell(3).value || "").trim();
         const vehicleType = String(row.getCell(4).value || "").trim();
-
         if (!flatNo) return;
-
         const cellIssues = {};
-
         // 1. slotNumber validation
         if (!slotNumber) {
           cellIssues["slotNumber"] = {
@@ -783,7 +714,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         } else {
           fileParkingSlots.add(slotNumber);
         }
-
         // 2. type validation
         const validParkingTypes = ["Open", "Covered", "Stilt"];
         if (!type) {
@@ -799,7 +729,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 3. vehicleType validation
         const validVehicleTypes = ["Two-Wheeler", "Four-Wheeler"];
         if (!vehicleType) {
@@ -815,7 +744,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 4. Check excessive parking — warn if more than 6 slots per flat (unusual but valid)
         fileFlatParkingCount[flatNo] = (fileFlatParkingCount[flatNo] || 0) + 1;
         if (fileFlatParkingCount[flatNo] > 6) {
@@ -825,7 +753,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         if (Object.keys(cellIssues).length > 0) {
           issues.push({
             sheet: parkingSheet.name,
@@ -836,26 +763,20 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         }
       });
     }
-
     // ========== VALIDATE SHEET 4: FAMILY MEMBERS ==========
     const familySheet = workbook.getWorksheet("4. Family Members");
     if (familySheet) {
       const fileFlatFamilyCount = {};
-
       familySheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-
         const flatNo = String(row.getCell(1).value || "").trim();
         const name = String(row.getCell(2).value || "").trim();
         const relation = String(row.getCell(3).value || "").trim();
         const age = row.getCell(4).value;
         const contactNumber = String(row.getCell(5).value || "").trim();
         const occupation = String(row.getCell(6).value || "").trim();
-
         if (!flatNo) return;
-
         const cellIssues = {};
-
         // 1. name validation WITH DUPLICATE CHECK
         if (!name) {
           cellIssues["name"] = {
@@ -888,7 +809,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             fileFamilyMembers.add(familyKey);
           }
         }
-
         // 2. relation validation
         const validRelations = [
           "Spouse",
@@ -915,7 +835,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         // 3. age validation
         if (age && (age < 0 || age > 120)) {
           cellIssues["age"] = {
@@ -924,7 +843,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 4. contactNumber validation
         if (contactNumber) {
           const phoneDigits = contactNumber.replace(/\D/g, "");
@@ -936,7 +854,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.errors++;
           }
         }
-
         // 5. Check excessive family members (max 10 per flat)
         fileFlatFamilyCount[flatNo] = (fileFlatFamilyCount[flatNo] || 0) + 1;
         if (fileFlatFamilyCount[flatNo] > 10) {
@@ -946,7 +863,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         if (Object.keys(cellIssues).length > 0) {
           issues.push({
             sheet: familySheet.name,
@@ -957,13 +873,11 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         }
       });
     }
-
     // ========== VALIDATE SHEET 5: OWNER HISTORY ==========
     const ownerHistorySheet = workbook.getWorksheet("5. Owner History");
     if (ownerHistorySheet) {
       ownerHistorySheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-
         const flatNo = String(row.getCell(1).value || "").trim();
         const ownerSequence = row.getCell(2).value;
         const ownerName = String(row.getCell(3).value || "").trim();
@@ -974,11 +888,8 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         const saleDate = row.getCell(8).value;
         const purchasePrice = row.getCell(9).value;
         const salePrice = row.getCell(10).value;
-
         if (!flatNo || flatNo === "INSTRUCTIONS:") return;
-
         const cellIssues = {};
-
         // 1. ownerSequence validation
         if (!ownerSequence || ownerSequence <= 0) {
           cellIssues["ownerSequence"] = {
@@ -987,7 +898,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 2. ownerName validation WITH DUPLICATE CHECK
         if (!ownerName) {
           cellIssues["ownerName"] = {
@@ -1020,7 +930,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             fileOwnerHistory.add(ownerKey);
           }
         }
-
         // 3. contactNumber validation
         if (contactNumber) {
           const phoneDigits = contactNumber.replace(/\D/g, "");
@@ -1032,7 +941,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.errors++;
           }
         }
-
         // 4. email validation
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           cellIssues["email"] = {
@@ -1041,7 +949,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 5. panCard validation WITH DUPLICATE CHECK
         // if (panCard) {
         //   if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panCard)) {
@@ -1056,7 +963,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         //     }
         //   }
         // }
-
         // 6. Date validation
         if (purchaseDate && saleDate) {
           const pDate = new Date(purchaseDate);
@@ -1069,7 +975,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.errors++;
           }
         }
-
         // 7. Price validation
         if (
           purchasePrice &&
@@ -1081,7 +986,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         if (salePrice && (salePrice < 0 || salePrice > 1000000000)) {
           cellIssues["salePrice"] = {
             type: "WARNING",
@@ -1089,7 +993,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         if (Object.keys(cellIssues).length > 0) {
           issues.push({
             sheet: ownerHistorySheet.name,
@@ -1100,15 +1003,12 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         }
       });
     }
-
     // ========== VALIDATE SHEET 6: TENANT HISTORY ==========
     const tenantHistorySheet = workbook.getWorksheet("6. Tenant History");
     if (tenantHistorySheet) {
       const currentTenants = {};
-
       tenantHistorySheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-
         const flatNo = String(row.getCell(1).value || "").trim();
         const tenantSequence = row.getCell(2).value;
         const tenantName = String(row.getCell(3).value || "").trim();
@@ -1120,11 +1020,8 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         const depositAmount = row.getCell(9).value;
         const rentPerMonth = row.getCell(10).value;
         const isCurrent = String(row.getCell(11).value || "").toLowerCase();
-
         if (!flatNo || flatNo === "INSTRUCTIONS:") return;
-
         const cellIssues = {};
-
         // 1. tenantSequence validation
         if (!tenantSequence || tenantSequence <= 0) {
           cellIssues["tenantSequence"] = {
@@ -1133,7 +1030,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 2. tenantName validation WITH DUPLICATE CHECK
         if (!tenantName) {
           cellIssues["tenantName"] = {
@@ -1166,7 +1062,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             fileTenantHistory.add(tenantKey);
           }
         }
-
         // 3. contactNumber validation
         if (contactNumber) {
           const phoneDigits = contactNumber.replace(/\D/g, "");
@@ -1178,7 +1073,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.errors++;
           }
         }
-
         // 4. email validation
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           cellIssues["email"] = {
@@ -1187,7 +1081,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.errors++;
         }
-
         // 5. panCard validation WITH DUPLICATE CHECK
         // if (panCard) {
         //   if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panCard)) {
@@ -1202,7 +1095,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
         //     }
         //   }
         // }
-
         // 6. Date validation
         if (startDate && endDate) {
           const sDate = new Date(startDate);
@@ -1215,7 +1107,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             validCount.errors++;
           }
         }
-
         // 7. Deposit/Rent validation
         if (depositAmount && (depositAmount < 0 || depositAmount > 10000000)) {
           cellIssues["depositAmount"] = {
@@ -1224,7 +1115,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         if (rentPerMonth && (rentPerMonth < 0 || rentPerMonth > 1000000)) {
           cellIssues["rentPerMonth"] = {
             type: "WARNING",
@@ -1232,7 +1122,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
           };
           validCount.warnings++;
         }
-
         // 8. isCurrent validation - only one current tenant per flat
         if (isCurrent === "yes") {
           if (currentTenants[flatNo]) {
@@ -1245,7 +1134,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
             currentTenants[flatNo] = rowNumber;
           }
         }
-
         if (Object.keys(cellIssues).length > 0) {
           issues.push({
             sheet: tenantHistorySheet.name,
@@ -1257,7 +1145,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
       });
     }
   }
-
   return {
     issues,
     validCount,
@@ -1274,7 +1161,6 @@ async function validateImportData(workbook, societyId, isEnhanced) {
     },
   };
 }
-
 // ========== ENHANCED IMPORT ==========
 async function handleEnhancedImport(workbook, decoded) {
   try {
@@ -1284,7 +1170,6 @@ async function handleEnhancedImport(workbook, decoded) {
     const familySheet = workbook.getWorksheet("4. Family Members");
     const ownerHistorySheet = workbook.getWorksheet("5. Owner History");
     const tenantHistorySheet = workbook.getWorksheet("6. Tenant History");
-
     if (!basicSheet) {
       return NextResponse.json(
         {
@@ -1293,7 +1178,6 @@ async function handleEnhancedImport(workbook, decoded) {
         { status: 400 },
       );
     }
-
     // Parse all sheets
     const basicData = parseSheet(basicSheet);
     const additionalData = parseSheet(detailsSheet, [
@@ -1352,43 +1236,36 @@ async function handleEnhancedImport(workbook, decoded) {
         duration: null,
       };
     });
-
     // ✅ GET NEXT MEMBERSHIP NUMBER
     const existingCount = await Member.countDocuments({
       societyId: decoded.societyId,
     });
     let nextNumber = existingCount + 1;
-
     // Check for duplicates
     const flatNos = Object.keys(basicData);
     const existingMembers = await Member.find({
       societyId: decoded.societyId,
       flatNo: { $in: flatNos },
     }).select("flatNo wing");
-
     const existingFlats = new Set(
       existingMembers.map((m) => `${m.wing || ""}-${m.flatNo}`),
     );
     const warnings = [];
-
     const createdMembers = [];
     const userCredentials = [];
     let parkingSlotsCount = 0;
     let ownerHistoryCount = 0;
     let tenantHistoryCount = 0;
     let familyMembersCount = 0;
-
     // Fetched once, not per-member (see the equivalent hoist further up in
     // this file for the other import path) - avoids re-querying every
     // username in the DB on each iteration of a potentially large import.
     const societyForDetailedImport = await Society.findById(decoded.societyId).select("name societyCode");
     const societyCodeForDetailedImport = await ensureSocietyCode(societyForDetailedImport);
     const usernameBloomDetailed = await buildUsernameBloomFilter();
-
     // ✅ CREATE MEMBERS ONE BY ONE WITH SEQUENTIAL MEMBERSHIP NUMBERS
     for (const [flatNo, basic] of Object.entries(basicData)) {
       const flatKey = `${basic.wing || ""}-${flatNo}`;
-
       if (existingFlats.has(flatKey)) {
         warnings.push({
           flatNo,
@@ -1396,7 +1273,6 @@ async function handleEnhancedImport(workbook, decoded) {
         });
         continue;
       }
-
       if (
         !basic.ownerName ||
         !basic.contactNumber ||
@@ -1405,7 +1281,6 @@ async function handleEnhancedImport(workbook, decoded) {
       ) {
         throw new Error(`Flat ${flatNo}: Missing required fields`);
       }
-
       const additional = additionalData[flatNo] || {};
       const memberData = {
         flatNo: flatNo,
@@ -1424,7 +1299,6 @@ async function handleEnhancedImport(workbook, decoded) {
           Number(basic["openingInterest"] ?? 0),
         societyId: decoded.societyId,
         membershipNumber: `MEM-${String(nextNumber).padStart(4, "0")}`, // ✅ MANUAL
-
         panCard: additional.panCard,
         aadhaar: additional.aadhaar,
         alternateContact: additional.alternateContact,
@@ -1432,7 +1306,6 @@ async function handleEnhancedImport(workbook, decoded) {
         emailSecondary: additional.emailSecondary,
         builtUpAreaSqft: additional.builtUpAreaSqft,
         possessionDate: additional.possessionDate,
-
         parkingSlots: parkingData[flatNo] || [],
         familyMembers: familyData[flatNo] || [],
         ownerHistory: ownerHistoryData[flatNo] || [],
@@ -1441,15 +1314,12 @@ async function handleEnhancedImport(workbook, decoded) {
         hasVotingRights: true,
         createdBy: decoded.userId,
       };
-
       parkingSlotsCount += (parkingData[flatNo] || []).length;
       familyMembersCount += (familyData[flatNo] || []).length;
       ownerHistoryCount += (ownerHistoryData[flatNo] || []).length;
       tenantHistoryCount += (tenantHistoryData[flatNo] || []).length;
-
       const member = await Member.create(memberData); // ✅ ONE AT A TIME
       nextNumber++; // ✅ INCREMENT
-
       // 2. Check existing user by email OR contact
       const existingUser = await User.findOne({
         $or: [
@@ -1457,7 +1327,6 @@ async function handleEnhancedImport(workbook, decoded) {
           { phone: String(basic.contactNumber) },
         ],
       });
-
       const newProfile = {
         profileId: new mongoose.Types.ObjectId(),
         societyId: decoded.societyId,
@@ -1470,11 +1339,9 @@ async function handleEnhancedImport(workbook, decoded) {
         status: "Active",
         joinedAt: new Date(),
       };
-
       let targetUser;
       let credentialPassword;
       let isNewUser = false;
-
       if (existingUser) {
         const alreadyLinked = existingUser.profiles?.some(
           (p) => String(p.memberId) === String(member._id),
@@ -1512,17 +1379,14 @@ async function handleEnhancedImport(workbook, decoded) {
         credentialPassword = password;
         isNewUser = true;
       }
-
       // 3. Backlink member → user
       await Member.updateOne({ _id: member._id }, { userId: targetUser._id });
-
       createdMembers.push({
         id: member._id,
         flatNo: member.flatNo,
         wing: member.wing,
         ownerName: member.ownerName,
       });
-
       userCredentials.push({
         flatNo: member.flatNo,
         wing: member.wing,
@@ -1533,7 +1397,6 @@ async function handleEnhancedImport(workbook, decoded) {
         isNewUser,
       });
     }
-
     await AuditLog.create({
       userId: decoded.userId,
       societyId: decoded.societyId,
@@ -1544,7 +1407,6 @@ async function handleEnhancedImport(workbook, decoded) {
       },
       timestamp: new Date(),
     });
-
     return NextResponse.json({
       success: true,
       summary: {
@@ -1567,12 +1429,10 @@ async function handleEnhancedImport(workbook, decoded) {
     throw error;
   }
 }
-
 // ========== SIMPLE IMPORT ==========
 async function handleSimpleImport(workbook, decoded) {
   try {
     const worksheet = workbook.worksheets[0];
-
     if (worksheet.rowCount > 1001) {
       return NextResponse.json(
         {
@@ -1581,7 +1441,6 @@ async function handleSimpleImport(workbook, decoded) {
         { status: 400 },
       );
     }
-
     const headerRow = worksheet.getRow(1);
     const headers = [];
     headerRow.eachCell({ includeEmpty: true }, (cell) => {
@@ -1591,7 +1450,6 @@ async function handleSimpleImport(workbook, decoded) {
           .toLowerCase(),
       );
     });
-
     const members = [];
     const rowErrors = [];
     // ADD THIS:
@@ -1604,14 +1462,12 @@ async function handleSimpleImport(workbook, decoded) {
     console.log("🔍 ROW 2 RAW:", row2vals);
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
-
       const getCell = (columnName) => {
         const colIndex = headers.indexOf(columnName);
         if (colIndex === -1) return "";
         const cell = row.getCell(colIndex + 1);
         return String(cell.value || "").trim();
       };
-
       const flatno = getCell("flatno");
       const wing = getCell("wing");
       const name = getCell("name");
@@ -1622,7 +1478,6 @@ async function handleSimpleImport(workbook, decoded) {
       const openingInterestRaw = getCell("openinginterest");
       const balanceLegacyRaw = getCell("balance"); // backward compat for old uploads
       const errors = [];
-
       if (!flatno) errors.push("flatno is required");
       if (!name) errors.push("name is required");
       if (!email) errors.push("email is required");
@@ -1635,7 +1490,6 @@ async function handleSimpleImport(workbook, decoded) {
         }
       }
       if (!mobileno) errors.push("mobileno is required");
-
       // openingPrincipal validation
       const resolvedPrincipal = openingPrincipalRaw
         ? parseFloat(openingPrincipalRaw)
@@ -1645,7 +1499,6 @@ async function handleSimpleImport(workbook, decoded) {
       const resolvedInterest = openingInterestRaw
         ? parseFloat(openingInterestRaw)
         : 0;
-
       if (openingPrincipalRaw && isNaN(resolvedPrincipal)) {
         errors.push(
           `openingPrincipal must be a number, got: "${openingPrincipalRaw}"`,
@@ -1653,7 +1506,6 @@ async function handleSimpleImport(workbook, decoded) {
       } else if (!isNaN(resolvedPrincipal) && resolvedPrincipal < 0) {
         errors.push("openingPrincipal cannot be negative");
       }
-
       if (openingInterestRaw && isNaN(resolvedInterest)) {
         errors.push(
           `openingInterest must be a number, got: "${openingInterestRaw}"`,
@@ -1661,7 +1513,6 @@ async function handleSimpleImport(workbook, decoded) {
       } else if (!isNaN(resolvedInterest) && resolvedInterest < 0) {
         errors.push("openingInterest cannot be negative");
       }
-
       if (errors.length === 0) {
         members.push({
           flatNo: flatno.substring(0, 50),
@@ -1687,7 +1538,6 @@ async function handleSimpleImport(workbook, decoded) {
         });
       }
     });
-
     if (rowErrors.length > 0) {
       return NextResponse.json(
         {
@@ -1698,7 +1548,6 @@ async function handleSimpleImport(workbook, decoded) {
         { status: 400 },
       );
     }
-
     // Check for duplicates
     const existingMembers = await Member.find({
       societyId: decoded.societyId,
@@ -1708,7 +1557,6 @@ async function handleSimpleImport(workbook, decoded) {
     );
     const duplicatesInFile = new Set();
     const duplicatesInDb = [];
-
     members.forEach((member, index) => {
       const key = `${member.wing}-${member.flatNo}`;
       if (duplicatesInFile.has(key)) {
@@ -1719,7 +1567,6 @@ async function handleSimpleImport(workbook, decoded) {
       }
       duplicatesInFile.add(key);
     });
-
     if (duplicatesInDb.length > 0) {
       return NextResponse.json(
         {
@@ -1730,33 +1577,27 @@ async function handleSimpleImport(workbook, decoded) {
         { status: 400 },
       );
     }
-
     // ✅ GET NEXT MEMBERSHIP NUMBER
     const existingCount = await Member.countDocuments({
       societyId: decoded.societyId,
     });
     let nextNumber = existingCount + 1;
-
     const createdMembers = [];
     const userCredentials = [];
-
     // Fetched once, not per-member: the society doesn't change across this
     // loop, and re-querying every username in the DB (buildUsernameBloomFilter)
     // for every single member would be wasteful on a large import.
     const societyForImport = await Society.findById(decoded.societyId).select("name societyCode");
     const societyCodeForImport = await ensureSocietyCode(societyForImport);
     const usernameBloom = await buildUsernameBloomFilter();
-
     // ✅ CREATE ONE BY ONE
     for (let i = 0; i < members.length; i++) {
       const memberData = members[i];
       memberData.societyId = decoded.societyId;
       memberData.createdBy = decoded.userId;
       memberData.membershipNumber = `MEM-${String(nextNumber).padStart(4, "0")}`; // ✅ MANUAL
-
       const member = await Member.create(memberData); // ✅ ONE AT A TIME
       nextNumber++; // ✅ INCREMENT
-
       const password = generatePassword();
       const { user: memberUser, isNew } = await upsertMemberUser({
         memberDoc: member,
@@ -1767,14 +1608,12 @@ async function handleSimpleImport(workbook, decoded) {
         bloom: usernameBloom,
         plainPassword: password,
       });
-
       createdMembers.push({
         id: member._id,
         flatNo: member.flatNo,
         wing: member.wing,
         ownerName: member.ownerName,
       });
-
       userCredentials.push({
         flatNo: member.flatNo,
         wing: member.wing,
@@ -1784,7 +1623,6 @@ async function handleSimpleImport(workbook, decoded) {
         password: isNew ? password : "(existing account — password unchanged)",
       });
     }
-
     await AuditLog.create({
       userId: decoded.userId,
       societyId: decoded.societyId,
@@ -1795,7 +1633,6 @@ async function handleSimpleImport(workbook, decoded) {
       },
       timestamp: new Date(),
     });
-
     return NextResponse.json(
       {
         success: true,
@@ -1809,15 +1646,12 @@ async function handleSimpleImport(workbook, decoded) {
     throw error;
   }
 }
-
 // ========== HELPER FUNCTIONS ==========
 function parseSheet(sheet, fields = null) {
   if (!sheet) return {};
-
   const data = {};
   const headerRow = sheet.getRow(1);
   const headers = [];
-
   headerRow.eachCell({ includeEmpty: true }, (cell) => {
     headers.push(
       String(cell.value ?? "")
@@ -1825,14 +1659,11 @@ function parseSheet(sheet, fields = null) {
         .replace(/\*/g, ""),
     );
   });
-
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) {
       const flatNo = String(row.getCell(1).value || "").trim();
       if (!flatNo || flatNo === "INSTRUCTIONS:") return;
-
       const rowData = {};
-
       if (fields) {
         fields.forEach((field, index) => {
           rowData[field] = row.getCell(index + 2).value;
@@ -1845,32 +1676,24 @@ function parseSheet(sheet, fields = null) {
           }
         });
       }
-
       data[flatNo] = rowData;
     }
   });
-
   return data;
 }
-
 function parseMultiRowSheet(sheet, mapper) {
   if (!sheet) return {};
-
   const data = {};
-
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) {
       const flatNo = String(row.getCell(1).value || "").trim();
       if (!flatNo) return;
-
       if (!data[flatNo]) data[flatNo] = [];
-
       const item = mapper(row);
       if (item && Object.values(item).some((v) => v)) {
         data[flatNo].push(item);
       }
     }
   });
-
   return data;
 }

@@ -6,24 +6,19 @@ import Member from "@/models/Member";
 import Society from "@/models/Society";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
-
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "xlsx";
-
     // Build query
     if (!decoded.societyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,13 +33,11 @@ export async function GET(request) {
     const wing = searchParams.get("wing");
     const paymentMode = searchParams.get("paymentMode");
     const financialYear = searchParams.get("financialYear");
-
     if (memberId && memberId !== "all") query.memberId = memberId;
     if (category && category !== "all") query.category = category;
     if (txnType && txnType !== "all") query.type = txnType;
     const filterMonth = searchParams.get("month");
     const filterYear = searchParams.get("year");
-
     // If month/year filters are used, they override startDate/endDate
     if (filterMonth && filterYear) {
       // Both selected: specific month of specific year
@@ -74,25 +67,20 @@ export async function GET(request) {
         query.date = { ...query.date, $lte: end };
       }
     }
-
     if (billPeriod && billPeriod !== "all") query.billPeriodId = billPeriod;
     if (paymentMode && paymentMode !== "all") query.paymentMode = paymentMode;
     if (financialYear && financialYear !== "all")
       query.financialYear = financialYear;
-
     const transactions = await Transaction.find(query)
       .populate("memberId", "roomNo wing ownerName")
       .populate("createdBy", "name email")
       .sort({ date: -1, createdAt: -1 })
       .lean();
-
     const society = await Society.findById(decoded.societyId).lean();
-
     // ===== EXCEL EXPORT =====
     if (format === "xlsx") {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Ledger");
-
       worksheet.columns = [
         { header: "Date", key: "date", width: 12 },
         { header: "Transaction ID", key: "transactionId", width: 20 },
@@ -106,14 +94,12 @@ export async function GET(request) {
         { header: "Balance (₹)", key: "balance", width: 15 },
         { header: "Created By", key: "createdBy", width: 20 },
       ];
-
       worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
       worksheet.getRow(1).fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FF4F46E5" },
       };
-
       transactions.forEach((t) => {
         worksheet.addRow({
           date: new Date(t.date).toLocaleDateString("en-IN"),
@@ -133,14 +119,12 @@ export async function GET(request) {
           createdBy: t.createdBy?.name || "",
         });
       });
-
       const totalDebit = transactions
         .filter((t) => t.type === "Debit")
         .reduce((sum, t) => sum + t.amount, 0);
       const totalCredit = transactions
         .filter((t) => t.type === "Credit")
         .reduce((sum, t) => sum + t.amount, 0);
-
       worksheet.addRow({});
       const summaryRow = worksheet.addRow({
         date: "",
@@ -163,9 +147,7 @@ export async function GET(request) {
         pattern: "solid",
         fgColor: { argb: "FFF3F4F6" },
       };
-
       const buffer = await workbook.xlsx.writeBuffer();
-
       return new NextResponse(buffer, {
         headers: {
           "Content-Type":
@@ -174,42 +156,35 @@ export async function GET(request) {
         },
       });
     }
-
     // ===== PDF EXPORT (COMPLETE) =====
     if (format === "pdf") {
       try {
         const jsPDF = require("jspdf").jsPDF;
         const autoTable = require("jspdf-autotable").default;
-
         const doc = new jsPDF({
           orientation: "portrait",
           unit: "mm",
           format: "a4",
         });
-
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
         let yPosition = 15;
-
         // Header
         doc.setFontSize(16);
         doc.text(society?.name || "Society", pageWidth / 2, yPosition, {
           align: "center",
         });
         yPosition += 6;
-
         doc.setFontSize(10);
         doc.text(society?.address || "", pageWidth / 2, yPosition, {
           align: "center",
         });
         yPosition += 6;
-
         doc.setFontSize(12);
         doc.text("Ledger Report", pageWidth / 2, yPosition, {
           align: "center",
         });
         yPosition += 8;
-
         // Filter info
         let filterInfo = [];
         if (filterMonth && filterYear) {
@@ -237,7 +212,6 @@ export async function GET(request) {
           filterInfo.push(`Category: ${category}`);
         if (financialYear && financialYear !== "all")
           filterInfo.push(`FY: ${financialYear}`);
-
         if (filterInfo.length > 0) {
           doc.setFontSize(9);
           doc.text(filterInfo.join(" | "), pageWidth / 2, yPosition, {
@@ -245,7 +219,6 @@ export async function GET(request) {
           });
           yPosition += 6;
         }
-
         // Summary
         const totalDebit = transactions
           .filter((t) => t.type === "Debit")
@@ -254,7 +227,6 @@ export async function GET(request) {
           .filter((t) => t.type === "Credit")
           .reduce((sum, t) => sum + t.amount, 0);
         const netBalance = totalDebit - totalCredit;
-
         doc.setFontSize(9);
         doc.text(`Total Transactions: ${transactions.length}`, 15, yPosition);
         yPosition += 5;
@@ -278,7 +250,6 @@ export async function GET(request) {
           yPosition,
         );
         yPosition += 8;
-
         // Table
         const tableData = transactions.map((t) => [
           new Date(t.date).toLocaleDateString("en-IN"),
@@ -293,7 +264,6 @@ export async function GET(request) {
             t.balanceAfterTransaction >= 0 ? "DR" : "CR"
           }`,
         ]);
-
         autoTable(doc, {
           head: [
             [
@@ -341,7 +311,6 @@ export async function GET(request) {
             );
           },
         });
-
         const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
         return new NextResponse(pdfBuffer, {
           headers: {
@@ -357,7 +326,6 @@ export async function GET(request) {
         );
       }
     }
-
     return NextResponse.json({ error: "Unsupported format" }, { status: 400 });
   } catch (error) {
     console.error("Export error:", error);

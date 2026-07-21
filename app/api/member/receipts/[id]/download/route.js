@@ -5,7 +5,6 @@ import Receipt from "@/models/Receipt";
 import Bill from "@/models/Bill";
 import Society from "@/models/Society";
 import Member from "@/models/Member";
-
 export async function GET(request, { params }) {
   try {
     await connectDB();
@@ -16,14 +15,12 @@ export async function GET(request, { params }) {
     const decoded = verifyToken(token);
     if (!decoded || !decoded.memberId)
       return NextResponse.json({ error: "Not a member" }, { status: 403 });
-
     const receipt = await Receipt.findOne({
       _id: id,
       memberId: decoded.memberId,
     }).lean();
     if (!receipt)
       return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
-
     const [bill, society, member] = await Promise.all([
       Bill.findById(receipt.billId).lean(),
       Society.findById(decoded.societyId).select("name address").lean(),
@@ -33,12 +30,9 @@ export async function GET(request, { params }) {
         )
         .lean(),
     ]);
-
     const html = generateReceiptHtml({ receipt, bill, society, member });
-
     // Mark as downloaded
     await Receipt.findByIdAndUpdate(id, { status: "Downloaded" });
-
     return new NextResponse(html, {
       headers: {
         "Content-Type": "text/html",
@@ -52,7 +46,6 @@ export async function GET(request, { params }) {
     );
   }
 }
-
 function generateReceiptHtml({ receipt, bill, society, member }) {
   const formatDate = (d) =>
     new Date(d).toLocaleDateString("en-IN", {
@@ -60,7 +53,6 @@ function generateReceiptHtml({ receipt, bill, society, member }) {
       month: "short",
       year: "numeric",
     });
-
   const baseCharges = bill?.charges ? Object.entries(bill.charges) : [];
   const allChargeRows = [
     ...baseCharges,
@@ -76,7 +68,6 @@ function generateReceiptHtml({ receipt, bill, society, member }) {
         ]
       : []),
   ];
-
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -127,8 +118,6 @@ function generateReceiptHtml({ receipt, bill, society, member }) {
       <div class="row"><span class="label">Bill Period</span><span class="value">${receipt.billPeriodId}</span></div>
       <div class="row"><span class="label">Payment Mode</span><span class="value">${receipt.paymentMode}</span></div>
       <div class="row"><span class="label">Transaction ID</span><span class="value" style="font-family: monospace; font-size: 12px;">${receipt.transactionId}</span></div>
-
-     
            ${
              allChargeRows.length > 0
                ? `
@@ -148,7 +137,6 @@ function generateReceiptHtml({ receipt, bill, society, member }) {
     `
                : ""
            }
-
       <div class="total-box">
         <div class="total-label">Amount Paid</div>
         <div class="total-amount">₹${receipt.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>

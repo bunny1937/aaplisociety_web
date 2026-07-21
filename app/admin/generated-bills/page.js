@@ -1,29 +1,23 @@
 "use client";
-
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Dashboard.module.css";
-
 export default function GeneratedBillsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [viewingBill, setViewingBill] = useState(null);
-
   // Fetch generated bills
   const { data: billsData, isLoading } = useQuery({
     queryKey: ["generated-bills"],
     queryFn: () => apiClient.get("/api/billing/generated"),
   });
-
   const bills = billsData?.bills || [];
 console.log('📋 Bill data:', billsData?.bills[0]);
-
   // Get unique periods
   const periods = [...new Set(bills.map((b) => b.billPeriodId))]
     .sort()
     .reverse();
-
   // Filter bills
   const filteredBills = bills.filter((bill) => {
     const matchesPeriod =
@@ -35,10 +29,8 @@ console.log('📋 Bill data:', billsData?.bills[0]);
         ?.toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
       bill.memberId?.wing?.toLowerCase().includes(searchTerm.toLowerCase());
-
     return matchesPeriod && matchesSearch;
   });
-
   const handlePrint = (bill) => {
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
@@ -65,13 +57,11 @@ console.log('📋 Bill data:', billsData?.bills[0]);
     `);
     printWindow.document.close();
   };
-
   const handleDownloadAll = () => {
     if (filteredBills.length === 0) {
       alert("No bills to download");
       return;
     }
-
     const printWindow = window.open("", "_blank");
     const allBillsHtml = filteredBills
       .map(
@@ -85,7 +75,6 @@ console.log('📋 Bill data:', billsData?.bills[0]);
     `
       )
       .join("");
-
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -110,7 +99,6 @@ console.log('📋 Bill data:', billsData?.bills[0]);
     `);
     printWindow.document.close();
   };
-
   return (
     <div>
       {/* PAGE HEADER */}
@@ -127,7 +115,6 @@ console.log('📋 Bill data:', billsData?.bills[0]);
           </button>
         </div>
       </div>
-
       {/* FILTERS */}
       <div className={styles.contentCard} style={{ marginBottom: "1.5rem" }}>
         <div
@@ -172,7 +159,6 @@ console.log('📋 Bill data:', billsData?.bills[0]);
           </span>
         </div>
       </div>
-
       {/* BILLS TABLE */}
       <div className={styles.contentCard}>
         {isLoading ? (
@@ -302,7 +288,6 @@ console.log('📋 Bill data:', billsData?.bills[0]);
           </table>
         )}
       </div>
-
       {/* VIEW BILL OVERLAY */}
       {viewingBill && (
         <div

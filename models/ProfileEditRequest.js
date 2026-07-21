@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 // Mirrors mobile-backend's ProfileEditRequest collection
 // (apps/mobile-backend/src/models/index.ts in the AapliSociety_App mobile
 // monorepo — see that repo's docs/superpowers/specs/2026-07-19-profile-restructure-design.md).
@@ -23,5 +22,4 @@ const ProfileEditRequestSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 export default mongoose.models.ProfileEditRequest || mongoose.model("ProfileEditRequest", ProfileEditRequestSchema);

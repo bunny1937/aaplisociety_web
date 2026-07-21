@@ -1,11 +1,9 @@
 "use client";
-
 import { useState, useEffect, useMemo } from "react";
 import DOMPurify from "dompurify";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/ViewBills.module.css";
-
 const STATUS_COLOR = {
   Paid: { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
   Partial: { bg: "#fef9c3", text: "#92400e", border: "#fcd34d" },
@@ -13,7 +11,6 @@ const STATUS_COLOR = {
   Overdue: { bg: "#f3e8ff", text: "#7c3aed", border: "#c4b5fd" },
   Scheduled: { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
 };
-
 function fmt(n) {
   return Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -29,12 +26,10 @@ function fmtDate(d) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
-
 function BillPdfTab({ bill }) {
   const [html, setHtml] = useState(bill.billHtml || null);
   const [loading, setLoading] = useState(!bill.billHtml);
   const [error, setError] = useState(null);
-
   useEffect(() => {
     if (bill.billHtml) { setHtml(bill.billHtml); setLoading(false); return; }
     setLoading(true);
@@ -47,7 +42,6 @@ function BillPdfTab({ bill }) {
       .then((h) => { setHtml(h); setLoading(false); })
       .catch((e) => { setError(e.message); setLoading(false); });
   }, [bill._id]);
-
   // Must run unconditionally, before any early return below - a hook called
   // only on some renders (e.g. skipped while `loading` is true on first
   // render, then reached once `html` resolves) violates the Rules of Hooks
@@ -56,7 +50,6 @@ function BillPdfTab({ bill }) {
     () => (html && typeof window !== "undefined" ? DOMPurify.sanitize(html) : ""),
     [html],
   );
-
   if (loading) return <div style={{ padding: 60, textAlign: "center", color: "#6b7280" }}>Loading bill...</div>;
   if (error) return (
     <div style={{ padding: 40, textAlign: "center" }}>
@@ -70,14 +63,12 @@ function BillPdfTab({ bill }) {
       <p style={{ color: "#6b7280", marginTop: 8 }}>No bill content. Click Print to regenerate.</p>
     </div>
   );
-
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
       <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
     </div>
   );
 }
-
 export default function ViewBillsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -85,7 +76,6 @@ export default function ViewBillsPage() {
   const [viewingBill, setViewingBill] = useState(null);
   const [activeTab, setActiveTab] = useState("summary");
   const [downloadingId, setDownloadingId] = useState(null);
-
   const { data: billsData, isLoading } = useQuery({
     queryKey: ["view-bills", selectedPeriod, filterStatus],
     queryFn: async () => {
@@ -96,16 +86,13 @@ export default function ViewBillsPage() {
       return apiClient.get(`/api/billing/generated${qs ? "?" + qs : ""}`);
     },
   });
-
   const { data: receiptsData, isLoading: receiptsLoading } = useQuery({
     queryKey: ["bill-receipts", viewingBill?.memberId?._id],
     queryFn: () => apiClient.get(`/api/receipts?memberId=${viewingBill.memberId._id}`),
     enabled: !!viewingBill?.memberId?._id && activeTab === "receipts",
   });
-
   const bills = billsData?.bills || [];
   const periods = [...new Set(bills.map((b) => b.billPeriodId))].filter(Boolean).sort().reverse();
-
   const filteredBills = bills.filter((b) => {
     const q = searchTerm.toLowerCase();
     return (
@@ -114,9 +101,7 @@ export default function ViewBillsPage() {
       b.memberId?.wing?.toLowerCase().includes(q)
     );
   });
-
   const openBill = (bill) => { setViewingBill(bill); setActiveTab("summary"); };
-
   const downloadBill = async (bill) => {
     setDownloadingId(bill._id?.toString());
     try {
@@ -147,7 +132,6 @@ export default function ViewBillsPage() {
       setDownloadingId(null);
     }
   };
-
   const exportToExcel = async () => {
     try {
       const res = await fetch("/api/billing/export", {
@@ -164,9 +148,7 @@ export default function ViewBillsPage() {
       URL.revokeObjectURL(url);
     } catch { alert("Export failed"); }
   };
-
   const sc = viewingBill ? (STATUS_COLOR[viewingBill.status] || STATUS_COLOR.Scheduled) : null;
-
   return (
     <div className={styles.container}>
       {/* Header */}
@@ -179,7 +161,6 @@ export default function ViewBillsPage() {
           <button onClick={exportToExcel} className="btn btn-secondary">Export Excel</button>
         </div>
       </div>
-
       {/* Filters */}
       <div className={styles.filtersCard}>
         <div className={styles.filterRow}>
@@ -200,7 +181,6 @@ export default function ViewBillsPage() {
           <div className={styles.resultCount}>{filteredBills.length} Bills</div>
         </div>
       </div>
-
       {/* Table */}
       {isLoading ? (
         <div className={styles.loading}><div className={styles.spinner} /><p>Loading bills...</p></div>
@@ -283,12 +263,10 @@ export default function ViewBillsPage() {
           </table>
         </div>
       )}
-
       {/* Modal */}
       {viewingBill && (
         <div className={styles.modal} onClick={() => setViewingBill(null)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-
             {/* Modal Header */}
             <div className={styles.modalHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -306,7 +284,6 @@ export default function ViewBillsPage() {
               </div>
               <button onClick={() => setViewingBill(null)} className={styles.closeBtn}>✕</button>
             </div>
-
             {/* Historical bill notice */}
             {(viewingBill.isHistoricalArchive || viewingBill.importedFrom === "BulkImport" || viewingBill.isLocked) && (
               <div style={{ margin: "0 2rem", padding: "10px 16px", background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#3730a3" }}>
@@ -314,7 +291,6 @@ export default function ViewBillsPage() {
                 <span><strong>Historical Record</strong> — This bill was imported as an audit record and is immutable. It cannot be edited, deleted, or regenerated.</span>
               </div>
             )}
-
             {/* Tabs */}
             <div style={{ display: "flex", borderBottom: "2px solid #e5e7eb", padding: "0 2rem" }}>
               {[["summary", "Summary"], ["bill", "Bill PDF"], ["receipts", "Receipts"]].map(([tab, label]) => (
@@ -323,9 +299,7 @@ export default function ViewBillsPage() {
                 </button>
               ))}
             </div>
-
             <div className={styles.modalBody}>
-
               {/* SUMMARY TAB */}
               {activeTab === "summary" && (
                 <div>
@@ -334,7 +308,6 @@ export default function ViewBillsPage() {
                     <span style={{ fontWeight: 700, color: sc.text, fontSize: 15 }}>{viewingBill.status}</span>
                     <span style={{ color: "#6b7280", fontSize: 13 }}>Due: {fmtDate(viewingBill.dueDate)}</span>
                   </div>
-
                   {/* Amount cards */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
                     {[
@@ -351,7 +324,6 @@ export default function ViewBillsPage() {
                       </div>
                     ))}
                   </div>
-
                   {/* Charges table */}
                   <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
                     <div style={{ padding: "12px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", fontWeight: 600, fontSize: 14 }}>Charge Breakdown</div>
@@ -373,12 +345,10 @@ export default function ViewBillsPage() {
                   </div>
                 </div>
               )}
-
               {/* BILL PDF TAB */}
               {activeTab === "bill" && (
                 <BillPdfTab bill={viewingBill} />
               )}
-
               {/* RECEIPTS TAB */}
               {activeTab === "receipts" && (
                 <div>
@@ -424,7 +394,6 @@ export default function ViewBillsPage() {
                 </div>
               )}
             </div>
-
             {/* Modal Footer */}
             <div className={styles.modalFooter}>
               <button onClick={() => setViewingBill(null)} className="btn btn-secondary">Close</button>

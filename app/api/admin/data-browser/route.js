@@ -6,40 +6,32 @@ import Transaction from "@/models/Transaction";
 import BillingHead from "@/models/BillingHead";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 import { logAdminActivity } from "@/lib/export-to-admin-db";
-
 const COLLECTIONS = {
   bills: Bill,
   members: Member,
   transactions: Transaction,
   billingheads: BillingHead,
 };
-
 export async function GET(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
-
   try {
     await connectDB();
-
     const { searchParams } = new URL(request.url);
     const societyId = searchParams.get("societyId");
     const collection = searchParams.get("collection");
-
     if (!societyId || !collection || !COLLECTIONS[collection]) {
       return NextResponse.json(
         { error: "Invalid parameters" },
         { status: 400 },
       );
     }
-
     const Model = COLLECTIONS[collection];
-
     // Fetch data
     let data = await Model.find({ societyId })
       .limit(1000)
       .sort({ createdAt: -1 })
       .lean();
-
     // Populate memberId if exists
     if (collection === "bills" || collection === "transactions") {
       data = await Model.find({ societyId })
@@ -48,7 +40,6 @@ export async function GET(request) {
         .sort({ createdAt: -1 })
         .lean();
     }
-
     return NextResponse.json({
       success: true,
       data,
@@ -61,49 +52,39 @@ export async function GET(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-
 export async function POST(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
-
   try {
     await connectDB();
-
     const { action, societyId, collection, ids, reason } = await request.json();
-
     if (action !== "delete" || !societyId || !collection || !ids || !reason) {
       return NextResponse.json(
         { error: "Invalid parameters" },
         { status: 400 },
       );
     }
-
     if (!COLLECTIONS[collection]) {
       return NextResponse.json(
         { error: "Invalid collection" },
         { status: 400 },
       );
     }
-
     const Model = COLLECTIONS[collection];
-
     // Fetch documents to be deleted
     const docsToDelete = await Model.find({
       _id: { $in: ids },
       societyId,
     }).lean();
-
     if (docsToDelete.length === 0) {
       return NextResponse.json(
         { error: "No documents found to delete" },
         { status: 404 },
       );
     }
-
     // Export to admin database using your existing function
     const { getAdminModels } = await import("@/lib/admin-models");
     const { Export } = await getAdminModels();
-
     const exportDoc = await Export.create({
       collection,
       societyId,
@@ -120,13 +101,11 @@ export async function POST(request) {
       willExpireAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
       isRestored: false,
     });
-
     // Delete documents
     const deleteResult = await Model.deleteMany({
       _id: { $in: ids },
       societyId,
     });
-
     await logAdminActivity({
       adminId: "superadmin",
       adminName: "superadmin",
@@ -135,7 +114,6 @@ export async function POST(request) {
       ipAddress: request.headers.get("x-forwarded-for") || "unknown",
       userAgent: request.headers.get("user-agent") || "unknown",
     });
-
     return NextResponse.json({
       success: true,
       message: `${deleteResult.deletedCount} items deleted and archived for 90 days`,

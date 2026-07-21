@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import styles from "@/styles/MemberNotices.module.css";
-
 const TYPE_ICONS = {
   maintenance: "🔧",
   meeting: "📅",
@@ -19,7 +18,6 @@ const PRIORITY_COLORS = {
   high: { bg: "#fef3c7", color: "#92400e", border: "#fcd34d" },
   urgent: { bg: "#fee2e2", color: "#991b1b", border: "#fca5a5" },
 };
-
 export default function MemberNoticesPage() {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,12 +27,10 @@ export default function MemberNoticesPage() {
   const [toast, setToast] = useState(null);
   const [acknowledged, setAcknowledged] = useState(new Set());
   const viewedRef = useRef(new Set());
-
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
-
   const fetchNotices = async () => {
     setLoading(true);
     try {
@@ -52,11 +48,9 @@ export default function MemberNoticesPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchNotices();
   }, [filterType, page]);
-
   // Auto mark-viewed using IntersectionObserver
   useEffect(() => {
     if (!notices.length) return;
@@ -82,7 +76,6 @@ export default function MemberNoticesPage() {
       .forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [notices]);
-
   const handleAcknowledge = async (id) => {
     try {
       const res = await fetch(`/api/notices/${id}/acknowledge`, {
@@ -97,7 +90,6 @@ export default function MemberNoticesPage() {
       showToast(err.message, "error");
     }
   };
-
   const urgentNotices = notices.filter((n) => n.priority === "urgent");
   const pinnedNotices = notices.filter(
     (n) => n.pinned && n.priority !== "urgent",
@@ -105,7 +97,6 @@ export default function MemberNoticesPage() {
   const restNotices = notices.filter(
     (n) => !n.pinned && n.priority !== "urgent",
   );
-
   const TYPES = [
     "maintenance",
     "meeting",
@@ -117,11 +108,9 @@ export default function MemberNoticesPage() {
     "billing",
     "custom",
   ];
-
   const NoticeCard = ({ n }) => {
     const pc = PRIORITY_COLORS[n.priority];
     const isAcknowledged = acknowledged.has(n._id);
-
     return (
       <div
         key={n._id}
@@ -150,10 +139,8 @@ export default function MemberNoticesPage() {
             })}
           </span>
         </div>
-
         <h3 className={styles.cardTitle}>{n.title}</h3>
         <p className={styles.cardDesc}>{n.description}</p>
-
         <div className={styles.cardFooter}>
           <span className={styles.author}>— {n.createdByName}</span>
           {n.expiresAt && (
@@ -162,7 +149,6 @@ export default function MemberNoticesPage() {
             </span>
           )}
         </div>
-
         {/* Acknowledge button for urgent */}
         {n.priority === "urgent" && (
           <div className={styles.ackSection}>
@@ -183,7 +169,6 @@ export default function MemberNoticesPage() {
       </div>
     );
   };
-
   return (
     <div className={styles.page}>
       {toast && (
@@ -191,12 +176,10 @@ export default function MemberNoticesPage() {
           {toast.msg}
         </div>
       )}
-
       <div className={styles.pageHeader}>
         <h1>Notice Board</h1>
         <p>Stay updated with society announcements</p>
       </div>
-
       {/* Type filters */}
       <div className={styles.filters}>
         {["all", ...TYPES].map((t) => (
@@ -212,7 +195,6 @@ export default function MemberNoticesPage() {
           </button>
         ))}
       </div>
-
       {loading ? (
         <div className={styles.loading}>
           {[1, 2, 3, 4].map((i) => (
@@ -241,7 +223,6 @@ export default function MemberNoticesPage() {
               ))}
             </div>
           )}
-
           {/* Pinned section */}
           {pinnedNotices.length > 0 && (
             <div className={styles.section}>
@@ -257,7 +238,6 @@ export default function MemberNoticesPage() {
               ))}
             </div>
           )}
-
           {/* All other notices */}
           {restNotices.length > 0 && (
             <div className={styles.section}>
@@ -277,7 +257,6 @@ export default function MemberNoticesPage() {
           )}
         </>
       )}
-
       {pagination.pages > 1 && (
         <div className={styles.pagination}>
           <button disabled={page <= 1} onClick={() => setPage(page - 1)}>

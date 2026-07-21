@@ -1,7 +1,6 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { execSync } from "child_process";
 import fs from "fs";
-
 // 🔥 Create MCP server
 const server = new Server(
   {
@@ -14,25 +13,20 @@ const server = new Server(
     },
   },
 );
-
 // 🔥 ANALYZE TOOL
 server.setRequestHandler("tools/call", async (req) => {
   const { name, arguments: args } = req.params;
-
   try {
     if (name === "analyze") {
       execSync(`node scripts/analyze.js "${args.input}"`, {
         stdio: "inherit",
       });
-
       const context = fs.existsSync("DEBUG_SMART.txt")
         ? fs.readFileSync("DEBUG_SMART.txt", "utf-8")
         : "";
-
       const diff = fs.existsSync("DEBUG_DIFF.txt")
         ? fs.readFileSync("DEBUG_DIFF.txt", "utf-8")
         : "";
-
       return {
         content: [
           {
@@ -42,31 +36,24 @@ server.setRequestHandler("tools/call", async (req) => {
         ],
       };
     }
-
     if (name === "debug") {
       execSync(`node scripts/debug.js "${args.input}"`, {
         stdio: "inherit",
       });
-
       const context = fs.readFileSync("DEBUG_SMART.txt", "utf-8");
-
       return {
         content: [{ type: "text", text: context }],
       };
     }
-
     if (name === "diff") {
       execSync(`node scripts/diff.js "${args.input}"`, {
         stdio: "inherit",
       });
-
       const diff = fs.readFileSync("DEBUG_DIFF.txt", "utf-8");
-
       return {
         content: [{ type: "text", text: diff }],
       };
     }
-
     return {
       content: [{ type: "text", text: "❌ Unknown tool" }],
     };
@@ -76,7 +63,6 @@ server.setRequestHandler("tools/call", async (req) => {
     };
   }
 });
-
 // 🔥 Tool definitions (IMPORTANT)
 server.setRequestHandler("tools/list", async () => {
   return {
@@ -117,6 +103,5 @@ server.setRequestHandler("tools/list", async () => {
     ],
   };
 });
-
 // 🔥 Start server (stdio mode)
 server.listen();

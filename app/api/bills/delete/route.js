@@ -5,47 +5,38 @@ import User from "@/models/User";
 import { exportToAdminDB, logAdminActivity } from "@/lib/export-to-admin-db";
 import Transaction from "@/models/Transaction";
 import { requireRoles } from "@/lib/authz";
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const auth = requireRoles(request, ["Admin"]);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { billIds, reason } = await request.json();
-
     if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
       return NextResponse.json(
         { error: "Bill IDs are required" },
         { status: 400 },
       );
     }
-
     if (!reason || reason.trim() === "") {
       return NextResponse.json(
         { error: "Deletion reason is required" },
         { status: 400 },
       );
     }
-
     // Get user info
     const user = await User.findById(decoded.userId).lean();
-
     // ✅ STEP 1: FETCH BILLS TO DELETE
     const billsToDelete = await Bill.find({
       _id: { $in: billIds },
       societyId: decoded.societyId,
     }).lean();
-
     if (billsToDelete.length === 0) {
       return NextResponse.json(
         { error: "No bills found to delete" },
         { status: 404 },
       );
     }
-
     // Block deletion of locked historical bills
     const lockedBills = billsToDelete.filter(
       (b) => b.isHistoricalArchive || b.isLocked || b.importedFrom === "BulkImport"
@@ -59,7 +50,6 @@ export async function POST(request) {
         { status: 403 },
       );
     }
-
     // ✅ STEP 2: EXPORT TO ADMIN.EXPORTS COLLECTION (BEFORE DELETING)
     const exportResult = await exportToAdminDB(billsToDelete, {
       collection: "bills",
@@ -69,7 +59,6 @@ export async function POST(request) {
       deletedByRole: user.role,
       deletionReason: reason,
     });
-
     // ✅ STEP 3: SOFT DELETE (mark as deleted)
     await Bill.updateMany(
       { _id: { $in: billIds } },
@@ -114,9 +103,7 @@ export async function POST(request) {
         reason,
       },
     });
-
     console.log(`✅ Deleted ${billsToDelete.length} bills`);
-
     return NextResponse.json({
       success: true,
       message: `${billsToDelete.length} bills deleted and exported to admin database`,

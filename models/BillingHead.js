@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const BillingHeadSchema = new mongoose.Schema(
   {
     headName: {
@@ -42,11 +41,8 @@ lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     timestamps: true,
   }
 );
-
 BillingHeadSchema.index({ societyId: 1, order: 1 });
 BillingHeadSchema.index({ societyId: 1, headName: 1 }, { unique: true });
 BillingHeadSchema.index({ societyId: 1, isDeleted: 1 });
-
-
 export default mongoose.models.BillingHead ||
   mongoose.model("BillingHead", BillingHeadSchema);

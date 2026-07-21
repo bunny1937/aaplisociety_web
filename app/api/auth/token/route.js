@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-
 export async function GET(request) {
   const token = getTokenFromRequest(request);
   if (!token || !verifyToken(token)) {

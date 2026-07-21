@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,7 +9,6 @@ import {
 import NotificationBell from "./NotificationBell";
 import RouteLoadingBar from "./RouteLoadingBar";
 import styles from "@/styles/SuperAdminLayout.module.css";
-
 const NAV = [
   {
     title: "Overview",
@@ -29,7 +27,6 @@ const NAV = [
     ],
   },
 ];
-
 const [queryClient] = [new QueryClient({
   defaultOptions: {
     queries: {
@@ -41,14 +38,12 @@ const [queryClient] = [new QueryClient({
     },
   },
 })];
-
 export default function SuperAdminLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [navigating, setNavigating] = useState(false);
   const navTimeoutRef = useRef(null);
-
   useEffect(() => {
     if (pathname.includes("/login")) return;
     const fetchUser = async () => {
@@ -65,24 +60,20 @@ export default function SuperAdminLayout({ children }) {
     };
     fetchUser();
   }, []);
-
   useEffect(() => {
     setNavigating(false);
     clearTimeout(navTimeoutRef.current);
   }, [pathname]);
-
   const handleNav = useCallback((path) => {
     if (pathname === path) return;
     setNavigating(true);
     navTimeoutRef.current = setTimeout(() => setNavigating(false), 3000);
     router.push(path);
   }, [pathname, router]);
-
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/auth/login");
   };
-
   if (!user) {
     return (
       <div className={styles.fullPageLoader}>
@@ -106,18 +97,15 @@ export default function SuperAdminLayout({ children }) {
       </div>
     );
   }
-
   return (
     <QueryClientProvider client={queryClient}>
       <div className={styles.container}>
         <RouteLoadingBar />
-
         {navigating && (
           <div className={styles.navOverlay}>
             <div className={styles.navSpinner} />
           </div>
         )}
-
         {/* SIDEBAR — dark blue per design spec */}
         <aside className={styles.sidebar}>
           {/* Logo */}
@@ -138,7 +126,6 @@ export default function SuperAdminLayout({ children }) {
               </div>
             </div>
           </div>
-
           {/* Nav */}
           <nav className={styles.sidebarNav}>
             {NAV.map((group, i) => (
@@ -161,7 +148,6 @@ export default function SuperAdminLayout({ children }) {
               </div>
             ))}
           </nav>
-
           {/* User footer */}
           <div className={styles.sidebarFooter}>
             <div className={styles.userInfo}>
@@ -178,7 +164,6 @@ export default function SuperAdminLayout({ children }) {
             </div>
           </div>
         </aside>
-
         {/* MAIN */}
         <div className={styles.mainWrapper}>
           {/* Top header — white with search */}
@@ -201,7 +186,6 @@ export default function SuperAdminLayout({ children }) {
               </div>
             </div>
           </header>
-
           <main className={styles.mainContent}>
             {children}
           </main>

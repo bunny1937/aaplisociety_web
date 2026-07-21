@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const NotificationSchema = new mongoose.Schema(
   {
     societyId: {
@@ -14,7 +13,6 @@ const NotificationSchema = new mongoose.Schema(
       required: true,
     },
     createdByName: { type: String, default: "System" },
-
     type: {
       type: String,
       required: true,
@@ -48,17 +46,14 @@ const NotificationSchema = new mongoose.Schema(
       ],
       index: true,
     },
-
     title: { type: String, required: true, trim: true, maxlength: 150 },
     message: { type: String, required: true, trim: true, maxlength: 500 },
-
     priority: {
       type: String,
       enum: ["normal", "high", "critical"],
       default: "normal",
       index: true,
     },
-
     // Targeting
     recipientType: {
       type: String,
@@ -67,30 +62,25 @@ const NotificationSchema = new mongoose.Schema(
     },
     // member:[memberId] · wing:[wingName] · flats:[memberId] · role:[roleName] · user:[userId]
     recipientIds: [{ type: String }],
-
     // Arbitrary structured payload (visitorId, photo, flatNo, action, …)
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
-
     readBy: [
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         readAt: { type: Date, default: Date.now },
       },
     ],
-
     actionUrl: { type: String, default: null },
     expiresAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },
 );
-
 NotificationSchema.index(
   { expiresAt: 1 },
   { expireAfterSeconds: 0, sparse: true },
 );
 NotificationSchema.index({ societyId: 1, isDeleted: 1, createdAt: -1 });
 NotificationSchema.index({ societyId: 1, recipientType: 1, createdAt: -1 });
-
 export default mongoose.models.Notification ||
   mongoose.model("Notification", NotificationSchema);

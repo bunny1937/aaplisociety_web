@@ -1,25 +1,20 @@
 "use client";
-
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "@/styles/Auth.module.css";
-
 function SetCredentialsForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
-
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [details, setDetails] = useState(null);
-
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
   useEffect(() => {
     if (!token) {
       setLoadError("This link is missing its token.");
@@ -38,11 +33,9 @@ function SetCredentialsForm() {
       .catch(() => setLoadError("Could not verify this link. Check your connection and try again."))
       .finally(() => setLoading(false));
   }, [token]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
-
     if (!username.trim() || !email.trim() || !password) {
       setFormError("All fields are required.");
       return;
@@ -51,7 +44,6 @@ function SetCredentialsForm() {
       setFormError("Passwords do not match.");
       return;
     }
-
     setSubmitting(true);
     try {
       const res = await fetch("/api/onboarding/set-credentials", {
@@ -71,7 +63,6 @@ function SetCredentialsForm() {
       setSubmitting(false);
     }
   };
-
   return (
     <div className={styles.authContainer}>
       <div className={styles.authCard}>
@@ -82,9 +73,7 @@ function SetCredentialsForm() {
             {details ? `Welcome, ${details.name} — ${details.societyName}` : "Verifying your link…"}
           </p>
         </div>
-
         {loading && <p style={{ textAlign: "center", color: "var(--text-secondary)" }}>Loading…</p>}
-
         {!loading && loadError && (
           <div
             style={{
@@ -99,7 +88,6 @@ function SetCredentialsForm() {
             {loadError}
           </div>
         )}
-
         {!loading && details && (
           <form onSubmit={handleSubmit} autoComplete="off">
             {formError && (
@@ -117,7 +105,6 @@ function SetCredentialsForm() {
                 {formError}
               </div>
             )}
-
             <div className={styles.formGroup}>
               <label className="label" htmlFor="username">Choose a username</label>
               <input
@@ -131,7 +118,6 @@ function SetCredentialsForm() {
                 disabled={submitting}
               />
             </div>
-
             <div className={styles.formGroup}>
               <label className="label" htmlFor="email">
                 Confirm your email ({details.maskedEmail})
@@ -147,7 +133,6 @@ function SetCredentialsForm() {
                 disabled={submitting}
               />
             </div>
-
             <div className={styles.formGroup}>
               <label className="label" htmlFor="password">New password</label>
               <input
@@ -159,7 +144,6 @@ function SetCredentialsForm() {
                 disabled={submitting}
               />
             </div>
-
             <div className={styles.formGroup}>
               <label className="label" htmlFor="confirmPassword">Confirm new password</label>
               <input
@@ -171,7 +155,6 @@ function SetCredentialsForm() {
                 disabled={submitting}
               />
             </div>
-
             <div className={styles.formActions}>
               <button
                 type="submit"
@@ -188,7 +171,6 @@ function SetCredentialsForm() {
     </div>
   );
 }
-
 export default function SetCredentialsPage() {
   return (
     <Suspense fallback={null}>

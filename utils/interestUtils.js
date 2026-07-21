@@ -3,7 +3,6 @@
  * Monthly-only. No DAILY. No SIMPLE/COMPOUND config.
  * interestRate=0 → bypass all logic.
  */
-
 /**
  * roundInterest — society rounding config.
  * TWO_DECIMAL: 10.256 → 10.26  (standard 2dp rounding)
@@ -17,7 +16,6 @@ export function roundInterest(value, mode = "TWO_DECIMAL") {
     return Math.ceil(Math.round(value * 100000) / 1000) / 100;
   return parseFloat(value.toFixed(2));
 }
-
 /**
  * calculateMonthlyInterest — single source of truth.
  *
@@ -44,32 +42,27 @@ export function calculateMonthlyInterest({
   if (!annualRate || annualRate <= 0) {
     return { currInt: 0, monthInterest: 0, remInt: 0 };
   }
-
   // No principal → carry remInt only
   if (!remainingPrincipal || remainingPrincipal <= 0) {
     const carried = roundInterest(remInt || 0, interestRounding);
     return { currInt: 0, monthInterest: carried, remInt: carried };
   }
-
   // Simple monthly interest: principal * annualRate / 1200
   // Always applies when prevRemPrincipal > 0 — no grace period gate
   const currInt = roundInterest(
     (remainingPrincipal * annualRate) / 1200,
     interestRounding,
   );
-
   const totalMonthInterest = roundInterest(
     (remInt || 0) + currInt,
     interestRounding,
   );
-
   return {
     currInt,
     monthInterest: totalMonthInterest,
     remInt: totalMonthInterest,
   };
 }
-
 /**
  * getBillPayFinalDate — interest cap date for a bill month.
  */
@@ -80,7 +73,6 @@ export function getBillPayFinalDate(billYear, billMonth, billPayFinalDay) {
   const clampedDay = Math.min(billPayFinalDay, lastDay);
   return new Date(billYear, billMonth - 1, clampedDay, 23, 59, 59, 999);
 }
-
 /**
  * getOldestDueDate — anchor date for interest.
  */
@@ -98,7 +90,6 @@ export function getOldestDueDate(unpaidBills, billDueDay, refYear, refMonth) {
   }
   return new Date(prevYear, prevMonth - 1, billDueDay || 10);
 }
-
 /**
  * calculateInterestAmount — backwards-compat wrapper.
  * Callers that haven't migrated still work.
@@ -134,7 +125,6 @@ export function calculateInterestAmount(
     chargeableMonths: monthInterest > 0 ? 1 : 0,
   };
 }
-
 /**
  * allocatePaymentInterestFirst — CORE ENGINE.
  *
@@ -164,7 +154,6 @@ export function allocatePaymentInterestFirst(
   let remaining = parseFloat(paymentAmount);
   let totalInterestCleared = 0;
   let totalPrincipalCleared = 0;
-
   // Deep clone to avoid mutating originals.
   const workBills = bills.map((b) => ({
     billId: b._id,
@@ -174,7 +163,6 @@ export function allocatePaymentInterestFirst(
     totalAmount: b.totalAmount || 0,
     amountPaid: b.amountPaid || 0,
   }));
-
   function clearInterest() {
     for (const wb of workBills) {
       if (remaining <= 0) break;
@@ -187,7 +175,6 @@ export function allocatePaymentInterestFirst(
       remaining = parseFloat((remaining - clear).toFixed(2));
     }
   }
-
   function clearPrincipal() {
     for (const wb of workBills) {
       if (remaining <= 0) break;
@@ -202,7 +189,6 @@ export function allocatePaymentInterestFirst(
       remaining = parseFloat((remaining - clear).toFixed(2));
     }
   }
-
   if (allocationMode === "PRINCIPAL_FIRST") {
     clearPrincipal();
     clearInterest();
@@ -211,11 +197,8 @@ export function allocatePaymentInterestFirst(
     clearInterest();
     clearPrincipal();
   }
-
   // previousBalance is DISPLAY-ONLY — not cleared here.
-
   const advanceCredit = parseFloat(remaining.toFixed(2));
-
   const billUpdates = workBills.map((wb) => {
     let newStatus;
     const balance = parseFloat(wb.balanceAmount.toFixed(2));
@@ -223,7 +206,6 @@ export function allocatePaymentInterestFirst(
       newStatus = "Paid"; // ₹0.005 epsilon for float precision
     else if (wb.amountPaid > 0) newStatus = "Partial";
     else newStatus = "Unpaid";
-
     return {
       billId: wb.billId,
       interestCleared: parseFloat(
@@ -242,7 +224,6 @@ export function allocatePaymentInterestFirst(
       newStatus,
     };
   });
-
   return {
     billUpdates,
     totalInterestCleared: parseFloat(totalInterestCleared.toFixed(2)),

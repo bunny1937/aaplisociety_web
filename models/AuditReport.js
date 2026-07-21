@@ -1,9 +1,7 @@
 import mongoose from "mongoose";
-
 // Indian FY logic helper stored for reference
 // FY starts April 1. joinMonth >= 4 → joinFY = joinYear, else joinFY = joinYear - 1
 // Required period: April of (joinFY-1) → joinMonth-1 of joinYear
-
 const AuditReportSchema = new mongoose.Schema(
   {
     societyId: {
@@ -20,18 +18,15 @@ const AuditReportSchema = new mongoose.Schema(
     },
     submittedByName: { type: String },
     submittedAt: { type: Date, default: Date.now, index: true },
-
     // Join month/year of the society on this platform
     joinMonth: { type: Number, required: true }, // 1-12
     joinYear: { type: Number, required: true },
-
     // Required audit window (calculated on submission)
     auditFromMonth: { type: Number, required: true }, // 1-12 (always April=4)
     auditFromYear: { type: Number, required: true },
     auditToMonth: { type: Number, required: true }, // joinMonth - 1
     auditToYear: { type: Number, required: true },
     totalMonthsRequired: { type: Number, required: true },
-
     // Validation summary
     validation: {
       totalMembersExpected: { type: Number },
@@ -46,7 +41,6 @@ const AuditReportSchema = new mongoose.Schema(
       errors: [String],
       warnings: [String],
     },
-
     // Stored bill data per member per month
     billRows: [
       {
@@ -64,7 +58,6 @@ const AuditReportSchema = new mongoose.Schema(
         grandTotal: Number,
       },
     ],
-
     status: {
       type: String,
       enum: ["Pending", "Approved", "Rejected"],
@@ -74,15 +67,12 @@ const AuditReportSchema = new mongoose.Schema(
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
     reviewNotes: { type: String },
-
     fileName: { type: String },
     fileSize: { type: Number },
   },
   { timestamps: true },
 );
-
 AuditReportSchema.index({ societyId: 1, submittedAt: -1 });
 AuditReportSchema.index({ status: 1, submittedAt: -1 });
-
 export default mongoose.models.AuditReport ||
   mongoose.model("AuditReport", AuditReportSchema);

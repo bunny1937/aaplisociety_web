@@ -7,7 +7,6 @@ import AuditLog from '@/models/AuditLog';
 import BillingHead from '@/models/BillingHead';
 import ExcelJS from 'exceljs';
 import { requireRoles, SOCIETY_ADMIN_ROLES } from '@/lib/authz';
-
 // Restrict importable entities — never allow writing to users/auditlogs directly
 const modelMap = {
   members: Member,
@@ -15,41 +14,30 @@ const modelMap = {
   bills: Bill,
   billingheads: BillingHead,
 };
-
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB
 const MAX_IMPORT_ROWS = 5000;
-
 export async function POST(request, { params }) {
   try {
     await connectDB();
-    
     const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { entity } =   await params;
     const Model = modelMap[entity];
-    
     if (!Model) {
       return NextResponse.json({ error: 'Invalid entity' }, { status: 400 });
     }
-
     const formData = await request.formData();
     const file = formData.get('file');
-
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
-
     if (file.size > MAX_IMPORT_BYTES) {
       return NextResponse.json({ error: 'File too large. Max 5MB.' }, { status: 400 });
     }
-
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-
     let dataToImport = [];
-
     // Check file type
     if (file.name.endsWith('.json')) {
       // JSON Import
@@ -60,12 +48,10 @@ export async function POST(request, { params }) {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(buffer);
       const worksheet = workbook.worksheets[0];
-
       const headers = [];
       worksheet.getRow(1).eachCell((cell) => {
         headers.push(String(cell.value).trim());
       });
-
       worksheet.eachRow((row, rowNumber) => {
         if (rowNumber > 1) {
           const rowData = {};
@@ -81,15 +67,12 @@ export async function POST(request, { params }) {
     } else {
       return NextResponse.json({ error: 'Unsupported file format. Use .json or .xlsx' }, { status: 400 });
     }
-
     if (!Array.isArray(dataToImport) || dataToImport.length === 0) {
       return NextResponse.json({ error: 'No data found in file' }, { status: 400 });
     }
-
     if (dataToImport.length > MAX_IMPORT_ROWS) {
       return NextResponse.json({ error: `Too many rows. Max ${MAX_IMPORT_ROWS} per import.` }, { status: 400 });
     }
-
     // Add societyId to each record if not society entity
     if (entity !== 'society') {
       dataToImport = dataToImport.map(item => ({
@@ -97,16 +80,13 @@ export async function POST(request, { params }) {
         societyId: decoded.societyId
       }));
     }
-
     // Insert data
     const result = await Model.insertMany(dataToImport, { ordered: false });
-
     return NextResponse.json({ 
       success: true, 
       imported: result.length,
       message: `Successfully imported ${result.length} records`
     });
-
   } catch (error) {
     console.error('Import error:', error);
     return NextResponse.json({ 

@@ -10,23 +10,18 @@ import cache from "@/lib/cache";
 import { requireSecurity } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { sendInApp } from "@/lib/visitor-channels";
-
 const MAX_ATTEMPTS = 5;
 const WINDOW_SECONDS = 300;
-
 export async function POST(request) {
   const auth = requireSecurity(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const body = await request.json();
     const otp = String(body.otp || "").trim();
     const qrToken = String(body.qrToken || "").trim();
-
     if (!otp && !qrToken)
       return NextResponse.json({ error: "Provide an OTP or QR token" }, { status: 400 });
-
     // ---- Brute-force throttle (per guard) ----
     const rlKey = `pass-verify:${auth.user.societyId}:${auth.user.userId}`;
     try {
@@ -40,7 +35,6 @@ export async function POST(request) {
     } catch (_) {
       // cache optional — do not block verification if Redis is down
     }
-
     // ---- Locate candidate pass by hashed credential (society-scoped) ----
     const hash = VisitorPass.hashCredential(otp || qrToken);
     const credField = otp ? "otpHash" : "qrTokenHash";
@@ -49,13 +43,11 @@ export async function POST(request) {
       status: "Active",
       [credField]: hash,
     });
-
     if (!pass)
       return NextResponse.json(
         { error: "Invalid or expired pass" },
         { status: 404 },
       );
-
     // ---- Validate usability (window + recurrence + uses) ----
     if (!pass.isUsableNow()) {
       // Reflect terminal state if the window has fully closed.
@@ -68,12 +60,10 @@ export async function POST(request) {
         { status: 403 },
       );
     }
-
     // ---- Consume one use ----
     pass.usedAt.push(new Date());
     if (pass.maxUses > 0 && pass.usedAt.length >= pass.maxUses) pass.status = "Used";
     await pass.save();
-
     // ---- Create the (already-approved) Entered visit ----
     const visitor = await Visitor.create({
       societyId: auth.user.societyId,
@@ -94,9 +84,7 @@ export async function POST(request) {
       approverRole: "Pass",
       escalation: { level: 0, stopped: true, lastNotifiedAt: null, history: [] },
     });
-
     const member = await Member.findById(pass.memberId).select("flatNo wing").lean();
-
     await sendInApp({
       societyId: auth.user.societyId,
       createdBy: auth.user.userId,
@@ -109,13 +97,11 @@ export async function POST(request) {
       actionUrl: "/member/visitors",
       metadata: { visitorId: visitor._id.toString(), passId: pass._id.toString() },
     });
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_PASS_VERIFIED", null, {
       passId: pass._id.toString(),
       visitorId: visitor._id.toString(),
       method: otp ? "OTP" : "QR",
     });
-
     return NextResponse.json({
       success: true,
       visitor: {

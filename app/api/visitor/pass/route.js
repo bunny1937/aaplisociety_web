@@ -12,28 +12,23 @@ import {
   isSafePhotoValue,
   PASS_MAX_USES_CAP,
 } from "@/lib/visitor-config";
-
 function resolveMemberId(auth, bodyMemberId) {
   // Residents always issue passes for their own flat. Admin/Security may pass one.
   if (auth.user.role === "Member") return auth.user.memberId;
   return bodyMemberId;
 }
-
 export async function POST(request) {
   const auth = requireAuth(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const body = await request.json();
-
     const memberId = resolveMemberId(auth, body.memberId);
     const visitorName = String(body.visitorName || "").trim();
     const purpose = String(body.purpose || "Guest").trim();
     const passType = ["OneTime", "Recurring", "Frequent"].includes(body.passType)
       ? body.passType
       : "OneTime";
-
     if (!memberId || !mongoose.Types.ObjectId.isValid(String(memberId)))
       return NextResponse.json({ error: "Valid memberId required" }, { status: 400 });
     if (!visitorName)
@@ -45,7 +40,6 @@ export async function POST(request) {
         { error: "visitorPhoto must be an uploaded URL" },
         { status: 400 },
       );
-
     const validFrom = new Date(body.validFrom);
     const expiresAt = new Date(body.expiresAt);
     if (isNaN(validFrom) || isNaN(expiresAt))
@@ -57,14 +51,12 @@ export async function POST(request) {
       );
     if (expiresAt <= new Date())
       return NextResponse.json({ error: "expiresAt is in the past" }, { status: 400 });
-
     let maxUses = body.maxUses ?? (passType === "OneTime" ? 1 : 0);
     if (maxUses < 0 || maxUses > PASS_MAX_USES_CAP)
       return NextResponse.json(
         { error: `maxUses must be between 0 and ${PASS_MAX_USES_CAP}` },
         { status: 400 },
       );
-
     let recurrence = null;
     if (passType === "Recurring") {
       const days = Array.isArray(body.recurrence?.days)
@@ -76,10 +68,8 @@ export async function POST(request) {
         endTime: body.recurrence?.endTime || "23:59",
       };
     }
-
     const { otp, otpHash } = VisitorPass.generateOTP();
     const { token: qrToken, qrTokenHash } = VisitorPass.generateQRToken();
-
     const pass = await VisitorPass.create({
       societyId: auth.user.societyId,
       memberId,
@@ -99,13 +89,11 @@ export async function POST(request) {
       qrTokenHash,
       status: "Active",
     });
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_PASS_CREATED", null, {
       passId: pass._id.toString(),
       visitorName,
       passType,
     });
-
     // Raw OTP + QR token returned exactly once — never stored in plaintext.
     return NextResponse.json({
       success: true,
@@ -119,15 +107,12 @@ export async function POST(request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 export async function GET(request) {
   const auth = requireAuth(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
-
     const query = { societyId: auth.user.societyId };
     if (auth.user.role === "Member") {
       if (!auth.user.memberId)
@@ -136,13 +121,11 @@ export async function GET(request) {
     } else if (searchParams.get("memberId")) {
       query.memberId = searchParams.get("memberId");
     }
-
     const passes = await VisitorPass.find(query)
       .sort({ createdAt: -1 })
       .limit(50)
       .select("-otpHash -qrTokenHash") // never leak secrets in listings
       .lean();
-
     return NextResponse.json({ success: true, passes });
   } catch (err) {
     console.error("Visitor pass list error", err);

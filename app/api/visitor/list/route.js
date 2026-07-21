@@ -6,11 +6,9 @@ import connectDB from "@/lib/mongodb";
 import Visitor from "@/models/Visitor";
 import { requireAuth } from "@/lib/authz";
 import { VISITOR_STATUSES } from "@/lib/visitor-config";
-
 export async function GET(request) {
   const auth = requireAuth(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
@@ -20,9 +18,7 @@ export async function GET(request) {
     const q = String(searchParams.get("q") || "").trim();
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, parseInt(searchParams.get("limit") || "20", 10));
-
     const query = { societyId: auth.user.societyId };
-
     // Members are restricted to their own flat.
     if (auth.user.role === "Member") {
       if (!auth.user.memberId)
@@ -33,9 +29,7 @@ export async function GET(request) {
         return NextResponse.json({ error: "Invalid memberId" }, { status: 400 });
       query.memberId = memberIdParam;
     }
-
     if (status && VISITOR_STATUSES.includes(status)) query.status = status;
-
     if (scope === "today") {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -45,7 +39,6 @@ export async function GET(request) {
     } else if (scope === "pending") {
       query.status = "Pending";
     }
-
     if (q) {
       query.$or = [
         { name: { $regex: q, $options: "i" } },
@@ -53,7 +46,6 @@ export async function GET(request) {
         { vehicleNumber: { $regex: q, $options: "i" } },
       ];
     }
-
     const [visitors, total] = await Promise.all([
       Visitor.find(query)
         .sort({ createdAt: -1 })
@@ -64,7 +56,6 @@ export async function GET(request) {
         .lean(),
       Visitor.countDocuments(query),
     ]);
-
     return NextResponse.json({
       success: true,
       visitors,

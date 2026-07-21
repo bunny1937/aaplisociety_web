@@ -3,18 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { useState } from "react";
 import styles from "@/styles/Dashboard.module.css";
-
 export default function ReceiptsPage() {
   const [page, setPage] = useState(1);
-
   const { data, isLoading } = useQuery({
     queryKey: ["my-receipts", page],
     queryFn: () => apiClient.get(`/api/member/receipts?page=${page}&limit=20`),
   });
-
   const receipts = data?.receipts || [];
   const pagination = data?.pagination || {};
-
   const downloadReceipt = async (receiptId) => {
     const response = await fetch(`/api/member/receipts/${receiptId}/download`, {
       credentials: "include",
@@ -30,7 +26,6 @@ export default function ReceiptsPage() {
     if (!w) alert("Popup blocked");
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   };
-
   return (
     <div>
       <div className={styles.pageHeader}>
@@ -41,7 +36,6 @@ export default function ReceiptsPage() {
           </p>
         </div>
       </div>
-
       {isLoading ? (
         <div style={{ padding: "3rem", textAlign: "center" }}>
           <div className="loading-spinner" style={{ margin: "0 auto" }}></div>
@@ -169,7 +163,6 @@ export default function ReceiptsPage() {
           ))}
         </div>
       )}
-
       {pagination.pages > 1 && (
         <div
           style={{

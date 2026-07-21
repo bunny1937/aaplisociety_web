@@ -1,12 +1,9 @@
 "use client";
-
 export default function ExcelPreviewGrid({ columns, rows, title, onReupload, onContinue, onCancel, summary }) {
   const validRows = rows.filter((r) => r.status !== "error");
   const errorRows = rows.filter((r) => r.status === "error");
   const warningRows = rows.filter((r) => r.status === "warning");
-
   const rowBg = (status) => ({ valid: "transparent", warning: "#fffbeb", error: "#fef2f2", skipped: "#f8fafc" }[status] || "transparent");
-
   const cellStyle = (cellStatus) => {
     const base = {
       padding: "6px 10px",
@@ -22,7 +19,6 @@ export default function ExcelPreviewGrid({ columns, rows, title, onReupload, onC
     if (cellStatus === "warning") return { ...base, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e" };
     return base;
   };
-
   return (
     <div style={{ background: "#fff", border: "2px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "1.5rem" }}>
       {/* Header */}
@@ -41,7 +37,6 @@ export default function ExcelPreviewGrid({ columns, rows, title, onReupload, onC
           ))}
         </div>
       </div>
-
       {/* Grid */}
       <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "440px" }}>
         <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
@@ -84,7 +79,6 @@ export default function ExcelPreviewGrid({ columns, rows, title, onReupload, onC
           </tbody>
         </table>
       </div>
-
       {/* Footer Actions */}
       <div style={{ padding: "1rem 1.5rem", borderTop: "2px solid #e5e7eb", display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
         <button className="btn btn-secondary" onClick={onReupload}>↩ Re-upload</button>

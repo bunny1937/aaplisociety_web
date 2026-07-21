@@ -8,7 +8,6 @@ import {
   hasBlockedContent,
   checkRateLimitResult,
 } from "@/lib/complaintUtils";
-
 // POST /api/complaints — Member creates a complaint
 export async function POST(request) {
   try {
@@ -16,7 +15,6 @@ export async function POST(request) {
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded || decoded.role !== "Member") {
       return NextResponse.json(
@@ -24,9 +22,7 @@ export async function POST(request) {
         { status: 403 },
       );
     }
-
     const { category, title, description } = await request.json();
-
     // --- Server-side validation ---
     const validCategories = [
       "noise",
@@ -71,7 +67,6 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-
     // --- Rate limit check ---
     const recentComplaints = await Complaint.find({
       memberId: decoded.memberId,
@@ -81,12 +76,10 @@ export async function POST(request) {
       .limit(5)
       .select("createdAt")
       .lean();
-
     const rateCheck = checkRateLimitResult(recentComplaints);
     if (!rateCheck.allowed) {
       return NextResponse.json({ error: rateCheck.reason }, { status: 429 });
     }
-
     const complaint = await Complaint.create({
       societyId: decoded.societyId,
       memberId: decoded.memberId,
@@ -96,7 +89,6 @@ export async function POST(request) {
       description: description.trim(),
       status: "PENDING",
     });
-
     return NextResponse.json({ success: true, complaint }, { status: 201 });
   } catch (error) {
     console.error("Create complaint error:", error);
@@ -106,7 +98,6 @@ export async function POST(request) {
     );
   }
 }
-
 // GET /api/complaints — Public approved complaints (members + admin)
 export async function GET(request) {
   try {
@@ -114,22 +105,18 @@ export async function GET(request) {
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const searchParams = new URL(request.url).searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
     const category = searchParams.get("category");
-
     const query = {
       societyId: decoded.societyId,
       status: "APPROVED",
     };
     if (category && category !== "all") query.category = category;
-
     const [complaints, total] = await Promise.all([
       Complaint.find(query)
         .sort({ createdAt: -1 })
@@ -140,7 +127,6 @@ export async function GET(request) {
         .lean(),
       Complaint.countDocuments(query),
     ]);
-
     return NextResponse.json({
       success: true,
       complaints,

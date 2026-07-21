@@ -2,9 +2,7 @@
  * excelValidator.js — pure validation for bill and payment Excel templates.
  * No DB calls. All DB lookups happen in the route; pass pre-fetched sets here.
  */
-
 const PAYMENT_METHODS = new Set(["Cash", "Cheque", "Online", "NEFT", "UPI"]);
-
 /**
  * validateBillRows — validate bill generation template rows.
  *
@@ -19,22 +17,18 @@ const PAYMENT_METHODS = new Set(["Cash", "Cheque", "Online", "NEFT", "UPI"]);
 export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColumns = [] }) {
   const seenFlats = new Map();
   const gridRows = [];
-
   const SKIP_COLS = new Set(["Wing-FlatNo", "Wing", "FlatNo", "Period", "Month", "Year", "DueDate", "OpeningPrincipal", "OpeningInterest", "CurrentCharges", "CurrentInterest", "BillPrincipal", "BillInterest", "TotalBillDue", "AlreadyPaid", "AdvanceCredit", "RemainingDue", "AmountPaid", "PaymentMethod", "PaymentDate", "Remarks", "PreviousBalance", "InterestDue", "GrandTotal"]);
-
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
     const rowNum = i + 2;
     const cells = {};
     let rowStatus = "valid";
-
     const markCell = (col, value, status, message) => {
       cells[col] = { value, status, message };
       if (status === "error" && rowStatus !== "error") rowStatus = "error";
       if (status === "warning" && rowStatus === "valid") rowStatus = "warning";
     };
     const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
-
     // Support both merged "Wing-FlatNo" and legacy separate Wing/FlatNo columns
     const wingFlatRaw = String(raw["Wing-FlatNo"] || "").trim();
     let wing, flatNo;
@@ -47,10 +41,8 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
       flatNo = String(raw["FlatNo"] || "").trim();
     }
     const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
-
     // Skip instruction row
     if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
-
     // Wing-FlatNo validation
     if (!wing || !flatNo) {
       markCell("Wing-FlatNo", wingFlatRaw || `${wing}-${flatNo}`, "error", "Wing-FlatNo is required (format: C-210)");
@@ -62,7 +54,6 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
       seenFlats.set(flatKey, rowNum);
       okCell("Wing-FlatNo", wingFlatRaw || `${wing}-${flatNo}`);
     }
-
     // Period
     const period = String(raw["Period"] || "").trim();
     if (billPeriodId && period && period !== billPeriodId) {
@@ -70,7 +61,6 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
     } else {
       okCell("Period", period || billPeriodId);
     }
-
     // Numeric charge columns
     for (const col of Object.keys(raw)) {
       if (SKIP_COLS.has(col) || cells[col]) continue;
@@ -83,30 +73,24 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
         okCell(col, val);
       }
     }
-
     // Fill skip cols as-is
     for (const col of SKIP_COLS) {
       if (!cells[col] && raw[col] !== undefined) okCell(col, raw[col]);
     }
-
     // Ensure all expected columns present
     for (const col of expectedColumns) {
       if (!cells[col]) markCell(col, "", "error", `Column "${col}" missing from this row`);
     }
-
     gridRows.push({ rowNum, status: rowStatus, cells });
   }
-
   const summary = {
     valid: gridRows.filter((r) => r.status === "valid" || r.status === "skipped").length,
     warning: gridRows.filter((r) => r.status === "warning").length,
     error: gridRows.filter((r) => r.status === "error").length,
     skipped: gridRows.filter((r) => r.status === "skipped").length,
   };
-
   return { gridRows, summary };
 }
-
 /**
  * validatePaymentRows — validate payment collection template rows.
  *
@@ -122,13 +106,10 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
   const seenFlats = new Map();
   const gridRows = [];
   const validPayments = [];
-
   const REF_COLS = ["DueDate","OpeningPrincipal","OpeningInterest","CurrentCharges","CurrentInterest","BillPrincipal","BillInterest","TotalBillDue","AlreadyPaid","AdvanceCredit","RemainingDue"];
-
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
     const rowNum = i + 2;
-
     // Support both merged "Wing-FlatNo" and legacy separate Wing/FlatNo columns
     const wingFlatRaw = String(raw["Wing-FlatNo"] || "").trim();
     let wing, flatNo;
@@ -140,25 +121,20 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
       wing = String(raw["Wing"] || "").trim();
       flatNo = String(raw["FlatNo"] || "").trim();
     }
-
     // Skip instruction row
     if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
     // Skip rows with no payment
     const _amtRaw = String(raw["AmountPaid"] ?? "").trim();
     if (!_amtRaw) continue;
-
     const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
-
     const cells = {};
     let rowStatus = "valid";
-
     const markCell = (col, value, status, message) => {
       cells[col] = { value, status, message };
       if (status === "error" && rowStatus !== "error") rowStatus = "error";
       if (status === "warning" && rowStatus === "valid") rowStatus = "warning";
     };
     const okCell = (col, value) => { cells[col] = { value, status: "valid" }; };
-
     // Wing-FlatNo validation
     const wingFlatDisplay = wingFlatRaw || `${wing}-${flatNo}`;
     if (!wing || !flatNo) {
@@ -171,7 +147,6 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
       seenFlats.set(flatKey, rowNum);
       okCell("Wing-FlatNo", wingFlatDisplay);
     }
-
     // Period
     if (raw["Period"]) {
       okCell("Period", raw["Period"]);
@@ -179,14 +154,12 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
       okCell("Month", raw["Month"]);
       okCell("Year", raw["Year"]);
     }
-
     // AmountPaid / PaymentMethod / PaymentDate — all blank = skip row (no payment this month)
     const amountStr = String(raw["AmountPaid"] || "").trim();
     const methodRaw = String(raw["PaymentMethod"] || "").trim();
     const rawDate = raw["PaymentDate"];
     const dateStr = String(rawDate ?? "").trim();
     const isPaymentRow = amountStr || methodRaw || dateStr;
-
     if (!isPaymentRow) {
       // No payment fields filled — mark row as skipped (valid, no action needed)
       okCell("AmountPaid", "");
@@ -199,9 +172,7 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
       gridRows.push({ rowNum, status: "skipped", cells });
       continue;
     }
-
     const bill = existingBillMap?.get(flatKey);
-
     const amount = parseFloat(amountStr);
     if (!amountStr) {
       markCell("AmountPaid", amountStr, "error", "AmountPaid is required when recording a payment");
@@ -215,7 +186,6 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
         okCell("AmountPaid", amount);
       }
     }
-
     // Tamper detection — compare read-only reference fields against DB values
     if (bill) {
       // TotalBillDue tamper check
@@ -230,7 +200,6 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
           okCell("TotalBillDue", excelTotalBillDue);
         }
       }
-
       // OpeningPrincipal tamper check
       const excelOP = raw["OpeningPrincipal"] !== undefined && raw["OpeningPrincipal"] !== ""
         ? parseFloat(raw["OpeningPrincipal"])
@@ -243,7 +212,6 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
           okCell("OpeningPrincipal", excelOP);
         }
       }
-
       // OpeningInterest tamper check
       const excelOI = raw["OpeningInterest"] !== undefined && raw["OpeningInterest"] !== ""
         ? parseFloat(raw["OpeningInterest"])
@@ -257,7 +225,6 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
         }
       }
     }
-
     // PaymentMethod
     const method = methodRaw;
     if (!method) {
@@ -267,7 +234,6 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
     } else {
       okCell("PaymentMethod", method);
     }
-
     // PaymentDate — handle JS Date (cellDates:true), XLSX serial, YYYY-MM-DD, DD-MM-YYYY
     if (!dateStr || dateStr === "Invalid Date") {
       markCell("PaymentDate", "", "error", "PaymentDate is required");
@@ -295,25 +261,20 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
         okCell("PaymentDate", displayDate);
       }
     }
-
     okCell("Remarks", raw["Remarks"] || "");
-
     for (const col of REF_COLS) {
       if (!cells[col]) okCell(col, raw[col] ?? "");
     }
-
     gridRows.push({ rowNum, status: rowStatus, cells });
     if (rowStatus !== "error") {
       validPayments.push({ ...raw, _rowNum: rowNum, _parsedAmount: parseFloat(raw["AmountPaid"]) });
     }
   }
-
   const summary = {
     valid: gridRows.filter((r) => r.status === "valid" || r.status === "skipped").length,
     warning: gridRows.filter((r) => r.status === "warning").length,
     error: gridRows.filter((r) => r.status === "error").length,
     skipped: gridRows.filter((r) => r.status === "skipped").length,
   };
-
   return { gridRows, summary, validPayments };
 }

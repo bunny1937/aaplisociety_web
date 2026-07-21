@@ -5,28 +5,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Admin.module.css";
 import DropZone from "../../../components/DropZone";
-
 // ── Validation Rules ──────────────────────────────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 const TAN_RE = /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/;
 const PHONE_RE = /^[6-9]\d{9}$/;
-
 function validateRows(rows) {
   const errors = [];
   const seenEmails = {};
   const seenNames = {};
-
   rows.forEach((row, idx) => {
     const r = idx + 2; // Excel row number (1=header, so data starts at 2)
     const e = (msg) => errors.push({ row: r, field: msg });
-
     // Required
     if (!row["Society Name"]?.toString().trim()) e("Society Name is required");
     if (!row["Address"]?.toString().trim()) e("Address is required");
     if (!row["Admin Full Name"]?.toString().trim())
       e("Admin Full Name is required");
-
     const adminEmail = row["Admin Email"]?.toString().trim();
     if (!adminEmail) {
       e("Admin Email is required");
@@ -40,7 +35,6 @@ function validateRows(rows) {
       }
       seenEmails[adminEmail.toLowerCase()] = r;
     }
-
     const sName = row["Society Name"]?.toString().trim().toLowerCase();
     if (sName) {
       if (seenNames[sName]) {
@@ -50,24 +44,19 @@ function validateRows(rows) {
       }
       seenNames[sName] = r;
     }
-
     // Optional but format-checked
     const pan = row["PAN No"]?.toString().trim();
     if (pan && !PAN_RE.test(pan))
       e(`PAN No "${pan}" must be format AAAAA0000A`);
-
     const tan = row["TAN No"]?.toString().trim();
     if (tan && !TAN_RE.test(tan))
       e(`TAN No "${tan}" must be format AAAA00000A`);
-
     const contactEmail = row["Contact Email"]?.toString().trim();
     if (contactEmail && !EMAIL_RE.test(contactEmail))
       e(`Contact Email "${contactEmail}" is not valid`);
-
     const phone = row["Contact Phone"]?.toString().trim().replace(/\s/g, "");
     if (phone && !PHONE_RE.test(phone))
       e(`Contact Phone "${phone}" must be 10 digits starting with 6-9`);
-
     const dor = row["Date of Registration"]?.toString().trim();
     if (dor) {
       const parsed = new Date(dor);
@@ -76,7 +65,6 @@ function validateRows(rows) {
       else if (parsed > new Date())
         e(`Date of Registration "${dor}" cannot be in the future`);
     }
-
     const ir = parseFloat(row["Interest Rate %"]);
     if (row["Interest Rate %"] !== undefined && row["Interest Rate %"] !== "") {
       if (isNaN(ir) || ir < 0 || ir > 100)
@@ -84,7 +72,6 @@ function validateRows(rows) {
           `Interest Rate must be a number between 0–100, got "${row["Interest Rate %"]}"`,
         );
     }
-
     const iad = parseInt(row["Bill Payment Due After (Days)"]);
     if (
       row["Bill Payment Due After (Days)"] !== undefined &&
@@ -95,7 +82,6 @@ function validateRows(rows) {
           `Bill Payment Due After (Days) must be 0–365, got "${row["Bill Payment Due After (Days)"]}"`,
         );
     }
-
     // Charge amounts must be numeric and non-negative
     const chargeFields = [
       "Maintenance Rate (Per Sq Ft)",
@@ -118,10 +104,8 @@ function validateRows(rows) {
       }
     });
   });
-
   return errors;
 }
-
 function rowToSocietyPayload(row) {
   const charges = [
     {
@@ -195,7 +179,6 @@ function rowToSocietyPayload(row) {
       vehicleType: "Four-Wheeler",
     },
   ];
-
   return {
     societyName: row["Society Name"]?.toString().trim(),
     registrationNo: row["Registration No"]?.toString().trim() || "",
@@ -215,7 +198,6 @@ function rowToSocietyPayload(row) {
     },
   };
 }
-
 // ── Template Download ─────────────────────────────────────────────
 function downloadTemplate() {
   const headers = [
@@ -243,7 +225,6 @@ function downloadTemplate() {
     "Covered Parking TW (Per Vehicle)",
     "Covered Parking FW (Per Vehicle)",
   ];
-
   const sample = [
     "Godbole Heights",
     "MH/2010/001",
@@ -269,28 +250,22 @@ function downloadTemplate() {
     "200",
     "300",
   ];
-
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
-
   // Column widths
   ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
-
   // Style header row bold (basic)
   headers.forEach((_, i) => {
     const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
     if (!ws[cellRef]) return;
     ws[cellRef].s = { font: { bold: true } };
   });
-
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Societies");
   XLSX.writeFile(wb, "society_upload_template.xlsx");
 }
-
 // ── Bill History Validation Engine ───────────────────────────────────────────
 const PAYMENT_METHODS_OK = new Set(["Cash", "Cheque", "Online", "NEFT", "UPI"]);
 const TOLERANCE = 0.05; // ₹ rounding tolerance
-
 function validateBillHistorySheet(rows, periodId, prevState, interestRate) {
   // prevState: Map of wingFlat → { closingPrincipal, closingInterest }
   // Returns { ok, errors, warnings, closingState }
@@ -298,25 +273,20 @@ function validateBillHistorySheet(rows, periodId, prevState, interestRate) {
   const warnings = [];
   const closingState = new Map();
   const seen = new Set();
-
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const r = i + 2;
-
     const wingFlat = String(row["Wing-FlatNo"] || "").trim();
     if (!wingFlat || wingFlat.startsWith("⚠")) continue;
-
     const rowPeriod = String(row["Period"] || "").trim();
     if (rowPeriod && rowPeriod !== periodId) {
       errors.push(`Row ${r} [${wingFlat}]: Period "${rowPeriod}" should be "${periodId}"`);
     }
-
     if (seen.has(wingFlat.toLowerCase())) {
       errors.push(`Row ${r} [${wingFlat}]: Duplicate flat — appears more than once in this sheet`);
       continue;
     }
     seen.add(wingFlat.toLowerCase());
-
     const n = (k) => parseFloat(row[k] || 0);
     const openingPrincipal = n("OpeningPrincipal");
     const openingInterest = n("OpeningInterest");
@@ -329,7 +299,6 @@ function validateBillHistorySheet(rows, periodId, prevState, interestRate) {
     const advanceCredit = n("AdvanceCredit");
     const remainingDue = n("RemainingDue");
     const amountPaid = n("AmountPaid");
-
     // 1. Opening balances vs previous closing — warn only (admin paper books are source of truth)
     if (prevState && prevState.has(wingFlat.toLowerCase())) {
       const prev = prevState.get(wingFlat.toLowerCase());
@@ -342,48 +311,40 @@ function validateBillHistorySheet(rows, periodId, prevState, interestRate) {
         warnings.push(`Row ${r} [${wingFlat}]: OpeningInterest ₹${openingInterest} differs from computed prev closing ₹${expectedOI} — using your value.`);
       }
     }
-
     // 2. CurrentInterest check — warn only (admin may use different rate or rounding)
     const expectedInterest = parseFloat(((openingPrincipal * interestRate) / 1200).toFixed(2));
     if (openingPrincipal > 0 && Math.abs(currentInterest - expectedInterest) > TOLERANCE) {
       warnings.push(`Row ${r} [${wingFlat}]: CurrentInterest ₹${currentInterest} differs from computed ₹${expectedInterest} (${openingPrincipal} × ${interestRate}% / 12) — using your value.`);
     }
-
     // 3. BillPrincipal = openingPrincipal + currentCharges
     const expectedBP = parseFloat((openingPrincipal + currentCharges).toFixed(2));
     if (Math.abs(billPrincipal - expectedBP) > TOLERANCE) {
       errors.push(`Row ${r} [${wingFlat}]: BillPrincipal ₹${billPrincipal} ≠ OpeningPrincipal+CurrentCharges (${openingPrincipal}+${currentCharges}=${expectedBP})`);
     }
-
     // 4. BillInterest = openingInterest + currentInterest
     const expectedBI = parseFloat((openingInterest + currentInterest).toFixed(2));
     if (Math.abs(billInterest - expectedBI) > TOLERANCE) {
       errors.push(`Row ${r} [${wingFlat}]: BillInterest ₹${billInterest} ≠ OpeningInterest+CurrentInterest (${openingInterest}+${currentInterest}=${expectedBI})`);
     }
-
     // 5. TotalBillDue = billPrincipal + billInterest
     const expectedTBD = parseFloat((billPrincipal + billInterest).toFixed(2));
     if (Math.abs(totalBillDue - expectedTBD) > TOLERANCE) {
       errors.push(`Row ${r} [${wingFlat}]: TotalBillDue ₹${totalBillDue} ≠ BillPrincipal+BillInterest (${billPrincipal}+${billInterest}=${expectedTBD})`);
     }
-
     // 6. RemainingDue — auto-compute, don't validate against cell value
     // Admin may fill the pre-payment amount; system always derives closing from formula
     const totalPaidThisRow = alreadyPaid + amountPaid + advanceCredit;
     const expectedRD = parseFloat(Math.max(0, totalBillDue - totalPaidThisRow).toFixed(2));
-
     // 7. PaymentMethod validation
     const pm = String(row["PaymentMethod"] || "").trim();
     if (amountPaid > 0 && pm && !PAYMENT_METHODS_OK.has(pm)) {
       warnings.push(`Row ${r} [${wingFlat}]: PaymentMethod "${pm}" is non-standard. Accepted: Cash/Cheque/Online/NEFT/UPI`);
     }
-
     // 8. Negative check
     [["OpeningPrincipal", openingPrincipal], ["OpeningInterest", openingInterest],
      ["CurrentCharges", currentCharges], ["AmountPaid", amountPaid]].forEach(([k, v]) => {
       if (v < 0) errors.push(`Row ${r} [${wingFlat}]: ${k} cannot be negative (got ${v})`);
     });
-
     // Compute closing state for next sheet
     // Payment allocation: interest first, then principal; advance reduces principal
     const totalPayment = alreadyPaid + amountPaid;
@@ -393,10 +354,8 @@ function validateBillHistorySheet(rows, periodId, prevState, interestRate) {
     const cP = parseFloat(Math.max(0, billPrincipal - principalPaid - advanceCredit).toFixed(2));
     closingState.set(wingFlat.toLowerCase(), { closingPrincipal: cP, closingInterest: cI });
   }
-
   return { ok: errors.length === 0, errors, warnings, closingState };
 }
-
 // ── BillHistoryStep Component ─────────────────────────────────────────────────
 function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, onComplete, onSkip }) {
   const [bhFile, setBhFile] = useState(null);
@@ -408,7 +367,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
   const [saveResult, setSaveResult] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [activeSheetIdx, setActiveSheetIdx] = useState(null);
-
   const handleFileChange = (file) => {
     if (!file) return;
     setBhFile(file);
@@ -418,14 +376,12 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
     setAllValid(false);
     setValidatedBills(null);
     setActiveSheetIdx(null);
-
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
         const wb = XLSX.read(evt.target.result, { type: "binary", cellDates: true });
         // Skip "Instructions" sheet, process period sheets (named YYYY-MM)
         const periodSheets = wb.SheetNames.filter((n) => /^\d{4}-\d{2}$/.test(n)).sort();
-
         if (!periodSheets.length) {
           setSheetResults([{ periodId: "?", ok: false, errors: ["No period sheets found (expected sheets named YYYY-MM like 2026-04)"], warnings: [], rowCount: 0 }]);
           setValidationDone(true);
@@ -433,12 +389,10 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
           setBhStep("idle");
           return;
         }
-
         const results = [];
         const allBills = [];
         let prevState = null; // Map of wingFlat → closing state
         let allOk = true;
-
         for (let si = 0; si < periodSheets.length; si++) {
           const sheetName = periodSheets[si];
           const ws = wb.Sheets[sheetName];
@@ -447,7 +401,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
           results.push({ periodId: sheetName, ...result, rowCount: rows.length });
           prevState = result.closingState;
           if (!result.ok) allOk = false;
-
           // Collect bills from this sheet
           for (const row of rows) {
             const wingFlat = String(row["Wing-FlatNo"] || "").trim();
@@ -455,7 +408,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
             allBills.push({ periodId: sheetName, wingFlat, ...row });
           }
         }
-
         setSheetResults(results);
         setValidationDone(true);
         setAllValid(allOk);
@@ -470,7 +422,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
     };
     reader.readAsBinaryString(file);
   };
-
   const handleSave = async () => {
     if (!validatedBills?.length) return;
     setBhStep("saving");
@@ -492,10 +443,8 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
       setBhStep("error");
     }
   };
-
   const totalErrors = sheetResults.reduce((s, r) => s + r.errors.length, 0);
   const totalWarnings = sheetResults.reduce((s, r) => s + r.warnings.length, 0);
-
   return (
     <div style={{ padding: "0.5rem 0" }}>
       <h3 style={{ margin: "0 0 0.4rem", color: "#a5b4fc", fontSize: "1rem" }}>
@@ -504,7 +453,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
       <p style={{ color: "#9ca3af", fontSize: "0.82rem", margin: "0 0 1.25rem" }}>
         Import all historical bills from prev April to the month before they joined. Required for accurate opening balance and audit trail.
       </p>
-
       {/* Template download */}
       {bhStep !== "done" && (
         <div style={{ background: "#1e1b4b", borderRadius: 8, padding: "1rem", marginBottom: "1.25rem" }}>
@@ -532,7 +480,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
           </button>
         </div>
       )}
-
       {bhStep === "done" && saveResult ? (
         <div style={{ background: "#064e3b", borderRadius: 8, padding: "1.25rem" }}>
           <div style={{ color: "#4ade80", fontWeight: 700, fontSize: "1rem", marginBottom: "0.5rem" }}>✅ Bill History Saved</div>
@@ -562,29 +509,24 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
               style={{ marginBottom: "1.25rem" }}
             />
           )}
-
           {bhStep === "validating" && (
             <div style={{ padding: "1rem", textAlign: "center", color: "#a5b4fc" }}>Validating all sheets...</div>
           )}
-
           {bhStep === "saving" && (
             <div style={{ padding: "1rem", textAlign: "center", color: "#a5b4fc" }}>Saving to database...</div>
           )}
-
           {bhStep === "error" && saveError && (
             <div style={{ background: "#450a0a", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}>
               <div style={{ color: "#fca5a5", fontWeight: 600 }}>Save Failed</div>
               <div style={{ color: "#fca5a5", fontSize: "0.82rem", marginTop: 4 }}>{saveError}</div>
             </div>
           )}
-
           {/* Sheet results */}
           {validationDone && sheetResults.length > 0 && (
             <div style={{ marginBottom: "1.25rem" }}>
               <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
                 Validation Results — {sheetResults.length} months
               </div>
-
               {/* Summary bar */}
               <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
                 <span style={{ background: "#064e3b", border: "1px solid #10b981", borderRadius: 6, padding: "3px 10px", fontSize: "0.75rem", color: "#4ade80", fontWeight: 700 }}>
@@ -601,7 +543,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
                   </span>
                 )}
               </div>
-
               {/* Sheet list — timeline style */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
                 {sheetResults.map((r, i) => (
@@ -629,7 +570,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
                       )}
                       <span style={{ color: "#4b5563", fontSize: "0.7rem" }}>{activeSheetIdx === i ? "▲" : "▼"}</span>
                     </div>
-
                     {/* Expanded error detail */}
                     {activeSheetIdx === i && (r.errors.length > 0 || r.warnings.length > 0) && (
                       <div style={{ background: "#111827", borderRadius: "0 0 6px 6px", padding: "0.75rem", marginTop: -1, border: "1px solid #374151", borderTop: "none" }}>
@@ -650,7 +590,6 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
               </div>
             </div>
           )}
-
           {/* Actions */}
           <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem" }}>
             {allValid && validatedBills && bhStep !== "saving" && (
@@ -673,13 +612,11 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
     </div>
   );
 }
-
 // Auto-detects joinPeriodId from first bill, then renders BillHistoryStep
 function BhModal({ society, onClose }) {
   const [joinPeriodId, setJoinPeriodId] = useState(society.onboarding?.joinPeriodId || null);
   const [loading, setLoading] = useState(!society.onboarding?.joinPeriodId);
   const [noBills, setNoBills] = useState(false);
-
   // Auto-fetch if not already stored
   useEffect(() => {
     if (joinPeriodId) { setLoading(false); return; }
@@ -702,7 +639,6 @@ function BhModal({ society, onClose }) {
       }
     })();
   }, []);
-
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -719,13 +655,11 @@ function BhModal({ society, onClose }) {
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: "1.3rem", cursor: "pointer" }}>✕</button>
         </div>
-
         {loading && (
           <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280", fontSize: "0.85rem" }}>
             Detecting join period from bills...
           </div>
         )}
-
         {!loading && noBills && (
           <div style={{ background: "#1c1400", border: "1px solid #92400e", borderRadius: 8, padding: "1rem" }}>
             <div style={{ color: "#fbbf24", fontWeight: 600, marginBottom: "0.4rem" }}>No bills found</div>
@@ -734,7 +668,6 @@ function BhModal({ society, onClose }) {
             </div>
           </div>
         )}
-
         {!loading && joinPeriodId && (
           <>
             <div style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 6, padding: "0.6rem 1rem", marginBottom: "1.25rem", fontSize: "0.8rem", color: "#60a5fa" }}>
@@ -754,12 +687,10 @@ function BhModal({ society, onClose }) {
     </div>
   );
 }
-
 export default function AdminSocietiesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const queryClient = useQueryClient();
-
   // Modal state — single society import
   const [showAddModal, setShowAddModal] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null); // file object for DropZone display
@@ -771,15 +702,12 @@ export default function AdminSocietiesPage() {
     current: 0,
     total: 0,
   });
-
   // View Credentials dialog
   const [viewCredsTarget, setViewCredsTarget] = useState(null); // { societyId, name }
   const [viewCreds, setViewCreds] = useState(null); // [{ flatNo, wing, ownerName, username, email }]
   const [viewCredsLoading, setViewCredsLoading] = useState(false);
-
   // Delete society
   const [deleteTarget, setDeleteTarget] = useState(null); // society object
-
   // Bulk import modal state
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkFile, setBulkFile] = useState(null);
@@ -788,21 +716,16 @@ export default function AdminSocietiesPage() {
   const [bulkResult, setBulkResult] = useState(null);
   const [bulkValidation, setBulkValidation] = useState(null); // { phase, errors, warnings }
   const [bulkError, setBulkError] = useState(null);
-
   // Bill history step state (bulk import flow)
   const [showBillHistory, setShowBillHistory] = useState(false);
   const [billHistoryDone, setBillHistoryDone] = useState(false);
-
   // Standalone bill history modal (from societies table)
   const [bhModalSociety, setBhModalSociety] = useState(null); // society object
-
   const { data: societiesData, isLoading } = useQuery({
     queryKey: ["admin-societies"],
     queryFn: () => apiClient.get("/api/admin/societies"),
   });
-
   const societies = societiesData?.societies || [];
-
   const filteredSocieties = societies.filter((s) => {
     const matchesSearch = s.name
       .toLowerCase()
@@ -811,7 +734,6 @@ export default function AdminSocietiesPage() {
       filterStatus === "All" || s.subscription?.status === filterStatus;
     return matchesSearch && matchesStatus && !s.isDeleted;
   });
-
   const updateSubscriptionMutation = useMutation({
     mutationFn: ({ societyId, updates }) =>
       apiClient.put("/api/admin/societies", { societyId, updates }),
@@ -820,7 +742,6 @@ export default function AdminSocietiesPage() {
       queryClient.invalidateQueries(["admin-societies"]);
     },
   });
-
   const handlePaymentRecord = (society) => {
     const amount = parseFloat(prompt(`Enter payment amount for "${society.name}":`));
     if (!amount || isNaN(amount)) return;
@@ -846,7 +767,6 @@ export default function AdminSocietiesPage() {
     }
     updateSubscriptionMutation.mutate({ societyId: society._id, updates });
   };
-
   const suspendSociety = (societyId) => {
     if (!confirm("Suspend this society? They will lose access.")) return;
     updateSubscriptionMutation.mutate({
@@ -854,14 +774,12 @@ export default function AdminSocietiesPage() {
       updates: { "subscription.status": "Suspended" },
     });
   };
-
   const activateSociety = (societyId) => {
     updateSubscriptionMutation.mutate({
       societyId,
       updates: { "subscription.status": "Active" },
     });
   };
-
   // ── Excel Parse & Validate ──
   const handleFileChange = (file) => {
     if (!file) return;
@@ -875,7 +793,6 @@ export default function AdminSocietiesPage() {
         });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-
         if (!rows.length) {
           setParsedRows([]);
           setValidationErrors([
@@ -883,7 +800,6 @@ export default function AdminSocietiesPage() {
           ]);
           return;
         }
-
         const errors = validateRows(rows);
         setParsedRows(rows);
         setValidationErrors(errors);
@@ -897,14 +813,12 @@ export default function AdminSocietiesPage() {
     };
     reader.readAsBinaryString(file);
   };
-
   // ── Create All Societies ──
   const handleCreateAll = async () => {
     if (!parsedRows?.length || validationErrors.length > 0) return;
     setUploadLoading(true);
     setCreationProgress({ current: 0, total: parsedRows.length });
     const results = [];
-
     for (let i = 0; i < parsedRows.length; i++) {
       const payload = rowToSocietyPayload(parsedRows[i]);
       setCreationProgress({ current: i + 1, total: parsedRows.length });
@@ -938,13 +852,11 @@ export default function AdminSocietiesPage() {
       }
       await new Promise((r) => setTimeout(r, 0));
     }
-
     setCreationResults(results);
     setUploadLoading(false);
     setCreationProgress({ current: 0, total: 0 });
     queryClient.invalidateQueries(["admin-societies"]);
   };
-
   const handleBulkImport = async () => {
     if (!bulkFile) return;
     setBulkStep("uploading");
@@ -962,16 +874,13 @@ export default function AdminSocietiesPage() {
         body: fd,
       });
       const data = await res.json();
-
       // Validation failed or rollback — show errors immediately, no animation
       if (data.validationFailed) {
         setBulkValidation(data);
         setBulkStep("validation-failed");
         return;
       }
-
       if (!res.ok) throw new Error(data.error || "Import failed");
-
       // API succeeded — animate steps so admin sees what happened
       setBulkAnimStep(1);
       await new Promise((r) => setTimeout(r, 1000));
@@ -983,7 +892,6 @@ export default function AdminSocietiesPage() {
       await new Promise((r) => setTimeout(r, 1000));
       setBulkAnimStep(5);
       await new Promise((r) => setTimeout(r, 700));
-
       setBulkResult(data);
       setBulkStep("done");
       queryClient.invalidateQueries(["admin-societies"]);
@@ -992,7 +900,6 @@ export default function AdminSocietiesPage() {
       setBulkStep("error");
     }
   };
-
   const resetBulkModal = () => {
     setShowBulkModal(false);
     setBulkFile(null);
@@ -1004,7 +911,6 @@ export default function AdminSocietiesPage() {
     setShowBillHistory(false);
     setBillHistoryDone(false);
   };
-
   const resetModal = () => {
     setShowAddModal(false);
     setUploadedFile(null);
@@ -1013,11 +919,9 @@ export default function AdminSocietiesPage() {
     setCreationResults(null);
     setCreationProgress({ current: 0, total: 0 });
   };
-
   const hasErrors = validationErrors.length > 0;
   const isReady =
     parsedRows && parsedRows.length > 0 && !hasErrors && !creationResults;
-
   return (
     <div className={styles.adminContainer}>
       <div className={styles.pageHeader}>
@@ -1064,7 +968,6 @@ export default function AdminSocietiesPage() {
           </div>
         </div>
       </div>
-
       {/* Filters */}
       <div className={styles.filtersBar}>
         <input
@@ -1086,7 +989,6 @@ export default function AdminSocietiesPage() {
           <option value="Expired">Expired</option>
         </select>
       </div>
-
       {/* Stats */}
       <div className={styles.statsGrid}>
         <div className={styles.statCard} style={{ borderColor: "#10B981" }}>
@@ -1123,14 +1025,12 @@ export default function AdminSocietiesPage() {
           <div className={styles.statLabel}>Total Revenue</div>
         </div>
       </div>
-
       {/* ── SUBSCRIPTION OVERVIEW ── */}
       {!isLoading && (() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const in7 = new Date(today); in7.setDate(today.getDate() + 7);
         const in30 = new Date(today); in30.setDate(today.getDate() + 30);
-
         const overdue = societies.filter((s) => {
           const d = s.subscription?.nextPaymentDate ? new Date(s.subscription.nextPaymentDate) : null;
           return d && d < today && s.subscription?.status !== "Suspended";
@@ -1145,7 +1045,6 @@ export default function AdminSocietiesPage() {
         });
         const noPayment = societies.filter((s) => !s.subscription?.nextPaymentDate && !s.isDeleted);
         const totalRevenue = societies.reduce((sum, s) => sum + (s.subscription?.amountPaid || 0), 0);
-
         return (
           <div style={{ marginBottom: "1.5rem" }}>
             {/* Alert rows */}
@@ -1183,7 +1082,6 @@ export default function AdminSocietiesPage() {
                 </div>
               </div>
             )}
-
             {/* Summary row */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem" }}>
               <div style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 8, padding: "0.9rem 1rem" }}>
@@ -1212,7 +1110,6 @@ export default function AdminSocietiesPage() {
           </div>
         );
       })()}
-
       {/* Table */}
       {isLoading ? (
         <div className={styles.loading}>Loading societies...</div>
@@ -1458,7 +1355,6 @@ export default function AdminSocietiesPage() {
           )}
         </div>
       )}
-
       {/* ── ADD SOCIETY MODAL ── */}
       {showAddModal && (
         <div
@@ -1692,7 +1588,6 @@ export default function AdminSocietiesPage() {
                   Download the template, fill in society data, upload and fix
                   any errors, then create.
                 </p>
-
                 {/* Step 1 — Download Template */}
                 <div
                   style={{
@@ -1744,7 +1639,6 @@ export default function AdminSocietiesPage() {
                     </button>
                   </div>
                 </div>
-
                 {/* Step 2 — Upload */}
                 <div
                   style={{
@@ -1794,7 +1688,6 @@ export default function AdminSocietiesPage() {
                     </div>
                   )}
                 </div>
-
                 {/* Validation Results */}
                 {parsedRows && (
                   <div style={{ marginBottom: "1rem" }}>
@@ -1918,7 +1811,6 @@ export default function AdminSocietiesPage() {
                     )}
                   </div>
                 )}
-
                 {/* Preview table */}
                 {isReady && (
                   <div
@@ -2067,7 +1959,6 @@ export default function AdminSocietiesPage() {
                     </table>
                   </div>
                 )}
-
                 {/* Progress bar during creation */}
                 {uploadLoading && (
                   <div style={{ marginBottom: "1rem" }}>
@@ -2096,7 +1987,6 @@ export default function AdminSocietiesPage() {
                     </div>
                   </div>
                 )}
-
                 {/* Footer buttons */}
                 <div
                   style={{
@@ -2146,7 +2036,6 @@ export default function AdminSocietiesPage() {
           </div>
         </div>
       )}
-
       {/* ── BULK IMPORT MODAL ── */}
       {showBulkModal && (
         <div
@@ -2186,7 +2075,6 @@ export default function AdminSocietiesPage() {
               Upload a 7-sheet Excel: Sheet1 = Society info, Sheets 2–7 =
               Members per wing.
             </p>
-
             {/* Step indicators */}
             <div
               style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}
@@ -2216,7 +2104,6 @@ export default function AdminSocietiesPage() {
                 </div>
               ))}
             </div>
-
             {bulkStep === "idle" && (
               <>
                 {/* Template download */}
@@ -2276,7 +2163,6 @@ export default function AdminSocietiesPage() {
                     Download BulkImport_Template.xlsx
                   </button>
                 </div>
-
                 {/* File upload */}
                 <DropZone
                   accept=".xlsx,.xls"
@@ -2287,7 +2173,6 @@ export default function AdminSocietiesPage() {
                   hint=".xlsx or .xls"
                   style={{ marginBottom: "1.25rem" }}
                 />
-
                 <div style={{ display: "flex", gap: "0.75rem" }}>
                   <button
                     onClick={handleBulkImport}
@@ -2321,7 +2206,6 @@ export default function AdminSocietiesPage() {
                 </div>
               </>
             )}
-
             {bulkStep === "uploading" && (() => {
               const steps = [
                 { label: "Uploading & parsing Excel file...", icon: "📤" },
@@ -2374,7 +2258,6 @@ export default function AdminSocietiesPage() {
                 </div>
               );
             })()}
-
             {bulkStep === "done" && bulkResult && (
               <div>
                 <div
@@ -2553,7 +2436,6 @@ export default function AdminSocietiesPage() {
                     📥 Download Member Credentials ({bulkResult.memberCredentials.length} members)
                   </button>
                 )}
-
                 {/* ── Bill History Step ── */}
                 {!showBillHistory && !billHistoryDone && (
                   <div style={{ background: "#1e1b4b", border: "1px solid #4f46e5", borderRadius: 8, padding: "1rem", marginBottom: "0.75rem" }}>
@@ -2571,7 +2453,6 @@ export default function AdminSocietiesPage() {
                     </button>
                   </div>
                 )}
-
                 {showBillHistory && !billHistoryDone && (
                   <div style={{ background: "#111827", border: "1px solid #374151", borderRadius: 8, padding: "1.25rem", marginBottom: "0.75rem" }}>
                     <BillHistoryStep
@@ -2584,13 +2465,11 @@ export default function AdminSocietiesPage() {
                     />
                   </div>
                 )}
-
                 {billHistoryDone && (
                   <div style={{ background: "#064e3b22", border: "1px solid #10b981", borderRadius: 8, padding: "0.75rem", marginBottom: "0.75rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: 600 }}>
                     ✓ Bill History step complete
                   </div>
                 )}
-
                 <button
                   onClick={resetBulkModal}
                   style={{
@@ -2608,7 +2487,6 @@ export default function AdminSocietiesPage() {
                 </button>
               </div>
             )}
-
             {bulkStep === "validation-failed" && bulkValidation && (
               <div>
                 <div style={{ background: "#1c1917", border: "1px solid #dc2626", borderRadius: 8, padding: "1.25rem", marginBottom: "1rem" }}>
@@ -2650,7 +2528,6 @@ export default function AdminSocietiesPage() {
                 </div>
               </div>
             )}
-
             {bulkStep === "error" && (
               <div>
                 <div
@@ -2711,7 +2588,6 @@ export default function AdminSocietiesPage() {
           </div>
         </div>
       )}
-
       {/* ── VIEW CREDENTIALS DIALOG ── */}
       {viewCredsTarget && (
         <div
@@ -2729,7 +2605,6 @@ export default function AdminSocietiesPage() {
               </div>
               <button onClick={() => { setViewCredsTarget(null); setViewCreds(null); }} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: "1.3rem", cursor: "pointer" }}>✕</button>
             </div>
-
             {viewCredsLoading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: "#6b7280" }}>Loading credentials...</div>
             ) : viewCreds?.length === 0 ? (
@@ -2769,7 +2644,6 @@ export default function AdminSocietiesPage() {
                 </table>
               </div>
             )}
-
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem", justifyContent: "flex-end" }}>
               {viewCreds?.length > 0 && (
                 <button
@@ -2804,7 +2678,6 @@ export default function AdminSocietiesPage() {
           </div>
         </div>
       )}
-
       {/* ── DELETE SOCIETY DIALOG ── */}
       {deleteTarget && (
         <div
@@ -2833,11 +2706,6 @@ export default function AdminSocietiesPage() {
               </button>
               <button
                 onClick={async () => {
-                  const societyName = deleteTarget.name;
-                  const confirm1 = window.confirm(`Delete "${societyName}" and ALL its data? This is permanent.`);
-                  if (!confirm1) return;
-                  const typed = window.prompt(`Type the society name to confirm deletion:\n\n"${societyName}"`);
-                  if (typed?.trim() !== societyName) { alert("Name did not match. Deletion cancelled."); return; }
                   const res = await fetch("/api/superadmin/delete-society", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -2858,7 +2726,6 @@ export default function AdminSocietiesPage() {
           </div>
         </div>
       )}
-
       {/* ── STANDALONE BILL HISTORY MODAL (from table button) ── */}
       {bhModalSociety && (
         <BhModal

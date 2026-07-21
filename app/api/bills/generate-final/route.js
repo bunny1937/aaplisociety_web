@@ -8,19 +8,15 @@ import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import renderBillHtml from "@/lib/bill-renderer";
 import cache from "@/lib/cache";
 import { computePreviousBalances } from "../../../../utils/billingEngine";
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const { billMonth, billYear, dueDate, bills, forceRegenerate } =
       await request.json();
     if (billMonth === undefined || !billYear || !dueDate || !bills) {
@@ -29,9 +25,7 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-
     const billPeriodId = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
-
     // Block generation for periods that have locked historical bills
     const historicalExists = await Bill.findOne({
       societyId: decoded.societyId,
@@ -48,7 +42,6 @@ export async function POST(request) {
         { status: 409 },
       );
     }
-
     // Check for duplicates
     const existing = await Bill.findOne({
       societyId: decoded.societyId,
@@ -70,11 +63,9 @@ export async function POST(request) {
         category: "Maintenance",
       });
     }
-
     // Load society + template ONCE
     const society = await Society.findById(decoded.societyId).lean();
     const billTemplate = society?.billTemplate;
-
     const billsToCreate = await Promise.all(
       bills.map(async (bill) => {
         // FIX 1: breakdown is now a plain object {name: amount}, not array
@@ -89,16 +80,13 @@ export async function POST(request) {
             if (name !== "Interest on Arrears") charges[name] = amount;
           });
         }
-
         // FIX 2: frontend sends totalAmount not grandTotal
         const grandTotal = bill.totalAmount ?? bill.grandTotal ?? 0;
-
         const member = await Member.findById(bill.memberId)
           .select(
             "flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary openingBalance openingPrincipal openingInterest",
           )
           .lean();
-
         let billHtml = null;
         let interestAmount = bill.interestAmount || 0;
         let renderedCurrInt = 0;
@@ -124,14 +112,11 @@ export async function POST(request) {
                 .sort({ billYear: 1, billMonth: 1 })
                 .lean(),
             ]);
-
             dbUnpaidBills = _dbUnpaidBills;
-
             const oldestUnpaidDate =
               dbUnpaidBills.length > 0 && dbUnpaidBills[0].dueDate
                 ? new Date(dbUnpaidBills[0].dueDate)
                 : null;
-
             // anyPriorBill: did this member ever have a bill before?
             // If yes + all paid → outstanding = 0, NOT member opening balances.
             // Only use member opening balances for brand-new members (no prior bills ever).
@@ -143,7 +128,6 @@ export async function POST(request) {
             })
               .select("_id")
               .lean();
-
             // Use centralized engine — source of truth is balanceAmount on unpaid bills
             const {
               principalOutstanding: _prevPrincipal,
@@ -154,7 +138,6 @@ export async function POST(request) {
             });
             prevRemPrincipal = _prevPrincipal;
             prevRemInt = _prevInterest;
-
             const renderResult = renderBillHtml(
               billTemplate?.html || "DEFAULT",
               society,
@@ -190,14 +173,11 @@ export async function POST(request) {
             );
           }
         }
-
         const _isScheduled = false;
-
         // Compute per-bill interest from previous bills' remInt
         // previousInterest = sum of interestBalance from all existing unpaid bills (passed in from excel template)
         const prevInterest = bill.previousInterest || 0;
         const prevPrincipal = bill.previousPrincipal || 0;
-
         return {
           billPeriodId,
           billMonth,
@@ -205,12 +185,10 @@ export async function POST(request) {
           memberId: bill.memberId,
           societyId: decoded.societyId,
           charges,
-
           // Previous carry-forward components
           previousBalance: bill.previousBalance || 0,
           previousPrincipal: prevPrincipal,
           previousInterest: prevInterest,
-
           // interestResult must come from calculateMonthlyInterest, not calculateInterestAmount
           // calculateMonthlyInterest returns { currInt, monthInterest }
           currInt: renderedCurrInt, // interest on THIS month's principal only
@@ -253,7 +231,6 @@ export async function POST(request) {
               status: _balance <= 0.005 ? "Paid" : _advApplied > 0 ? "Partial" : "Unpaid",
             };
           })(),
-
           subtotal: bill.subtotal || bill.currentBillTotal || 0,
           serviceTax: bill.serviceTax || 0,
           currentBillTotal: bill.currentBillTotal || bill.subtotal || 0,
@@ -268,7 +245,6 @@ export async function POST(request) {
         };
       }),
     );
-
     // Collect advance credit consumption before stripping temp field
     const advanceToConsume = new Map();
     for (const b of billsToCreate) {
@@ -277,16 +253,13 @@ export async function POST(request) {
       }
       delete b._advanceApplied;
     }
-
     const createdBills = await Bill.insertMany(billsToCreate);
-
     // Decrement advanceCredit on members where it was applied
     for (const [memberId, applied] of advanceToConsume) {
       await Member.findByIdAndUpdate(memberId, {
         $inc: { advanceCredit: -applied },
       });
     }
-
     // Zero out historical BulkImport bills that were absorbed into openingPrincipal.
     // Only target importedFrom=BulkImport — live Partial bills are real receivables
     // and must NOT be zeroed (their balanceAmount is the source of truth for the next bill's openingPrincipal).
@@ -313,8 +286,6 @@ export async function POST(request) {
         );
       }
     }
-
-
     // Create a ledger debit transaction per bill so running balance is correct
     for (const bill of createdBills) {
       const lastTxn = await Transaction.findOne({
@@ -324,12 +295,10 @@ export async function POST(request) {
       })
         .sort({ createdAt: -1 })
         .lean();
-
       const prevBal = parseFloat(
         (lastTxn?.balanceAfterTransaction ?? 0).toFixed(2),
       );
       const newBal = parseFloat((prevBal + bill.totalBillDue).toFixed(2));
-
       await Transaction.create({
         transactionId: Transaction.generateTransactionId(),
         date: bill.generatedAt || new Date(),
@@ -347,7 +316,6 @@ export async function POST(request) {
         createdBy: decoded.userId,
       });
     }
-
     await cache.delPattern(`billing:list:${decoded.societyId}:*`);
     await cache.del(`billing:generated:${decoded.societyId}`);
     await cache.del(`payments:outstanding:${decoded.societyId}`);

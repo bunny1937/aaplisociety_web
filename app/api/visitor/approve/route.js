@@ -9,15 +9,12 @@ import { requireAuth } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { notifyGuardDecision } from "@/lib/visitor-notify";
 import { stopEscalation } from "@/lib/escalation";
-
 export async function POST(request) {
   const auth = requireAuth(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { visitorId, action } = await request.json();
-
     if (!visitorId || !mongoose.Types.ObjectId.isValid(visitorId))
       return NextResponse.json({ error: "Valid visitorId required" }, { status: 400 });
     if (!["approve", "reject"].includes(action))
@@ -25,7 +22,6 @@ export async function POST(request) {
         { error: "action must be 'approve' or 'reject'" },
         { status: 400 },
       );
-
     // Scope: members may only act on their own flat's visitors.
     const query = { _id: visitorId, societyId: auth.user.societyId };
     const isResident = auth.user.role === "Member";
@@ -34,11 +30,9 @@ export async function POST(request) {
         return NextResponse.json({ error: "Member profile required" }, { status: 403 });
       query.memberId = auth.user.memberId;
     }
-
     const visitor = await Visitor.findOne(query);
     if (!visitor)
       return NextResponse.json({ error: "Visitor record not found" }, { status: 404 });
-
     if (visitor.status !== "Pending")
       return NextResponse.json(
         { error: `Visitor already ${visitor.status}` },
@@ -46,18 +40,15 @@ export async function POST(request) {
       );
     if (visitor.expiresAt && new Date() > visitor.expiresAt)
       return NextResponse.json({ error: "Approval window expired" }, { status: 410 });
-
     visitor.status = action === "approve" ? "Approved" : "Rejected";
     visitor.approvedBy = auth.user.userId;
     visitor.approvedAt = new Date();
     visitor.approverRole = isResident ? "Resident" : auth.user.role;
     await stopEscalation(visitor);
     await visitor.save();
-
     const member = await Member.findById(visitor.memberId)
       .select("flatNo wing")
       .lean();
-
     await notifyGuardDecision({
       societyId: auth.user.societyId,
       actorId: auth.user.userId,
@@ -65,7 +56,6 @@ export async function POST(request) {
       action,
       member,
     });
-
     await logAudit(
       auth.user.userId,
       auth.user.societyId,
@@ -73,7 +63,6 @@ export async function POST(request) {
       null,
       { visitorId: visitor._id.toString(), name: visitor.name },
     );
-
     return NextResponse.json({ success: true, status: visitor.status });
   } catch (err) {
     console.error("Visitor approve error", err);

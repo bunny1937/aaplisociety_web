@@ -3,12 +3,10 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Dashboard.module.css";
-
 export default function MemberProfilePage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
-
   const { data, isLoading } = useQuery({
     queryKey: ["my-profile"],
     queryFn: () => apiClient.get("/api/member/profile"),
@@ -20,7 +18,6 @@ export default function MemberProfilePage() {
       });
     },
   });
-
   const saveMutation = useMutation({
     mutationFn: (updates) => apiClient.put("/api/member/profile", updates),
     onSuccess: () => {
@@ -30,24 +27,20 @@ export default function MemberProfilePage() {
     },
     onError: (e) => alert("Failed: " + e.message),
   });
-
   if (isLoading)
     return (
       <div style={{ padding: "3rem", textAlign: "center" }}>
         <div className="loading-spinner" style={{ margin: "0 auto" }}></div>
       </div>
     );
-
   const member = data?.member;
   const society = data?.society;
-
   if (!member)
     return (
       <div style={{ padding: "2rem", color: "#6B7280" }}>
         Member profile not found.
       </div>
     );
-
   const InfoRow = ({ label, value, highlight }) =>
     value ? (
       <div
@@ -71,7 +64,6 @@ export default function MemberProfilePage() {
         </span>
       </div>
     ) : null;
-
   const Section = ({ title, icon, children }) => (
     <div className={styles.contentCard} style={{ marginBottom: "1.5rem" }}>
       <div className={styles.cardHeader}>
@@ -82,7 +74,6 @@ export default function MemberProfilePage() {
       <div style={{ padding: "0 1.5rem 1.5rem" }}>{children}</div>
     </div>
   );
-
   return (
     <div>
       <div
@@ -110,7 +101,6 @@ export default function MemberProfilePage() {
           </button>
         </div>
       </div>
-
       {/* Identity Card */}
       <div
         style={{
@@ -151,7 +141,6 @@ export default function MemberProfilePage() {
           </div>
         </div>
       </div>
-
       {/* Basic Info */}
       <Section title="Flat Details" icon="🏠">
         <InfoRow
@@ -190,7 +179,6 @@ export default function MemberProfilePage() {
           value={member.hasVotingRights ? "Yes" : "No"}
         />
       </Section>
-
       {/* Contact Info */}
       <Section title="Contact Information" icon="📞">
         <InfoRow label="Primary Contact" value={member.contactNumber} />
@@ -275,7 +263,6 @@ export default function MemberProfilePage() {
           </>
         )}
       </Section>
-
       {/* Identity Documents — show only if data exists */}
       {(member.panCard || member.aadhaar) && (
         <Section title="Identity Documents" icon="🪪">
@@ -290,7 +277,6 @@ export default function MemberProfilePage() {
           )}
         </Section>
       )}
-
       {/* Parking Slots */}
       {member.parkingSlots?.length > 0 && (
         <Section title="Parking Slots" icon="🚗">
@@ -341,7 +327,6 @@ export default function MemberProfilePage() {
           ))}
         </Section>
       )}
-
       {/* Family Members */}
       {member.familyMembers?.length > 0 && (
         <Section title="Family Members" icon="👨‍👩‍👧‍👦">
@@ -390,7 +375,6 @@ export default function MemberProfilePage() {
           ))}
         </Section>
       )}
-
       {/* Current Tenant */}
       {member.ownershipType === "Rented" && member.currentTenant && (
         <Section title="Current Tenant" icon="🏠">
@@ -424,7 +408,6 @@ export default function MemberProfilePage() {
           />
         </Section>
       )}
-
       {/* Emergency Contact */}
       {member.emergencyContact?.name && (
         <Section title="Emergency Contact" icon="🆘">
@@ -433,7 +416,6 @@ export default function MemberProfilePage() {
           <InfoRow label="Phone" value={member.emergencyContact.phoneNumber} />
         </Section>
       )}
-
       {/* Society Info */}
       <Section title="Society Information" icon="🏢">
         <InfoRow label="Society Name" value={society?.name} />

@@ -6,17 +6,14 @@ import connectDB from "@/lib/mongodb";
 import Visitor from "@/models/Visitor";
 import { requireSecurity } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
-
 export async function PATCH(request) {
   const auth = requireSecurity(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { visitorId } = await request.json();
     if (!visitorId || !mongoose.Types.ObjectId.isValid(visitorId))
       return NextResponse.json({ error: "Valid visitorId required" }, { status: 400 });
-
     const visitor = await Visitor.findOneAndUpdate(
       {
         _id: visitorId,
@@ -31,11 +28,9 @@ export async function PATCH(request) {
         { error: "Visitor not found or not currently inside" },
         { status: 404 },
       );
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_EXITED", null, {
       visitorId: visitor._id.toString(),
     });
-
     return NextResponse.json({ success: true, exitTime: visitor.exitTime });
   } catch (err) {
     console.error("Visitor exit error", err);

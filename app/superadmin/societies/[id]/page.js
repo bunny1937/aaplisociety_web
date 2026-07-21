@@ -1,18 +1,15 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import styles from "./SocietyDetail.module.css";
 import { adminApi } from "@/lib/admin-api";
-
 export default function SocietyDetail() {
   const [activeTab, setActiveTab] = useState("overview");
   const router = useRouter();
   const params = useParams();
   const queryClient = useQueryClient();
   const societyId = params.id;
-
   // Superadmin auth check via cookie
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
@@ -22,14 +19,12 @@ export default function SocietyDetail() {
       })
       .catch(() => router.replace("/superadmin/login"));
   }, [router]);
-
   // ✅ Fetch society (cached for 5 min)
   const { data: societyData, isLoading: societyLoading } = useQuery({
     queryKey: ["society", societyId],
     queryFn: () => adminApi.fetchSociety(societyId),
     staleTime: 5 * 60 * 1000,
   });
-
   // ✅ Fetch members (cached, only when tab active)
   const { data: membersData } = useQuery({
     queryKey: ["society-data", societyId, "members"],
@@ -37,7 +32,6 @@ export default function SocietyDetail() {
     staleTime: 5 * 60 * 1000,
     enabled: activeTab === "members",
   });
-
   // ✅ Fetch bills (cached, only when tab active)
   const { data: billsData } = useQuery({
     queryKey: ["society-data", societyId, "bills"],
@@ -45,7 +39,6 @@ export default function SocietyDetail() {
     staleTime: 5 * 60 * 1000,
     enabled: activeTab === "bills",
   });
-
   // ✅ Fetch transactions (cached, only when tab active)
   const { data: txnData } = useQuery({
     queryKey: ["society-data", societyId, "transactions"],
@@ -53,7 +46,6 @@ export default function SocietyDetail() {
     staleTime: 5 * 60 * 1000,
     enabled: activeTab === "transactions",
   });
-
   // ✅ Mutation for updates (auto-invalidates cache)
   const updateMutation = useMutation({
     mutationFn: (updates) => adminApi.updateSociety(societyId, updates),
@@ -64,30 +56,24 @@ export default function SocietyDetail() {
       alert("Society updated successfully");
     },
   });
-
   const handleSuspend = () => {
     if (!confirm("Suspend this society? They will lose access immediately."))
       return;
     updateMutation.mutate({ "subscription.status": "Suspended" });
   };
-
   const handleActivate = () => {
     updateMutation.mutate({ "subscription.status": "Active" });
   };
-
   const society = societyData?.society;
   const members = membersData?.data || [];
   const bills = billsData?.data || [];
   const transactions = txnData?.data || [];
-
   if (societyLoading) {
     return <div className={styles.loading}>Loading society...</div>;
   }
-
   if (!society) {
     return <div className={styles.error}>Society not found</div>;
   }
-
   return (
     <div className={styles.container}>
       <button
@@ -96,7 +82,6 @@ export default function SocietyDetail() {
       >
         ← Back to Dashboard
       </button>
-
       {/* Header */}
       <div className={styles.header}>
         <div>
@@ -130,7 +115,6 @@ export default function SocietyDetail() {
           )}
         </div>
       </div>
-
       {/* Stats Grid */}
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
@@ -164,7 +148,6 @@ export default function SocietyDetail() {
           </div>
         </div>
       </div>
-
       {/* Society Info */}
       <div className={styles.infoSection}>
         <h2>Society Information</h2>
@@ -201,7 +184,6 @@ export default function SocietyDetail() {
           </div>
         </div>
       </div>
-
       {/* Tabs */}
       <div className={styles.tabs}>
         <button
@@ -229,7 +211,6 @@ export default function SocietyDetail() {
           Transactions ({transactions.length})
         </button>
       </div>
-
       {/* Tab Content */}
       <div className={styles.tabContent}>
         {activeTab === "overview" && (
@@ -244,7 +225,6 @@ export default function SocietyDetail() {
             <p>Created: {new Date(society.createdAt).toLocaleDateString()}</p>
           </div>
         )}
-
         {activeTab === "members" && (
           <table className={styles.table}>
             <thead>
@@ -291,7 +271,6 @@ export default function SocietyDetail() {
             </tbody>
           </table>
         )}
-
         {activeTab === "bills" && (
           <table className={styles.table}>
             <thead>
@@ -322,7 +301,6 @@ export default function SocietyDetail() {
             </tbody>
           </table>
         )}
-
         {activeTab === "transactions" && (
           <table className={styles.table}>
             <thead>

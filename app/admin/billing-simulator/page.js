@@ -1,14 +1,10 @@
 "use client";
-
 import { useState, useEffect, useCallback } from "react";
-
 // ── constants ─────────────────────────────────────────────────────────────────
-
 const MONTH_NAMES = [
   "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
-
 const DEFAULT_CONFIG = {
   interestRate: 18,
   gracePeriodDays: 1,
@@ -18,24 +14,19 @@ const DEFAULT_CONFIG = {
   allocationMode: "INTEREST_FIRST",
   charges: 4540,
 };
-
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-
 function fmt(v) {
   return `₹${Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
-
 function fmtDate(iso) {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
   return `${d} ${MONTH_NAMES[parseInt(m)]} ${y}`;
 }
-
 // ── small components ──────────────────────────────────────────────────────────
-
 function Badge({ status }) {
   const map = {
     Paid: "bg-green-100 text-green-800",
@@ -49,7 +40,6 @@ function Badge({ status }) {
     </span>
   );
 }
-
 function PassBadge({ passed }) {
   return (
     <span className={`px-2 py-0.5 rounded text-xs font-bold ${passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
@@ -57,7 +47,6 @@ function PassBadge({ passed }) {
     </span>
   );
 }
-
 function Field({ label, children }) {
   return (
     <div className="flex items-center gap-2">
@@ -66,7 +55,6 @@ function Field({ label, children }) {
     </div>
   );
 }
-
 function NumInput({ value, onChange, className = "" }) {
   return (
     <input type="number" value={value}
@@ -74,7 +62,6 @@ function NumInput({ value, onChange, className = "" }) {
       className={`border border-gray-300 rounded px-2 py-1 text-sm flex-1 ${className}`} />
   );
 }
-
 function DateInput({ value, onChange, className = "" }) {
   return (
     <input type="date" value={value}
@@ -82,9 +69,7 @@ function DateInput({ value, onChange, className = "" }) {
       className={`border border-gray-300 rounded px-2 py-1 text-sm flex-1 ${className}`} />
   );
 }
-
 // ── SETUP SCREEN ──────────────────────────────────────────────────────────────
-
 function SetupScreen({ onStart }) {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [allMembers, setAllMembers] = useState([]);
@@ -93,23 +78,19 @@ function SetupScreen({ onStart }) {
   const [openingPrincipal, setOpeningPrincipal] = useState(0);
   const [openingInterest, setOpeningInterest] = useState(0);
   const [advanceCredit, setAdvanceCredit] = useState(0);
-
   useEffect(() => {
     fetch("/api/billing-simulator/members")
       .then(r => r.json())
       .then(d => { if (d.members) setAllMembers(d.members); })
       .catch(() => {});
   }, []);
-
   const setCfg = (key, val) => setConfig(c => ({ ...c, [key]: val }));
-
   const filtered = allMembers.filter(m =>
     search === "" ||
     m.name?.toLowerCase().includes(search.toLowerCase()) ||
     m.flatNo?.includes(search) ||
     m.wing?.toLowerCase().includes(search.toLowerCase())
   );
-
   function selectMember(m) {
     setMember(m);
     setOpeningPrincipal(m.openingPrincipal || 0);
@@ -117,7 +98,6 @@ function SetupScreen({ onStart }) {
     setAdvanceCredit(m.advanceCredit || 0);
     setSearch("");
   }
-
   function start() {
     if (!member) return;
     onStart({
@@ -134,15 +114,12 @@ function SetupScreen({ onStart }) {
       },
     });
   }
-
   return (
     <div className="max-w-2xl mx-auto space-y-5">
       <h2 className="text-lg font-bold text-gray-800">Step 1 — Setup</h2>
-
       {/* Society Config */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-3">
         <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide mb-1">Society Config</h3>
-
         <Field label="Interest Rate (% p.a.)">
           <NumInput value={config.interestRate} onChange={v => setCfg("interestRate", v)} />
         </Field>
@@ -182,7 +159,6 @@ function SetupScreen({ onStart }) {
       {/* Member selection */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-3">
         <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide mb-1">Select Member</h3>
-
         {member ? (
           <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
             <div>
@@ -211,7 +187,6 @@ function SetupScreen({ onStart }) {
           </div>
         )}
       </div>
-
       {/* Opening balances */}
       {member && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-3">
@@ -227,7 +202,6 @@ function SetupScreen({ onStart }) {
           </Field>
         </div>
       )}
-
       <button onClick={start} disabled={!member}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl text-sm transition-colors">
         Start Simulation →
@@ -235,28 +209,22 @@ function SetupScreen({ onStart }) {
     </div>
   );
 }
-
 // ── RUNNING SCREEN ────────────────────────────────────────────────────────────
-
 function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry, onAddAction, onFinish, loading, error }) {
   const today = todayISO();
   const now = new Date();
   const defaultYear = now.getFullYear();
   const defaultMonth = now.getMonth() + 1;
-
   const [actionType, setActionType] = useState("generate");
-
   // Generate form
   const [genYear, setGenYear] = useState(defaultYear);
   const [genMonth, setGenMonth] = useState(defaultMonth);
   const [genDate, setGenDate] = useState(today);
   const [genCharges, setGenCharges] = useState(config.charges);
-
   // Pay form
   const [payPeriod, setPayPeriod] = useState("");
   const [payDate, setPayDate] = useState(today);
   const [payAmount, setPayAmount] = useState(0);
-
   // Unpaid bills from last snapshot carryOut (or member opening)
   const lastSnap = snapshots[snapshots.length - 1];
   const carryOut = lastSnap?.carryOut || {
@@ -264,12 +232,10 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
     openingInterest: member.openingInterest,
     advanceCredit: member.advanceCredit,
   };
-
   // Unpaid bills across all snapshots (those without full payment)
   const unpaidPeriods = snapshots
     .filter(s => !s.payment || s.bill.status !== "Paid")
     .map(s => s.billPeriodId);
-
   function submitGenerate() {
     onAddAction({
       type: "generate",
@@ -284,7 +250,6 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
     setGenMonth(next);
     setGenYear(nextY);
   }
-
   function submitPay() {
     onAddAction({
       type: "pay",
@@ -293,26 +258,21 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
       amount: parseFloat(payAmount) || 0,
     });
   }
-
   // Auto-select first unpaid period when switching to pay
   useEffect(() => {
     if (actionType === "pay" && unpaidPeriods.length > 0 && !payPeriod) {
       setPayPeriod(unpaidPeriods[0]);
     }
   }, [actionType, unpaidPeriods.length]);
-
   return (
     <div className="grid grid-cols-12 gap-5">
-
       {/* LEFT — action panel */}
       <div className="col-span-4 space-y-4">
-
         {/* Member header */}
         <div className="bg-blue-600 text-white rounded-xl px-4 py-3">
           <div className="font-bold">{member.name}</div>
           <div className="text-blue-200 text-xs">{member.flat}</div>
         </div>
-
         {/* Carry state */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <div className="text-xs font-bold text-gray-500 uppercase mb-2">Current Outstanding</div>
@@ -331,7 +291,6 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
             </div>
           </div>
         </div>
-
         {/* Action toggle */}
         <div className="flex rounded-lg overflow-hidden border border-gray-200">
           <button onClick={() => setActionType("generate")}
@@ -343,7 +302,6 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
             Record Payment
           </button>
         </div>
-
         {/* Generate form */}
         {actionType === "generate" && (
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
@@ -374,7 +332,6 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
             </button>
           </div>
         )}
-
         {/* Pay form */}
         {actionType === "pay" && (
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
@@ -410,33 +367,27 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
             </button>
           </div>
         )}
-
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-700 text-sm">
             {error}
           </div>
         )}
-
         <button onClick={onFinish}
           className="w-full border border-blue-600 text-blue-600 hover:bg-blue-50 font-bold py-2 rounded-xl text-sm">
           View Summary →
         </button>
       </div>
-
       {/* RIGHT — live results */}
       <div className="col-span-8 space-y-4">
-
         {snapshots.length === 0 && (
           <div className="bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center text-gray-400 text-sm">
             Generate the first bill to begin simulation.
           </div>
         )}
-
         {/* Month cards */}
         {snapshots.map((snap, idx) => (
           <MonthCard key={snap.billPeriodId} snap={snap} idx={idx} />
         ))}
-
         {/* Ledger */}
         {ledger.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
@@ -471,15 +422,12 @@ function RunningScreen({ config, member, actions, snapshots, ledger, finalCarry,
     </div>
   );
 }
-
 // ── MONTH CARD ────────────────────────────────────────────────────────────────
-
 function MonthCard({ snap, idx }) {
   const [open, setOpen] = useState(true);
   const b = snap.bill;
   const p = snap.payment;
   const c = snap.closing;
-
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
       <button onClick={() => setOpen(o => !o)}
@@ -496,7 +444,6 @@ function MonthCard({ snap, idx }) {
           <span className="text-gray-400">{open ? "▲" : "▼"}</span>
         </div>
       </button>
-
       {open && (
         <div className="px-5 py-4 space-y-4">
           {/* Bill State — immutable pre-payment snapshot */}
@@ -518,7 +465,6 @@ function MonthCard({ snap, idx }) {
               <Row label="Total Bill Due" val={fmt(b.totalBillDue)} bold />
             </div>
           </div>
-
           {/* Closing State — post-payment snapshot */}
           {p && snap.closing ? (
             <div className="space-y-1">
@@ -557,7 +503,6 @@ function MonthCard({ snap, idx }) {
     </div>
   );
 }
-
 function Row({ label, val, bold, highlight }) {
   const color = highlight === "red" ? "text-red-600" : highlight === "orange" ? "text-orange-500" : highlight === "green" ? "text-green-600" : "text-gray-800";
   return (
@@ -567,12 +512,9 @@ function Row({ label, val, bold, highlight }) {
     </div>
   );
 }
-
 // ── SUMMARY SCREEN ────────────────────────────────────────────────────────────
-
 function SummaryScreen({ config, member, snapshots, ledger, finalCarry, testCases, onReset, onBack }) {
   const allPassed = testCases?.every(t => t.passed);
-
   function downloadLedger() {
     const rows = [
       ["Month", "Due Date", "Principal Due", "Interest Due", "Total Due", "Amount Paid", "Balance", "Status"],
@@ -584,7 +526,6 @@ function SummaryScreen({ config, member, snapshots, ledger, finalCarry, testCase
     const a = document.createElement("a"); a.href = url; a.download = `ledger_${member.flat}_${Date.now()}.csv`; a.click();
     URL.revokeObjectURL(url);
   }
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -595,7 +536,6 @@ function SummaryScreen({ config, member, snapshots, ledger, finalCarry, testCase
           <button onClick={onReset} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">New Simulation</button>
         </div>
       </div>
-
       {/* Final balances */}
       {finalCarry && (
         <div className="grid grid-cols-3 gap-4">
@@ -613,14 +553,12 @@ function SummaryScreen({ config, member, snapshots, ledger, finalCarry, testCase
           </div>
         </div>
       )}
-
       {/* Month-by-month */}
       <div className="space-y-3">
         {snapshots.map((snap, idx) => (
           <MonthCard key={snap.billPeriodId} snap={snap} idx={idx} />
         ))}
       </div>
-
       {/* Test cases */}
       {testCases?.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -648,7 +586,6 @@ function SummaryScreen({ config, member, snapshots, ledger, finalCarry, testCase
           </div>
         </div>
       )}
-
       {/* Full ledger */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="text-xs font-bold text-gray-500 uppercase mb-3">Monthly Outstanding Summary</div>
@@ -684,9 +621,7 @@ function SummaryScreen({ config, member, snapshots, ledger, finalCarry, testCase
     </div>
   );
 }
-
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
-
 export default function BillingSimulatorPage() {
   const [step, setStep] = useState("setup"); // "setup" | "running" | "summary"
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -700,7 +635,6 @@ export default function BillingSimulatorPage() {
   const [error, setError] = useState(null);
   const [realMode, setRealMode] = useState(false);
   const [realLog, setRealLog] = useState([]);
-
   async function callSimulator(allActions, cfg, mem) {
     if (allActions.length === 0) {
       setSnapshots([]);
@@ -729,7 +663,6 @@ export default function BillingSimulatorPage() {
       setLoading(false);
     }
   }
-
   async function callRealGenerate(action) {
     const res = await fetch("/api/billing-simulator/generate-real", {
       method: "POST",
@@ -745,7 +678,6 @@ export default function BillingSimulatorPage() {
     if (!res.ok || !data.success) throw new Error(data.error || "Real generate failed");
     return data;
   }
-
   async function callRealPay(action) {
     const res = await fetch("/api/billing-simulator/pay-real", {
       method: "POST",
@@ -761,7 +693,6 @@ export default function BillingSimulatorPage() {
     if (!res.ok || !data.success) throw new Error(data.error || "Real pay failed");
     return data;
   }
-
   function handleStart({ config: cfg, member: mem }) {
     setConfig(cfg);
     setMember(mem);
@@ -774,11 +705,9 @@ export default function BillingSimulatorPage() {
     setRealLog([]);
     setStep("running");
   }
-
   async function handleAddAction(action) {
     const next = [...actions, action];
     setActions(next);
-
     if (realMode) {
       try {
         let result;
@@ -794,18 +723,14 @@ export default function BillingSimulatorPage() {
         setError(`Real DB write failed: ${e.message}`);
       }
     }
-
     callSimulator(next, config, member);
   }
-
   function handleFinish() {
     setStep("summary");
   }
-
   function handleBack() {
     setStep("running");
   }
-
   function handleReset() {
     setStep("setup");
     setMember(null);
@@ -818,11 +743,9 @@ export default function BillingSimulatorPage() {
     setRealMode(false);
     setRealLog([]);
   }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-6">
-
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -858,7 +781,6 @@ export default function BillingSimulatorPage() {
             )}
           </div>
         </div>
-
         {/* Real Mode warning banner */}
         {realMode && step === "running" && (
           <div className="mb-4 bg-red-50 border border-red-300 rounded-xl px-5 py-3 flex items-start gap-3">
@@ -869,7 +791,6 @@ export default function BillingSimulatorPage() {
             </div>
           </div>
         )}
-
         {/* Real Mode activity log */}
         {realMode && realLog.length > 0 && step === "running" && (
           <div className="mb-4 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
@@ -889,11 +810,9 @@ export default function BillingSimulatorPage() {
             </div>
           </div>
         )}
-
         {step === "setup" && (
           <SetupScreen onStart={handleStart} />
         )}
-
         {step === "running" && (
           <RunningScreen
             config={config}
@@ -908,7 +827,6 @@ export default function BillingSimulatorPage() {
             error={error}
           />
         )}
-
         {step === "summary" && (
           <SummaryScreen
             config={config}
@@ -921,7 +839,6 @@ export default function BillingSimulatorPage() {
             onBack={handleBack}
           />
         )}
-
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const SocietySchema = new mongoose.Schema(
   {
     // Basic Information
@@ -9,15 +8,12 @@ const SocietySchema = new mongoose.Schema(
     address: { type: String, trim: true },
     panNo: { type: String, trim: true },
     tanNo: { type: String, trim: true },
-
     // Contact Details
     personOfContact: { type: String, trim: true },
     contactEmail: { type: String, trim: true },
     contactPhone: { type: String, trim: true },
-
     // Carpet Area
     carpetAreaSqft: { type: Number, default: 0 },
-
     // Bill Template - UPDATED STRUCTURE
     billTemplate: {
       type: {
@@ -29,10 +25,8 @@ const SocietySchema = new mongoose.Schema(
       pdfUrl: { type: String },
       hasFormFields: { type: Boolean, default: false },
       detectedFields: [{ type: String }],
-
       // For uploaded image
       imageUrl: { type: String },
-
       // For custom design
       design: {
         type: mongoose.Schema.Types.Mixed,
@@ -56,18 +50,15 @@ const SocietySchema = new mongoose.Schema(
         showSignature: Boolean,
         signatureLabel: String,
       },
-
       // Common assets
       logoUrl: { type: String },
       signatureUrl: { type: String },
-
       uploadedAt: { type: Date },
       uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       // OLD FIELDS - keep for backward compatibility
       fileName: { type: String },
       filePath: { type: String },
     },
-
     // Configuration
     config: {
       // billing settings (non-charge)
@@ -112,7 +103,6 @@ const SocietySchema = new mongoose.Schema(
         enum: ["MONTHLY"],
         default: "MONTHLY",
       },
-
       // Scheduled bill generation/push
       // billGenerationDay: day of month admin generates bills (e.g., 1 = 1st of month)
       // billPushDay: day of month bills become visible to members / go Unpaid (e.g., 5 = 5th)
@@ -206,10 +196,8 @@ const SocietySchema = new mongoose.Schema(
     deletedAt: { type: Date },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     deletionReason: { type: String },
-
     // Config versioning
     configVersion: { type: Number, default: 1 },
-
     // Onboarding tracking
     onboarding: {
       billHistoryImported: { type: Boolean, default: false },
@@ -217,13 +205,11 @@ const SocietySchema = new mongoose.Schema(
       billHistoryPeriods: [{ type: String }], // e.g. ["2025-04", "2025-05", ...]
       joinPeriodId: { type: String, default: null }, // YYYY-MM when society joined platform
     },
-
     // Matrix Config
     matrixConfig: {
       L: { type: Number, default: 0 },
       R: { type: Number, default: 0 },
     },
-
     // ❌ FIX #2: REMOVED billingHeads[] array
     // Use BillingHead model as SINGLE SOURCE OF TRUTH:
     // Query: BillingHead.find({ societyId })
@@ -232,7 +218,6 @@ const SocietySchema = new mongoose.Schema(
     timestamps: true,
   },
 );
-
 // Pre-save hook
 // Clamp a day value to the last valid day of a given month/year
 function clampDay(day, month, year) {
@@ -241,7 +226,6 @@ function clampDay(day, month, year) {
   const lastDay = new Date(year, month, 0).getDate();
   return Math.min(day, lastDay);
 }
-
 SocietySchema.pre("save", function (next) {
   if (this.isModified("config") || this.isModified("matrixConfig")) {
     this.configVersion += 1;
@@ -269,10 +253,8 @@ SocietySchema.pre("save", function (next) {
   }
   next();
 });
-
 // Indexes
 SocietySchema.index({ isDeleted: 1 });
 SocietySchema.index({ "subscription.status": 1 });
-
 export default mongoose.models.Society ||
   mongoose.model("Society", SocietySchema);

@@ -4,7 +4,6 @@ import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import BillingHead from "@/models/BillingHead";
 import Society from "@/models/Society";
 import cache from "@/lib/cache";
-
 export async function POST(request) {
   try {
     await connectDB();
@@ -14,18 +13,14 @@ export async function POST(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     // ← REMOVED: duplicate require("@/models/Society")
     // ← REMOVED: the block that returns 400 if existing > 0
     // Instead: DELETE corrupt docs and re-seed cleanly
-
     const society = await Society.findById(decoded.societyId).lean();
     if (!society)
       return NextResponse.json({ error: "Society not found" }, { status: 404 });
-
     // Wipe existing (possibly corrupt) heads for this society
     await BillingHead.deleteMany({ societyId: decoded.societyId });
-
     const configCharges = society.config?.charges || [];
     // society.config.charges uses { label, value } — but also check { name, amount } variants
     const headsToCreate = configCharges
@@ -39,7 +34,6 @@ export async function POST(request) {
         order: i + 1,
         societyId: decoded.societyId,
       }));
-
     if (headsToCreate.length === 0) {
       headsToCreate.push(
         {
@@ -60,12 +54,9 @@ export async function POST(request) {
         },
       );
     }
-
     const created = await BillingHead.insertMany(headsToCreate);
-
     await cache.del(`billing-heads:list:${decoded.societyId}`);
     await cache.del(`society-config:${decoded.societyId}`);
-
     return NextResponse.json({
       success: true,
       message: `Migrated ${created.length} billing heads from config`,

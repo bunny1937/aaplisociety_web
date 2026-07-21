@@ -4,26 +4,20 @@ import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Transaction from "@/models/Transaction";
 import Member from "@/models/Member";
 import cache from "@/lib/cache";
-
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const { searchParams } = new URL(request.url);
-
     // Base query
     const query = { societyId: decoded.societyId };
-
     // Quick filters
     const memberId = searchParams.get("memberId");
     const category = searchParams.get("category");
@@ -44,16 +38,13 @@ export async function GET(request) {
     const createdBy = searchParams.get("createdBy");
     const includeReversed = searchParams.get("includeReversed") === "true";
     const onlyReversed = searchParams.get("onlyReversed") === "true";
-
     // Pagination & grouping
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "500");
     const groupBy = searchParams.get("groupBy"); // member | category | date
     const sortBy = searchParams.get("sortBy") || "date";
     const sortOrder = searchParams.get("sortOrder") === "asc" ? 1 : -1;
-
     // Apply filters
-
     // Member filter (single or multiple)
     if (memberId && memberId !== "all") {
       if (memberId.includes(",")) {
@@ -62,15 +53,12 @@ export async function GET(request) {
         query.memberId = memberId;
       }
     }
-
     if (category && category !== "all") {
       query.category = category;
     }
-
     if (txnType && txnType !== "all") {
       query.type = txnType;
     }
-
     // If month/year filters are used, they override startDate/endDate
     if (filterMonth && filterYear) {
       // Both selected: specific month of specific year
@@ -97,43 +85,35 @@ export async function GET(request) {
       if (startDate) {
         query.date = { ...query.date, $gte: new Date(startDate) };
       }
-
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
         query.date = { ...query.date, $lte: end };
       }
     }
-
     if (billPeriod && billPeriod !== "all") {
       query.billPeriodId = billPeriod;
     }
     // Advanced filters
-
     if (paymentMode && paymentMode !== "all") {
       query.paymentMode = paymentMode;
     }
-
     if (financialYear && financialYear !== "all") {
       query.financialYear = financialYear;
     }
-
     if (createdBy && createdBy !== "all") {
       query.createdBy = createdBy;
     }
-
     if (onlyReversed) {
       query.isReversed = true;
     } else if (!includeReversed) {
       query.isReversed = false;
     }
-
     if (minAmount || maxAmount) {
       query.amount = {};
       if (minAmount) query.amount.$gte = parseFloat(minAmount);
       if (maxAmount) query.amount.$lte = parseFloat(maxAmount);
     }
-
     // Wing / Room filters (require member lookup for advanced cases)
     let memberFilter = null;
     if (wing || roomNoPattern) {
@@ -161,7 +141,6 @@ export async function GET(request) {
           memberFilter.roomNo = roomNoPattern;
         }
       }
-
       const matchingMembers = await Member.find(memberFilter)
         .select("_id")
         .lean();
@@ -187,7 +166,6 @@ export async function GET(request) {
         });
       }
     }
-
     // Fetch transactions with sorting
     const sortField =
       sortBy === "amount"
@@ -206,12 +184,10 @@ export async function GET(request) {
     const cacheKey = isSimpleFetch
       ? `ledger:fetch:${decoded.societyId}:${memberId}`
       : null;
-
     if (cacheKey) {
       const cached = await cache.get(cacheKey);
       if (cached) return NextResponse.json(cached);
     }
-
     const transactions = await Transaction.find(query)
       .populate("memberId", "roomNo wing ownerName areaSqFt")
       .populate("createdBy", "name email role")
@@ -219,26 +195,20 @@ export async function GET(request) {
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
-
     const totalCount = await Transaction.countDocuments(query);
-
     // Calculate summary
     const totalDebit = transactions
       .filter((t) => t.type === "Debit")
       .reduce((sum, t) => sum + t.amount, 0);
-
     const totalCredit = transactions
       .filter((t) => t.type === "Credit")
       .reduce((sum, t) => sum + t.amount, 0);
-
     // Opening balance + net balance
     let openingBalance = 0;
     let netBalance = 0;
-
     if (memberId && memberId !== "all" && !memberId.includes(",")) {
       const member = await Member.findById(memberId).lean();
       openingBalance = member?.openingBalance || 0;
-
       if (transactions.length > 0) {
         netBalance =
           transactions[transactions.length - 1].balanceAfterTransaction;
@@ -248,7 +218,6 @@ export async function GET(request) {
     } else {
       netBalance = totalDebit - totalCredit;
     }
-
     // Apply balance status filter (post-query filter)
     let finalTransactions = transactions;
     if (balanceStatus && balanceStatus !== "all") {
@@ -260,7 +229,6 @@ export async function GET(request) {
         return true;
       });
     }
-
     // Grouping logic
     let groupedData = null;
     if (groupBy) {
@@ -282,7 +250,6 @@ export async function GET(request) {
             "0",
           )}`;
         }
-
         if (!groupedData[key]) {
           groupedData[key] = {
             transactions: [],
@@ -295,7 +262,6 @@ export async function GET(request) {
         else groupedData[key].totalCredit += t.amount;
       });
     }
-
     const responseData = {
       success: true,
       transactions: finalTransactions,

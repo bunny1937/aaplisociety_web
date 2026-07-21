@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -21,9 +20,7 @@ import {
 } from "@/components/visitor/ui";
 import OfflineEntryForm from "@/components/visitor/OfflineEntryForm";
 import OutboxStatus from "@/components/visitor/OutboxStatus";
-
 const POLL_MS = 12000;
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -37,7 +34,6 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 // ---- styles ----
 const S = {
   loadingWrap: { display: "flex", justifyContent: "center", padding: 60 },
@@ -84,7 +80,6 @@ const S = {
   expTag: { color: tokens.danger, fontWeight: 700, fontSize: 12, marginLeft: 8 },
   sosP: { color: tokens.sub, fontSize: 14, marginTop: 0, marginBottom: 14 },
 };
-
 export default function SecurityDashboardPage() {
   const [stats, setStats] = useState(null);
   const [pending, setPending] = useState([]);
@@ -97,9 +92,7 @@ export default function SecurityDashboardPage() {
   const [offlineOpen, setOfflineOpen] = useState(false);
   const [sosNote, setSosNote] = useState("");
   const [sosBusy, setSosBusy] = useState(false);
-
   const notify = (message, type = "info") => setToast({ message, type });
-
   const load = useCallback(async (silent) => {
     if (!silent) setLoading(true);
     try {
@@ -126,13 +119,11 @@ export default function SecurityDashboardPage() {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     load();
     const t = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(t);
   }, [load]);
-
   // Every action is one tap. The backend does the real work; the guard just
   // sees the result as a toast and the list refreshes.
   const act = async (id, kind) => {
@@ -167,7 +158,6 @@ export default function SecurityDashboardPage() {
       setBusyId(null);
     }
   };
-
   const sendSos = async () => {
     setSosBusy(true);
     try {
@@ -181,7 +171,6 @@ export default function SecurityDashboardPage() {
       setSosBusy(false);
     }
   };
-
   const onOfflineDone = (outcome) => {
     setOfflineOpen(false);
     if (outcome === "sent")
@@ -193,7 +182,6 @@ export default function SecurityDashboardPage() {
       );
     load(true);
   };
-
   const statList = stats
     ? [
         { label: "Inside now", value: stats.insideNow ?? 0, color: tokens.success, icon: "\uD83C\uDFE0" },
@@ -204,7 +192,6 @@ export default function SecurityDashboardPage() {
         { label: "Rejected today", value: stats.rejectedToday ?? 0, color: tokens.danger, icon: "\u26D4" },
       ]
     : [];
-
   const renderRow = (v, kind) => {
     const id = v._id || v.id;
     const waitSecs = Math.floor((Date.now() - new Date(v.createdAt).getTime()) / 1000);
@@ -218,11 +205,9 @@ export default function SecurityDashboardPage() {
         ? { background: "#fffbeb", borderRadius: 8, padding: "14px 10px" }
         : {}),
     };
-
     const flat =
       (v.memberId && v.memberId.wing ? v.memberId.wing + "-" : "") +
       ((v.memberId && v.memberId.flatNo) || "\u2014");
-
     return (
       <div key={id} style={rowStyle}>
         <Avatar src={v.photo} name={v.name} />
@@ -241,10 +226,8 @@ export default function SecurityDashboardPage() {
               ? "in " + timeAgo(v.entryTime || v.updatedAt)
               : timeAgo(v.createdAt)}
           </div>
-
           <div style={S.actions}>
             <StatusBadge status={v.status} />
-
             {kind === "pending" &&
               (() => {
                 const phone =
@@ -294,7 +277,6 @@ export default function SecurityDashboardPage() {
                   </>
                 );
               })()}
-
             {kind === "approved" && (
               <Button
                 size="sm"
@@ -305,7 +287,6 @@ export default function SecurityDashboardPage() {
                 ✅ Allow in
               </Button>
             )}
-
             {kind === "inside" && (
               <Button
                 size="sm"
@@ -321,7 +302,6 @@ export default function SecurityDashboardPage() {
       </div>
     );
   };
-
   return (
     <div>
       <PageHeader
@@ -341,9 +321,7 @@ export default function SecurityDashboardPage() {
           </>
         }
       />
-
       <OutboxStatus />
-
       {loading && !stats ? (
         <div style={S.loadingWrap}>
           <Spinner size={30} />
@@ -355,7 +333,6 @@ export default function SecurityDashboardPage() {
               <StatCard key={s.label} {...s} />
             ))}
           </div>
-
           <div style={S.colsWrap}>
             <Card>
               <h3 style={S.sectionTitle}>
@@ -378,7 +355,6 @@ export default function SecurityDashboardPage() {
                 pending.map((v) => renderRow(v, "pending"))
               )}
             </Card>
-
             <Card style={approved.length > 0 ? { borderColor: "#10b981", borderWidth: 2 } : {}}>
               <h3 style={S.sectionTitle}>
                 Resident approved — let them in ({approved.length})
@@ -396,7 +372,6 @@ export default function SecurityDashboardPage() {
                 approved.map((v) => renderRow(v, "approved"))
               )}
             </Card>
-
             <Card>
               <h3 style={S.sectionTitle}>Currently inside ({inside.length})</h3>
               <p style={S.helpText}>
@@ -415,7 +390,6 @@ export default function SecurityDashboardPage() {
           </div>
         </>
       )}
-
       <Modal
         open={offlineOpen}
         title="📝 Offline person entry"
@@ -428,7 +402,6 @@ export default function SecurityDashboardPage() {
         </p>
         <OfflineEntryForm onDone={onOfflineDone} />
       </Modal>
-
       <Modal
         open={sosOpen}
         title="🚨 Raise SOS alert"
@@ -456,7 +429,6 @@ export default function SecurityDashboardPage() {
           />
         </Field>
       </Modal>
-
       <Toast {...(toast || {})} onClose={() => setToast(null)} />
     </div>
   );

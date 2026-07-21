@@ -9,7 +9,6 @@ import AuditLog from '@/models/AuditLog';
 import BillingHead from '@/models/BillingHead';
 import Receipt from '@/models/Receipt';
 import { requireRoles } from '@/lib/authz';
-
 const modelMap = {
   society: Society,
   members: Member,
@@ -20,34 +19,27 @@ const modelMap = {
   auditlogs: AuditLog,
   billingheads: BillingHead
 };
-
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
-    
     const auth = requireRoles(request, ['Admin']);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { entity } =  await params;
     const Model = modelMap[entity];
-    
     if (!Model) {
       return NextResponse.json({ error: 'Invalid entity' }, { status: 400 });
     }
-
     // Prevent deleting society entity
     if (entity === 'society') {
       return NextResponse.json({ 
         error: 'Cannot reset society data. Please delete individual fields instead.' 
       }, { status: 403 });
     }
-
     // Delete all records for this society
     const result = await Model.deleteMany({
       societyId: decoded.societyId
     });
-
     // Log the reset action
     await AuditLog.create({
       userId: decoded.userId,
@@ -56,13 +48,11 @@ export async function DELETE(request, { params }) {
       oldData: { entity, deletedCount: result.deletedCount },
       timestamp: new Date()
     });
-
     return NextResponse.json({ 
       success: true, 
       deleted: result.deletedCount,
       message: `Successfully reset ${entity}. Deleted ${result.deletedCount} records.`
     });
-
   } catch (error) {
     console.error('Reset error:', error);
     return NextResponse.json({ 

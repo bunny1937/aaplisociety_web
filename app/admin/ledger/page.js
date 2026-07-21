@@ -1,15 +1,12 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Dashboard.module.css";
 import ledgerStyles from "@/styles/Ledger.module.css";
 import Select from "react-select";
-
 export default function UltraAdvancedLedgerPage() {
   const queryClient = useQueryClient();
-
   // ========== STATE MANAGEMENT ==========
   const [filters, setFilters] = useState({
     memberId: "all",
@@ -25,7 +22,6 @@ export default function UltraAdvancedLedgerPage() {
     maxAmount: "",
     balanceStatus: "all",
   });
-
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -38,7 +34,6 @@ export default function UltraAdvancedLedgerPage() {
   const [savedViews, setSavedViews] = useState([]);
   const [newViewName, setNewViewName] = useState("");
   const [showColumnToggle, setShowColumnToggle] = useState(false);
-
   const [visibleColumns, setVisibleColumns] = useState({
     date: true,
     txnId: true,
@@ -53,13 +48,11 @@ export default function UltraAdvancedLedgerPage() {
     billPeriod: true,
     financialYear: false,
   });
-
   // ========== DATA FETCHING ==========
   const { data: membersData } = useQuery({
     queryKey: ["members"],
     queryFn: () => apiClient.get("/api/members/list?limit=1000"),
   });
-
   const buildQueryString = () => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
@@ -74,7 +67,6 @@ export default function UltraAdvancedLedgerPage() {
     params.append("limit", limit);
     return params.toString();
   };
-
   const {
     data: ledgerData,
     isLoading,
@@ -83,7 +75,6 @@ export default function UltraAdvancedLedgerPage() {
     queryKey: ["ledger", filters, sortBy, sortOrder, groupBy, page, limit],
     queryFn: () => apiClient.get(`/api/ledger/fetch?${buildQueryString()}`),
   });
-
   // ========== ANALYTICS CALCULATIONS ==========
   const analytics = {
     totalTransactions: ledgerData?.transactions?.length || 0,
@@ -92,7 +83,6 @@ export default function UltraAdvancedLedgerPage() {
     netBalance: ledgerData?.summary?.netBalance || 0,
     openingBalance: ledgerData?.summary?.openingBalance || 0,
   };
-
   // Interest-specific analytics
   const interestAnalytics = {
     totalInterest: 0,
@@ -104,18 +94,15 @@ export default function UltraAdvancedLedgerPage() {
     topInterestPayers: [],
     interestTrend: [],
   };
-
   if (ledgerData?.transactions) {
     const interestTransactions = ledgerData.transactions.filter(
       (t) => t.category === "Interest"
     );
-
     interestAnalytics.totalInterest = interestTransactions.reduce(
       (sum, t) => sum + t.amount,
       0
     );
     interestAnalytics.interestCount = interestTransactions.length;
-
     if (interestTransactions.length > 0) {
       interestAnalytics.avgInterest =
         interestAnalytics.totalInterest / interestTransactions.length;
@@ -125,7 +112,6 @@ export default function UltraAdvancedLedgerPage() {
       interestAnalytics.minInterest = Math.min(
         ...interestTransactions.map((t) => t.amount)
       );
-
       // Group by month
       interestTransactions.forEach((t) => {
         const date = new Date(t.date);
@@ -141,7 +127,6 @@ export default function UltraAdvancedLedgerPage() {
         interestAnalytics.interestByMonth[monthKey].count += 1;
         interestAnalytics.interestByMonth[monthKey].total += t.amount;
       });
-
       // Top interest payers
       const interestByMember = {};
       interestTransactions.forEach((t) => {
@@ -158,11 +143,9 @@ export default function UltraAdvancedLedgerPage() {
         interestByMember[key].count += 1;
         interestByMember[key].transactions.push(t);
       });
-
       interestAnalytics.topInterestPayers = Object.values(interestByMember)
         .sort((a, b) => b.totalInterest - a.totalInterest)
         .slice(0, 10);
-
       // Interest trend (last 6 months)
       const months = Object.keys(interestAnalytics.interestByMonth)
         .sort()
@@ -173,7 +156,6 @@ export default function UltraAdvancedLedgerPage() {
       }));
     }
   }
-
   // Payment analytics
   const paymentAnalytics = {
     cashPayments: 0,
@@ -182,7 +164,6 @@ export default function UltraAdvancedLedgerPage() {
     upiPayments: 0,
     totalPayments: 0,
   };
-
   if (ledgerData?.transactions) {
     const payments = ledgerData.transactions.filter(
       (t) => t.category === "Payment"
@@ -208,13 +189,11 @@ export default function UltraAdvancedLedgerPage() {
       }
     });
   }
-
   // ========== HANDLERS ==========
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
     setPage(1); // Reset to first page
   };
-
   const resetFilters = () => {
     setFilters({
       memberId: "all",
@@ -233,7 +212,6 @@ export default function UltraAdvancedLedgerPage() {
     setSearchTerm("");
     setPage(1);
   };
-
   const fetchTransactionDetails = async (transactionId) => {
     try {
       const data = await apiClient.get(
@@ -246,12 +224,10 @@ export default function UltraAdvancedLedgerPage() {
       alert("Failed to fetch transaction details");
     }
   };
-
   const exportData = (format) => {
     const queryString = buildQueryString();
     window.open(`/api/ledger/export?${queryString}&format=${format}`, "_blank");
   };
-
   const saveCurrentView = () => {
     if (!newViewName.trim()) {
       alert("Please enter a view name");
@@ -269,7 +245,6 @@ export default function UltraAdvancedLedgerPage() {
     setNewViewName("");
     alert(`View "${newViewName}" saved!`);
   };
-
   const loadSavedView = (view) => {
     setFilters(view.filters);
     setSortBy(view.sortBy);
@@ -278,16 +253,13 @@ export default function UltraAdvancedLedgerPage() {
     setVisibleColumns(view.visibleColumns);
     setPage(1);
   };
-
   const deleteSavedView = (index) => {
     const newViews = savedViews.filter((_, i) => i !== index);
     setSavedViews(newViews);
   };
-
   const toggleColumn = (column) => {
     setVisibleColumns((prev) => ({ ...prev, [column]: !prev[column] }));
   };
-
   const handleSort = (field) => {
     if (sortBy === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -296,7 +268,6 @@ export default function UltraAdvancedLedgerPage() {
       setSortOrder("asc");
     }
   };
-
   // Filter transactions by search term
   const filteredTransactions = ledgerData?.transactions?.filter((txn) => {
     if (!searchTerm) return true;
@@ -309,7 +280,6 @@ export default function UltraAdvancedLedgerPage() {
       txn.category?.toLowerCase().includes(search)
     );
   });
-
   // ========== MEMBER OPTIONS FOR SELECT ==========
   const memberOptions = [
     { value: "all", label: "All Members" },
@@ -325,7 +295,6 @@ export default function UltraAdvancedLedgerPage() {
         member,
       })),
   ];
-
   // ========== RENDER ==========
   return (
     <div>
@@ -362,7 +331,6 @@ export default function UltraAdvancedLedgerPage() {
           </button>
         </div>
       </div>
-
       {/* ========== ANALYTICS DASHBOARD ========== */}
       <div className={ledgerStyles.summaryBar}>
         <div
@@ -382,7 +350,6 @@ export default function UltraAdvancedLedgerPage() {
               .length || 0}
           </div>
         </div>
-
         <div
           className={ledgerStyles.summaryCard}
           style={{ borderLeftColor: "#DC2626" }}
@@ -393,7 +360,6 @@ export default function UltraAdvancedLedgerPage() {
           </div>
           <div className={ledgerStyles.summaryBadge}>Money owed by members</div>
         </div>
-
         <div
           className={ledgerStyles.summaryCard}
           style={{ borderLeftColor: "#10B981" }}
@@ -404,7 +370,6 @@ export default function UltraAdvancedLedgerPage() {
           </div>
           <div className={ledgerStyles.summaryBadge}>Payments received</div>
         </div>
-
         <div
           className={ledgerStyles.summaryCard}
           style={{
@@ -429,7 +394,6 @@ export default function UltraAdvancedLedgerPage() {
           </div>
         </div>
       </div>
-
       {/* ========== INTEREST ANALYTICS ========== */}
       <div
         style={{
@@ -489,7 +453,6 @@ export default function UltraAdvancedLedgerPage() {
                   {interestAnalytics.interestCount} transactions
                 </div>
               </div>
-
               <div
                 style={{
                   padding: "1.25rem",
@@ -530,7 +493,6 @@ export default function UltraAdvancedLedgerPage() {
                   per transaction
                 </div>
               </div>
-
               <div
                 style={{
                   padding: "1.25rem",
@@ -569,7 +531,6 @@ export default function UltraAdvancedLedgerPage() {
                 </div>
               </div>
             </div>
-
             {/* Interest Trend Chart */}
             {interestAnalytics.interestTrend.length > 0 && (
               <div style={{ marginTop: "1.5rem" }}>
@@ -646,7 +607,6 @@ export default function UltraAdvancedLedgerPage() {
             )}
           </div>
         </div>
-
         {/* Payment Mode Distribution */}
         <div className={styles.contentCard}>
           <div className={styles.cardHeader}>
@@ -747,7 +707,6 @@ export default function UltraAdvancedLedgerPage() {
           </div>
         </div>
       </div>
-
       {/* ========== TOP INTEREST PAYERS ========== */}
       {interestAnalytics.topInterestPayers.length > 0 && (
         <div className={styles.contentCard} style={{ marginBottom: "1.5rem" }}>
@@ -867,7 +826,6 @@ export default function UltraAdvancedLedgerPage() {
           </div>
         </div>
       )}
-
       {/* ========== SAVED VIEWS ========== */}
       {savedViews.length > 0 && (
         <div className={ledgerStyles.savedViewsPanel}>
@@ -882,7 +840,6 @@ export default function UltraAdvancedLedgerPage() {
           </div>
         </div>
       )}
-
       {/* ========== FILTERS PANEL ========== */}
       <div className={ledgerStyles.filtersPanel}>
         <div className={ledgerStyles.quickFilters}>
@@ -912,7 +869,6 @@ export default function UltraAdvancedLedgerPage() {
               }}
             />
           </div>
-
           <div className={ledgerStyles.filterGroup}>
             <label>Category</label>
             <select
@@ -927,7 +883,6 @@ export default function UltraAdvancedLedgerPage() {
               <option value="Adjustment">Adjustment</option>
             </select>
           </div>
-
           <div className={ledgerStyles.filterGroup}>
             <label>Type</label>
             <select
@@ -940,7 +895,6 @@ export default function UltraAdvancedLedgerPage() {
               <option value="Credit">Credit</option>
             </select>
           </div>
-
           <div className={ledgerStyles.filterGroup}>
             <label>Month</label>
             <select
@@ -969,7 +923,6 @@ export default function UltraAdvancedLedgerPage() {
               ))}
             </select>
           </div>
-
           <div className={ledgerStyles.filterGroup}>
             <label>Year</label>
             <select
@@ -985,7 +938,6 @@ export default function UltraAdvancedLedgerPage() {
               ))}
             </select>
           </div>
-
           <div className={ledgerStyles.filterGroup}>
             <label>Balance Status</label>
             <select
@@ -1002,14 +954,12 @@ export default function UltraAdvancedLedgerPage() {
             </select>
           </div>
         </div>
-
         <button
           onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
           className={ledgerStyles.toggleAdvanced}
         >
           {showAdvancedFilters ? "▲ Hide" : "▼ Show"} Advanced Filters
         </button>
-
         {showAdvancedFilters && (
           <div className={ledgerStyles.advancedFilters}>
             <div className={ledgerStyles.filterGroup}>
@@ -1031,7 +981,6 @@ export default function UltraAdvancedLedgerPage() {
                 <option value="System">System</option>
               </select>
             </div>
-
             <div className={ledgerStyles.filterGroup}>
               <label>Wing</label>
               <select
@@ -1045,7 +994,6 @@ export default function UltraAdvancedLedgerPage() {
                 <option value="C">C</option>
               </select>
             </div>
-
             <div className={ledgerStyles.filterGroup}>
               <label>Start Date</label>
               <input
@@ -1057,7 +1005,6 @@ export default function UltraAdvancedLedgerPage() {
                 className="input"
               />
             </div>
-
             <div className={ledgerStyles.filterGroup}>
               <label>End Date</label>
               <input
@@ -1067,7 +1014,6 @@ export default function UltraAdvancedLedgerPage() {
                 className="input"
               />
             </div>
-
             <div className={ledgerStyles.filterGroup}>
               <label>Min Amount (₹)</label>
               <input
@@ -1080,7 +1026,6 @@ export default function UltraAdvancedLedgerPage() {
                 className="input"
               />
             </div>
-
             <div className={ledgerStyles.filterGroup}>
               <label>Max Amount (₹)</label>
               <input
@@ -1095,7 +1040,6 @@ export default function UltraAdvancedLedgerPage() {
             </div>
           </div>
         )}
-
         <div className={ledgerStyles.filterActions}>
           <button
             onClick={resetFilters}
@@ -1119,7 +1063,6 @@ export default function UltraAdvancedLedgerPage() {
           </button>
         </div>
       </div>
-
       {/* ========== TABLE CONTROLS ========== */}
       <div className={ledgerStyles.tableControls}>
         <div className={ledgerStyles.searchBox}>
@@ -1130,7 +1073,6 @@ export default function UltraAdvancedLedgerPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-
         <div className={ledgerStyles.groupByControl}>
           <label>Group By:</label>
           <select
@@ -1144,7 +1086,6 @@ export default function UltraAdvancedLedgerPage() {
             <option value="date">Month</option>
           </select>
         </div>
-
         <div className={ledgerStyles.sortControl}>
           <label>Sort:</label>
           <select
@@ -1162,7 +1103,6 @@ export default function UltraAdvancedLedgerPage() {
             {sortOrder === "asc" ? "↑" : "↓"}
           </button>
         </div>
-
         <details className={ledgerStyles.columnToggle}>
           <summary>⚙️ Columns</summary>
           <div className={ledgerStyles.columnList}>
@@ -1180,7 +1120,6 @@ export default function UltraAdvancedLedgerPage() {
           </div>
         </details>
       </div>
-
       {/* ========== LEDGER TABLE ========== */}
       <div className={styles.contentCard}>
         {isLoading ? (
@@ -1434,7 +1373,6 @@ export default function UltraAdvancedLedgerPage() {
                 </tbody>
               </table>
             </div>
-
             {/* Pagination */}
             <div className={ledgerStyles.pagination}>
               <button
@@ -1457,7 +1395,6 @@ export default function UltraAdvancedLedgerPage() {
           </>
         )}
       </div>
-
       {/* ========== TRANSACTION DETAIL MODAL ========== */}
       {showDetailModal && selectedTransaction && (
         <div
@@ -1685,7 +1622,6 @@ export default function UltraAdvancedLedgerPage() {
                   </tbody>
                 </table>
               </div>
-
               {/* Billing Breakdown */}
               {selectedTransaction.breakdown &&
                 selectedTransaction.breakdown.length > 0 && (
@@ -1746,7 +1682,6 @@ export default function UltraAdvancedLedgerPage() {
                     </table>
                   </div>
                 )}
-
               {/* Audit Trail */}
               {selectedTransaction.auditTrail &&
                 selectedTransaction.auditTrail.length > 0 && (

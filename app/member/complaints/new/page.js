@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "@/styles/CreateComplaint.module.css";
-
 const CATEGORIES = [
   { value: "noise", label: "🔊 Noise" },
   { value: "parking", label: "🚗 Parking" },
@@ -15,7 +14,6 @@ const CATEGORIES = [
   { value: "pets", label: "🐾 Pets" },
   { value: "other", label: "📋 Other" },
 ];
-
 export default function CreateComplaintPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -26,12 +24,10 @@ export default function CreateComplaintPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
-
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
-
   const validate = () => {
     const e = {};
     if (!form.category) e.category = "Please select a category";
@@ -44,7 +40,6 @@ export default function CreateComplaintPage() {
       e.description = "Description must be under 1000 characters";
     return e;
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
@@ -68,7 +63,6 @@ export default function CreateComplaintPage() {
       setLoading(false);
     }
   };
-
   return (
     <div className={styles.page}>
       {toast && (
@@ -103,7 +97,6 @@ export default function CreateComplaintPage() {
               <span className={styles.error}>{errors.category}</span>
             )}
           </div>
-
           <div className={styles.field}>
             <label>
               Title *{" "}
@@ -121,7 +114,6 @@ export default function CreateComplaintPage() {
               <span className={styles.error}>{errors.title}</span>
             )}
           </div>
-
           <div className={styles.field}>
             <label>
               Description *{" "}
@@ -143,12 +135,10 @@ export default function CreateComplaintPage() {
               <span className={styles.error}>{errors.description}</span>
             )}
           </div>
-
           <div className={styles.notice}>
             🔒 Your complaint is submitted anonymously as a random pseudonym.
             Max 2 per day, 15 min cooldown.
           </div>
-
           <div style={{ background: "#FEF3C7", border: "1px solid #F59E0B", borderRadius: "8px", padding: "12px 16px", fontSize: "0.85rem", color: "#92400E", marginBottom: "1rem" }}>
             🔒 Complaint submission is currently disabled. Contact your society admin directly.
           </div>

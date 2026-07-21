@@ -1,40 +1,32 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
 const H = {};
-
 async function adminGet(url) {
   const res = await fetch(url, { credentials: "include", headers: H });
   if (!res.ok) throw new Error((await res.json()).error || "Request failed");
   return res.json();
 }
-
 async function adminPost(url, body) {
   const res = await fetch(url, { method: "POST", credentials: "include", headers: { ...H, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error((await res.json()).error || "Request failed");
   return res.json();
 }
-
 export default function AdminDataBrowserPage() {
   const [selectedSociety, setSelectedSociety] = useState('');
   const [selectedCollection, setSelectedCollection] = useState('bills');
   const [selectedItems, setSelectedItems] = useState([]);
   const queryClient = useQueryClient();
-
   const { data: societiesData } = useQuery({
     queryKey: ['admin-societies'],
     queryFn: () => adminGet('/api/admin/societies'),
   });
-
   const { data: collectionData, isLoading } = useQuery({
     queryKey: ['admin-data', selectedSociety, selectedCollection],
     queryFn: () => adminGet(`/api/admin/data-browser?societyId=${selectedSociety}&collection=${selectedCollection}`),
     enabled: !!selectedSociety && !!selectedCollection,
   });
-
   const data = collectionData?.data || [];
-
   const deleteMutation = useMutation({
     mutationFn: (payload) => adminPost('/api/admin/data-browser', payload),
     onSuccess: (response) => {
@@ -43,23 +35,19 @@ export default function AdminDataBrowserPage() {
       queryClient.invalidateQueries(['admin-data']);
     }
   });
-
   const handleDelete = () => {
     if (selectedItems.length === 0) {
       alert('Please select items to delete');
       return;
     }
-
     const reason = prompt('Reason for deletion (required):');
     if (!reason || reason.trim() === '') {
       alert('Deletion reason is required');
       return;
     }
-
     if (!confirm(`⚠️ Delete ${selectedItems.length} items?\n\n✅ They will be:\n- Exported to Archive\n- Kept for 90 days\n- Auto-deleted after that`)) {
       return;
     }
-
     deleteMutation.mutate({
       action: 'delete',
       societyId: selectedSociety,
@@ -68,7 +56,6 @@ export default function AdminDataBrowserPage() {
       reason
     });
   };
-
   const toggleSelectAll = () => {
     if (selectedItems.length === data.length) {
       setSelectedItems([]);
@@ -76,7 +63,6 @@ export default function AdminDataBrowserPage() {
       setSelectedItems(data.map(d => d._id));
     }
   };
-
   const toggleItem = (id) => {
     if (selectedItems.includes(id)) {
       setSelectedItems(selectedItems.filter(i => i !== id));
@@ -84,13 +70,11 @@ export default function AdminDataBrowserPage() {
       setSelectedItems([...selectedItems, id]);
     }
   };
-
   const statusColors = {
     paid: { background: "#10b98122", color: "#10b981" },
     unpaid: { background: "#ef444422", color: "#ef4444" },
     partial: { background: "#f59e0b22", color: "#f59e0b" },
   };
-
   return (
     <div style={{ padding: 0, maxWidth: 1300, margin: "0 auto", color: "#1f2937" }}>
       <div style={{ marginBottom: "1.5rem" }}>
@@ -99,7 +83,6 @@ export default function AdminDataBrowserPage() {
           <p style={{ color: "#6b7280", fontSize: "0.85rem", marginTop: 4 }}>View and manage all society data with export-before-delete protection</p>
         </div>
       </div>
-
       {/* Filters */}
       <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
@@ -118,7 +101,6 @@ export default function AdminDataBrowserPage() {
             ))}
           </select>
         </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
           <label style={{ color: "#6b7280", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Collection</label>
           <select
@@ -135,7 +117,6 @@ export default function AdminDataBrowserPage() {
             <option value="billingheads">Billing Heads</option>
           </select>
         </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
           <label style={{ color: "#6b7280", fontSize: "12px", fontWeight: 600 }}>&nbsp;</label>
           <button
@@ -147,7 +128,6 @@ export default function AdminDataBrowserPage() {
           </button>
         </div>
       </div>
-
       {/* Info Box */}
       {selectedSociety && (
         <div style={{ background: "#d1fae5", border: "1px solid #6ee7b7", borderRadius: 8, padding: "1rem 1.25rem", marginBottom: "1.25rem", fontSize: "13px", color: "#065f46" }}>
@@ -160,7 +140,6 @@ export default function AdminDataBrowserPage() {
           </ul>
         </div>
       )}
-
       {/* Data Table */}
       {isLoading ? (
         <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>Loading data...</div>
@@ -174,7 +153,6 @@ export default function AdminDataBrowserPage() {
               {selectedItems.length === data.length ? '☐ Deselect All' : '☑ Select All'}
             </button>
           </div>
-
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
@@ -239,7 +217,6 @@ export default function AdminDataBrowserPage() {
                     />
                   </td>
                   <td style={{ padding: "10px 12px", color: "#9ca3af", fontFamily: "monospace", fontSize: "11px", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{item._id}</td>
-
                   {selectedCollection === 'bills' && (
                     <>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
@@ -253,7 +230,6 @@ export default function AdminDataBrowserPage() {
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{new Date(item.createdAt).toLocaleDateString('en-IN')}</td>
                     </>
                   )}
-
                   {selectedCollection === 'members' && (
                     <>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.ownerName}</td>
@@ -262,7 +238,6 @@ export default function AdminDataBrowserPage() {
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.areaSqFt} sq ft</td>
                     </>
                   )}
-
                   {selectedCollection === 'transactions' && (
                     <>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.memberId?.wing}-{item.memberId?.roomNo}</td>
@@ -271,7 +246,6 @@ export default function AdminDataBrowserPage() {
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{new Date(item.date).toLocaleDateString('en-IN')}</td>
                     </>
                   )}
-
                   {selectedCollection === 'billingheads' && (
                     <>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.headName}</td>

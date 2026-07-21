@@ -5,33 +5,26 @@ import Society from "@/models/Society";
 import fs from "fs";
 import path from "path";
 import { writeFile } from "fs/promises";
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     if (decoded.role === "Accountant") {
       return NextResponse.json(
         { error: "Insufficient permissions" },
         { status: 403 }
       );
     }
-
     const formData = await request.formData();
     const file = formData.get("template");
-
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
-
     // Validate file type
     if (file.type !== "application/pdf") {
       return NextResponse.json(
@@ -39,23 +32,19 @@ export async function POST(request) {
         { status: 400 }
       );
     }
-
     // Create uploads directory if it doesn't exist
     const uploadsDir = path.join(process.cwd(), "public", "templates");
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
-
     // Generate unique filename
     const fileName = `bill-template-${decoded.societyId}-${Date.now()}.pdf`;
     const filePath = path.join(uploadsDir, fileName);
     const publicPath = `/templates/${fileName}`;
-
     // Convert file to buffer and save
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     await writeFile(filePath, buffer);
-
     // Update society with template info
     const society = await Society.findByIdAndUpdate(
       decoded.societyId,
@@ -70,7 +59,6 @@ export async function POST(request) {
       },
       { new: true }
     );
-
     return NextResponse.json({
       success: true,
       message: "Template uploaded successfully",
@@ -88,25 +76,20 @@ export async function POST(request) {
     );
   }
 }
-
 // DELETE template
 export async function DELETE(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const society = await Society.findById(decoded.societyId);
     if (!society) {
       return NextResponse.json({ error: "Society not found" }, { status: 404 });
     }
-
     // Delete file from filesystem
     if (society.billTemplate?.fileName) {
       const filePath = path.join(
@@ -119,7 +102,6 @@ export async function DELETE(request) {
         fs.unlinkSync(filePath);
       }
     }
-
     // Reset to default template
     society.billTemplate = {
       type: "default",
@@ -129,7 +111,6 @@ export async function DELETE(request) {
       uploadedBy: null,
     };
     await society.save();
-
     return NextResponse.json({
       success: true,
       message: "Template deleted, using default",

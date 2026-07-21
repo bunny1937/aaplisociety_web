@@ -3,7 +3,6 @@ import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Bill from "@/models/Bill";
 import mongoose from "mongoose";
-
 export async function GET(request) {
   try {
     await connectDB();
@@ -13,12 +12,10 @@ export async function GET(request) {
     const decoded = verifyToken(token);
     if (!decoded || !decoded.memberId)
       return NextResponse.json({ error: "Not a member" }, { status: 403 });
-
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const limit = parseInt(searchParams.get("limit") || "50");
     const page = parseInt(searchParams.get("page") || "1");
-
     const memberId = new mongoose.Types.ObjectId(decoded.memberId);
     const societyId = new mongoose.Types.ObjectId(decoded.societyId);
     const query = {
@@ -31,7 +28,6 @@ export async function GET(request) {
     } else {
       query.status = { $ne: "Scheduled" };
     }
-
     const [bills, total, agg] = await Promise.all([
       Bill.find(query)
         .sort({ billYear: -1, billMonth: -1 })
@@ -56,7 +52,6 @@ export async function GET(request) {
         },
       ]),
     ]);
-
     const aggRow = agg[0] || {};
     const summary = {
       total,
@@ -64,7 +59,6 @@ export async function GET(request) {
       totalPaid: aggRow.totalPaid || 0,
       totalOutstanding: aggRow.totalOutstanding || 0,
     };
-
     return NextResponse.json({
       success: true,
       bills,

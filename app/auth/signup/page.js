@@ -1,9 +1,7 @@
 'use client';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from '@/styles/Auth.module.css';
-
 export default function SignupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -13,7 +11,6 @@ export default function SignupPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    
     // Step 2: Society
     societyName: '',
     registrationNo: '',
@@ -21,12 +18,10 @@ export default function SignupPage() {
     address: '',
     panNo: '',
     tanNo: '',
-    
     // Step 3: Contact
     personOfContact: '',
     contactEmail: '',
     contactPhone: '',
-    
     // Step 4: Config
     maintenanceRate: '',
     sinkingFundRate: '',
@@ -38,11 +33,9 @@ export default function SignupPage() {
     gracePeriodDays: '10',
     billDueDay: '10'
   });
-
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -51,10 +44,8 @@ export default function SignupPage() {
     }
     setApiError('');
   };
-
   const validateStep = () => {
     const newErrors = {};
-    
     if (step === 1) {
       if (!formData.fullName.trim()) newErrors.fullName = 'Name is required';
       if (!formData.email.trim()) newErrors.email = 'Email is required';
@@ -65,47 +56,36 @@ export default function SignupPage() {
         newErrors.confirmPassword = 'Passwords do not match';
       }
     }
-    
     if (step === 2) {
       if (!formData.societyName.trim()) newErrors.societyName = 'Society name is required';
       if (!formData.address.trim()) newErrors.address = 'Address is required';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleNext = () => {
     if (validateStep()) {
       setStep(step + 1);
     }
   };
-
   const handleBack = () => {
     setStep(step - 1);
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (!validateStep()) return;
-
     setIsLoading(true);
     setApiError('');
-
     try {
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(data.error || 'Signup failed');
       }
-
       alert('Account created successfully!');
       router.push('/auth/login');
     } catch (error) {
@@ -114,7 +94,6 @@ export default function SignupPage() {
       setIsLoading(false);
     }
   };
-
   const getStepTitle = () => {
     switch(step) {
       case 1: return 'Admin Account';
@@ -124,7 +103,6 @@ export default function SignupPage() {
       default: return '';
     }
   };
-
   return (
     <div className={styles.authContainer}>
       <div className={styles.authCard}>
@@ -134,7 +112,6 @@ export default function SignupPage() {
             Step {step} of 4: {getStepTitle()}
           </p>
         </div>
-
         {/* Progress Indicator */}
         <div style={{
           display: 'flex',
@@ -154,7 +131,6 @@ export default function SignupPage() {
             />
           ))}
         </div>
-
         <form onSubmit={handleSubmit}>
           {apiError && (
             <div style={{
@@ -169,7 +145,6 @@ export default function SignupPage() {
               {apiError}
             </div>
           )}
-
           {/* STEP 1: Admin */}
           {step === 1 && (
             <>
@@ -187,7 +162,6 @@ export default function SignupPage() {
                 />
                 {errors.fullName && <p className="error-text">{errors.fullName}</p>}
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="email">Email Address</label>
                 <input
@@ -202,7 +176,6 @@ export default function SignupPage() {
                 />
                 {errors.email && <p className="error-text">{errors.email}</p>}
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="password">Password</label>
                 <input
@@ -217,7 +190,6 @@ export default function SignupPage() {
                 />
                 {errors.password && <p className="error-text">{errors.password}</p>}
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="confirmPassword">Confirm Password</label>
                 <input
@@ -234,7 +206,6 @@ export default function SignupPage() {
               </div>
             </>
           )}
-
           {/* STEP 2: Society */}
           {step === 2 && (
             <>
@@ -252,7 +223,6 @@ export default function SignupPage() {
                 />
                 {errors.societyName && <p className="error-text">{errors.societyName}</p>}
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="registrationNo">Registration No (Optional)</label>
                 <input
@@ -266,7 +236,6 @@ export default function SignupPage() {
                   disabled={isLoading}
                 />
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="dateOfRegistration">Date of Registration</label>
                 <input
@@ -279,7 +248,6 @@ export default function SignupPage() {
                   disabled={isLoading}
                 />
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="address">Address</label>
                 <textarea
@@ -294,7 +262,6 @@ export default function SignupPage() {
                 />
                 {errors.address && <p className="error-text">{errors.address}</p>}
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="panNo">PAN Number</label>
@@ -310,7 +277,6 @@ export default function SignupPage() {
                     disabled={isLoading}
                   />
                 </div>
-
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="tanNo">TAN Number</label>
                   <input
@@ -328,7 +294,6 @@ export default function SignupPage() {
               </div>
             </>
           )}
-
           {/* STEP 3: Contact */}
           {step === 3 && (
             <>
@@ -345,7 +310,6 @@ export default function SignupPage() {
                   disabled={isLoading}
                 />
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="contactEmail">Contact Email</label>
                 <input
@@ -359,7 +323,6 @@ export default function SignupPage() {
                   disabled={isLoading}
                 />
               </div>
-
               <div className={styles.formGroup}>
                 <label className="label" htmlFor="contactPhone">Contact Phone</label>
                 <input
@@ -375,7 +338,6 @@ export default function SignupPage() {
               </div>
             </>
           )}
-
           {/* STEP 4: Config (Optional) */}
           {step === 4 && (
             <>
@@ -386,7 +348,6 @@ export default function SignupPage() {
               }}>
                 Optional: Configure billing rates (you can change these later)
               </p>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="maintenanceRate">Maintenance (₹/sqft)</label>
@@ -402,7 +363,6 @@ export default function SignupPage() {
                     disabled={isLoading}
                   />
                 </div>
-
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="sinkingFundRate">Sinking Fund (₹/sqft)</label>
                   <input
@@ -417,7 +377,6 @@ export default function SignupPage() {
                     disabled={isLoading}
                   />
                 </div>
-
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="repairFundRate">Repair Fund (₹/sqft)</label>
                   <input
@@ -432,7 +391,6 @@ export default function SignupPage() {
                     disabled={isLoading}
                   />
                 </div>
-
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="interestRate">Interest Rate (%)</label>
                   <input
@@ -447,7 +405,6 @@ export default function SignupPage() {
                     disabled={isLoading}
                   />
                 </div>
-
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="waterCharge">Water Charge (₹)</label>
                   <input
@@ -461,7 +418,6 @@ export default function SignupPage() {
                     disabled={isLoading}
                   />
                 </div>
-
                 <div className={styles.formGroup}>
                   <label className="label" htmlFor="securityCharge">Security Charge (₹)</label>
                   <input
@@ -478,7 +434,6 @@ export default function SignupPage() {
               </div>
             </>
           )}
-
           {/* Navigation Buttons */}
           <div className={styles.formActions} style={{
             display: 'flex',
@@ -495,7 +450,6 @@ export default function SignupPage() {
                 Back
               </button>
             )}
-
             {step < 4 ? (
               <button
                 type="button"
@@ -521,7 +475,6 @@ export default function SignupPage() {
             )}
           </div>
         </form>
-
         <div className={styles.authFooter}>
           Already have an account?{' '}
           <a href="/auth/login" className={styles.authLink}>

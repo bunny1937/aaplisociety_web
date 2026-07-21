@@ -12,21 +12,17 @@ import {
   allocatePaymentInterestFirst,
   getBillPayFinalDate,
 } from "../../../../utils/interestUtils";
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const {
       memberId,
       amount,
@@ -38,7 +34,6 @@ export async function POST(request) {
       transactionRef,
       notes,
     } = await request.json();
-
     if (!memberId || !amount) {
       return NextResponse.json(
         { error: "Member ID and amount are required" },
@@ -57,23 +52,19 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-
     const member = await Member.findOne({
       _id: memberId,
       societyId: decoded.societyId,
     });
-
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
-
     // Guard: reject payment from MEMBER portal if past billPayFinalDay.
     // Admin / Secretary must be able to record late payments.
     const society = await Society.findById(decoded.societyId)
       .select("config")
       .lean();
     const billPayFinalDay = society?.config?.billPayFinalDay || 0;
-
     if (billPayFinalDay > 0 && decoded.role === "Member") {
       const oldestBill = await Bill.findOne({
         memberId,
@@ -83,7 +74,6 @@ export async function POST(request) {
       })
         .sort({ billYear: 1, billMonth: 1 })
         .lean();
-
       if (oldestBill) {
         const finalDate = getBillPayFinalDate(
           oldestBill.billYear,
@@ -92,7 +82,6 @@ export async function POST(request) {
         );
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
         if (finalDate && today > finalDate) {
           return NextResponse.json(
             {
@@ -110,13 +99,11 @@ export async function POST(request) {
         }
       }
     }
-
     // ✅ Guard: reject payment if today is past billPayFinalDay for the oldest unpaid bill's month
     // const society = await Society.findById(decoded.societyId)
     //   .select("config")
     //   .lean();
     // const billPayFinalDay = society?.config?.billPayFinalDay || 0;
-
     // if (billPayFinalDay > 0) {
     //   // Find oldest unpaid bill to get its month context
     //   const oldestBill = await Bill.findOne({
@@ -127,7 +114,6 @@ export async function POST(request) {
     //   })
     //     .sort({ billYear: 1, billMonth: 1 })
     //     .lean();
-
     //   if (oldestBill) {
     //     const finalDate = getBillPayFinalDate(
     //       oldestBill.billYear,
@@ -136,7 +122,6 @@ export async function POST(request) {
     //     );
     //     const today = new Date();
     //     today.setHours(0, 0, 0, 0);
-
     //     if (finalDate && today > finalDate) {
     //       return NextResponse.json(
     //         {
@@ -147,9 +132,7 @@ export async function POST(request) {
     //     }
     //   }
     // }
-
     // ... (keep auth, member fetch, billPayFinalDate guard unchanged) ...
-
     // ✅ Get unpaid bills oldest-first
     const unpaidBills = await Bill.find({
       memberId,
@@ -157,34 +140,28 @@ export async function POST(request) {
       status: { $in: ["Unpaid", "Partial", "Overdue", "Scheduled"] },
       isDeleted: false,
     }).sort({ billYear: 1, billMonth: 1 });
-
     const hasOpeningBalance =
       (member.openingPrincipal || 0) + (member.openingInterest || 0) > 0;
-
     const memberTotalPayable =
       unpaidBills.reduce((s, b) => s + (b.balanceAmount || 0), 0) +
       (member.openingPrincipal || 0) +
       (member.openingInterest || 0);
-
     if (memberTotalPayable <= 0 && unpaidBills.length === 0) {
       return NextResponse.json(
         { error: "No outstanding bills found for this member" },
         { status: 400 },
       );
     }
-
     // If no bills but has opening balance, create a synthetic bill for allocation
     if (unpaidBills.length === 0 && hasOpeningBalance) {
       // Allocate against opening balance using interest-first
       const openingInt = parseFloat((member.openingInterest || 0).toFixed(2));
       const openingPrin = parseFloat((member.openingPrincipal || 0).toFixed(2));
       const paid = parseFloat(amount);
-
       let intCleared = Math.min(paid, openingInt);
       let remaining = parseFloat((paid - intCleared).toFixed(2));
       let prinCleared = Math.min(remaining, openingPrin);
       let advance = parseFloat((remaining - prinCleared).toFixed(2));
-
       // Reduce opening balances on Member
       const newOpeningInt = parseFloat((openingInt - intCleared).toFixed(2));
       const newOpeningPrin = parseFloat((openingPrin - prinCleared).toFixed(2));
@@ -195,7 +172,6 @@ export async function POST(request) {
         },
         ...(advance > 0 ? { $inc: { advanceCredit: advance } } : {}),
       });
-
       // Record ledger transaction
       const lastTxn = await Transaction.findOne({
         memberId,
@@ -207,7 +183,6 @@ export async function POST(request) {
       const prevBal =
         lastTxn?.balanceAfterTransaction ?? member.openingBalance ?? 0;
       const newBal = parseFloat((prevBal - paid).toFixed(2));
-
       const txn = await Transaction.create({
         transactionId: Transaction.generateTransactionId(),
         date: paymentDate ? new Date(paymentDate) : new Date(),
@@ -232,7 +207,6 @@ export async function POST(request) {
           advanceCredit: advance,
         },
       });
-
       const breakdown = {
         interestCleared: intCleared,
         principalCleared: prinCleared,
@@ -254,7 +228,6 @@ export async function POST(request) {
         { status: 201 },
       );
     }
-
     // ✅ Migrate legacy bills that have balanceAmount but no principalBalance/interestBalance split
     // This handles bills generated before the new engine was deployed
     const normalizedBills = unpaidBills.map((b) => {
@@ -276,7 +249,6 @@ export async function POST(request) {
       }
       return bill;
     });
-
     // ✅ INTEREST-FIRST ALLOCATION (replaces FIFO)
     const {
       billUpdates,
@@ -289,7 +261,6 @@ export async function POST(request) {
       normalizedBills,
       society?.config?.adjustmentApplicationMode || "INTEREST_FIRST",
     );
-
     // Persist bill updates
     const billsUpdated = [];
     for (const update of billUpdates) {
@@ -297,7 +268,6 @@ export async function POST(request) {
         (b) => String(b._id) === String(update.billId),
       );
       if (!bill) continue;
-
       bill.interestBalance = update.newInterestBalance;
       bill.principalBalance = update.newPrincipalBalance;
       bill.balanceAmount = update.newBalanceAmount;
@@ -306,7 +276,6 @@ export async function POST(request) {
       bill.lastModifiedAt = new Date();
       bill.lastModifiedBy = decoded.userId;
       await bill.save();
-
       billsUpdated.push({
         billId: bill._id,
         billPeriod: bill.billPeriodId,
@@ -315,14 +284,12 @@ export async function POST(request) {
         newStatus: bill.status,
       });
     }
-
     // ✅ Store advance credit on member if overpayment
     if (advanceCredit > 0) {
       await Member.findByIdAndUpdate(memberId, {
         $inc: { advanceCredit },
       });
     }
-
     // ✅ Get current ledger balance for transaction
     const lastTransaction = await Transaction.findOne({
       memberId,
@@ -331,13 +298,10 @@ export async function POST(request) {
     })
       .sort({ date: -1, createdAt: -1 })
       .lean();
-
     let currentLedgerBalance =
       lastTransaction?.balanceAfterTransaction ?? member.openingBalance ?? 0;
-
     const paymentAmount = parseFloat(amount);
     const newLedgerBalance = currentLedgerBalance - paymentAmount;
-
     // ✅ RECORD PAYMENT TRANSACTION
     const transaction = await Transaction.create({
       transactionId: Transaction.generateTransactionId(),
@@ -360,7 +324,6 @@ export async function POST(request) {
       // Store breakdown for transparency
       paymentBreakdown: breakdown,
     });
-
     // ✅ AUDIT LOG
     await AuditLog.create({
       userId: decoded.userId,
@@ -380,11 +343,9 @@ export async function POST(request) {
       },
       timestamp: new Date(),
     });
-
     // ✅ Get society config for breakdown visibility
     const societyConfig = society?.config || {};
     const showBreakdown = societyConfig.memberPaymentBreakdownVisible !== false;
-
     return NextResponse.json(
       {
         success: true,

@@ -3,21 +3,17 @@ import connectDB from '@/lib/mongodb';
 import { verifyToken, getTokenFromRequest } from '@/lib/jwt';
 import Member from '@/models/Member';
 import AuditLog from '@/models/AuditLog';
-
 export async function POST(request) {
   try {
     await connectDB();
-    
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
     const decoded = verifyToken(token);
     if (!decoded || decoded.role !== 'Admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-
     // Find all members with duplicate membershipNumber
     const duplicates = await Member.aggregate([
       {
@@ -37,7 +33,6 @@ export async function POST(request) {
         $match: { count: { $gt: 1 } }
       }
     ]);
-
     if (duplicates.length === 0) {
       return NextResponse.json({
         success: true,
@@ -45,15 +40,12 @@ export async function POST(request) {
         fixed: 0
       });
     }
-
     const fixed = [];
-
     // Fix each duplicate group
     for (const dup of duplicates) {
       // Keep first member, reassign others
       for (let i = 1; i < dup.members.length; i++) {
         const member = await Member.findById(dup.members[i].id);
-        
         if (member) {
           // Find next available number
           const lastMember = await Member
@@ -61,7 +53,6 @@ export async function POST(request) {
             .sort({ membershipNumber: -1 })
             .select('membershipNumber')
             .lean();
-          
           let nextNumber = 1;
           if (lastMember?.membershipNumber) {
             const match = lastMember.membershipNumber.match(/MEM-(\d+)/);
@@ -69,13 +60,10 @@ export async function POST(request) {
               nextNumber = parseInt(match[1]) + 1;
             }
           }
-          
           const oldNumber = member.membershipNumber;
           const newNumber = `MEM-${String(nextNumber).padStart(4, '0')}`;
-          
           member.membershipNumber = newNumber;
           await member.save();
-          
           fixed.push({
             flatNo: member.fullFlatId,
             oldNumber,
@@ -84,7 +72,6 @@ export async function POST(request) {
         }
       }
     }
-
     // Audit log
     await AuditLog.create({
       userId: decoded.userId,
@@ -96,7 +83,6 @@ export async function POST(request) {
       },
       timestamp: new Date()
     });
-
    return NextResponse.json({
   success: true,
   message: fixed.length > 0 
@@ -105,8 +91,6 @@ export async function POST(request) {
   fixed: fixed || [],  // ✅ Always return array
   fixedCount: fixed.length
 });
-
-
   } catch (error) {
     console.error('Fix duplicates error:', error);
     return NextResponse.json({
@@ -115,22 +99,18 @@ export async function POST(request) {
     }, { status: 500 });
   }
 }
-
 // GET endpoint to view duplicates
 export async function GET(request) {
   try {
     await connectDB();
-    
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
     const decoded = verifyToken(token);
     if (!decoded || decoded.role !== 'Admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-
     const duplicates = await Member.aggregate([
       {
         $match: {
@@ -156,14 +136,12 @@ export async function GET(request) {
         $match: { count: { $gt: 1 } }
       }
     ]);
-
     return NextResponse.json({
       success: true,
       duplicates,
       totalDuplicateGroups: duplicates.length,
       totalAffectedMembers: duplicates.reduce((sum, d) => sum + d.count, 0)
     });
-
   } catch (error) {
     console.error('Check duplicates error:', error);
     return NextResponse.json({

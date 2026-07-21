@@ -4,21 +4,17 @@ import {
   allocatePaymentInterestFirst,
   roundInterest,
 } from "../../../utils/interestUtils";
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
 function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
 }
-
 function isoDate(d) {
   if (!d) return null;
   if (d instanceof Date) return d.toISOString().split("T")[0];
   return String(d).split("T")[0];
 }
-
 // ---------------------------------------------------------------------------
 // ARCHITECTURE: Two-state immutable snapshot model
 //
@@ -39,7 +35,6 @@ function isoDate(d) {
 //   openingPrincipal = previousMonth.closingPrincipal  (ONLY)
 //   openingInterest  = previousMonth.closingInterest   (ONLY)
 // ---------------------------------------------------------------------------
-
 function runSimulation(config, member, actions) {
   // carry: the single source of truth for what flows into the next bill.
   // openingPrincipal/Interest = previous month's closingPrincipal/Interest ONLY.
@@ -48,19 +43,15 @@ function runSimulation(config, member, actions) {
     openingInterest: twoDp(member.openingInterest),
     advanceCredit: twoDp(member.advanceCredit || 0),
   };
-
   // oldestUnpaidDueDate: interest anchor. Set when there is outstanding principal,
   // cleared when fully paid. Persists across months if never fully cleared.
   let oldestUnpaidDueDate = null;
-
   const snapshots = [];
-
   // currentBill: the single active unpaid bill entry for the allocator.
   // Each generate REPLACES this — prior outstanding is already absorbed into
   // openingPrincipal/Interest, so there is never more than one entry.
   // { billPeriodId, dueDate, remainingPrincipal, remainingInterest, totalBillDue }
   let currentBill = null;
-
   for (const action of actions) {
     // ------------------------------------------------------------------
     // GENERATE
@@ -68,11 +59,9 @@ function runSimulation(config, member, actions) {
     if (action.type === "generate") {
       const { year, month } = action;
       const billPeriodId = `${year}-${String(month).padStart(2, "0")}`;
-
       // Opening balances come EXCLUSIVELY from carry (prior closing state).
       const openingPrincipal = twoDp(carry.openingPrincipal);
       const openingInterest = twoDp(carry.openingInterest);
-
       // Interest anchor: oldest outstanding due date, or previous month's due date.
       const dueDate = new Date(year, month - 1, 10);
       if (openingPrincipal > 0 && !oldestUnpaidDueDate) {
@@ -83,22 +72,18 @@ function runSimulation(config, member, actions) {
       }
       const oldestDueDate = oldestUnpaidDueDate ||
         new Date(year, month - 1 === 0 ? 11 : month - 2, 10);
-
       const { currInt: currentInterest } = calculateMonthlyInterest({
         remainingPrincipal: openingPrincipal,
         remInt: 0,
         annualRate: config.interestRate,
         interestRounding: config.interestRounding,
       });
-
       const currentCharges =
         action.charges != null ? action.charges : config.charges;
-
       // IMMUTABLE bill state — never mutated after creation.
       const billPrincipalBalance = twoDp(openingPrincipal + currentCharges);
       const billInterestBalance = twoDp(openingInterest + currentInterest);
       const totalBillDue = twoDp(billPrincipalBalance + billInterestBalance);
-
       const bill = {
         billPeriodId,
         billYear: year,
@@ -106,16 +91,13 @@ function runSimulation(config, member, actions) {
         generationDate: isoDate(action.generationDate),
         dueDate: isoDate(dueDate),
         oldestDueDate: isoDate(oldestDueDate),
-
         openingPrincipal,
         openingInterest,
         currentCharges,
         currentInterest,
-
         billPrincipalBalance,
         billInterestBalance,
         totalBillDue,
-
         // Aliases for test cases & UI
         charges: currentCharges,
         prevRemPrincipal: openingPrincipal,
@@ -128,7 +110,6 @@ function runSimulation(config, member, actions) {
         amountPaid: 0,
         status: "Unpaid",
       };
-
       // Replace currentBill — prior outstanding already absorbed into opening balances.
       // The allocator sees ONE bill at a time; no double-counting possible.
       currentBill = {
@@ -138,17 +119,14 @@ function runSimulation(config, member, actions) {
         remainingInterest: billInterestBalance,
         totalBillDue,
       };
-
       // If no payment follows, next month carries the full bill balance.
       carry.openingPrincipal = billPrincipalBalance;
       carry.openingInterest = billInterestBalance;
-
       const carryIn = {
         openingPrincipal,
         openingInterest,
         advanceCredit: carry.advanceCredit,
       };
-
       snapshots.push({
         billPeriodId,
         generationDate: isoDate(action.generationDate),
@@ -163,21 +141,18 @@ function runSimulation(config, member, actions) {
         },
       });
     }
-
     // ------------------------------------------------------------------
     // PAY
     // ------------------------------------------------------------------
     if (action.type === "pay") {
       const { billPeriodId, paymentDate, amount } = action;
       const snapshot = snapshots.find((s) => s.billPeriodId === billPeriodId);
-
       // Build allocator input from mutable remaining balances
       // currentBill is the single consolidated entry — no double-counting possible.
       if (!currentBill) {
         // No bill generated yet — ignore stray payment.
         continue;
       }
-
       const billsForAlloc = [{
         _id: currentBill.billPeriodId,
         principalBalance: currentBill.remainingPrincipal,
@@ -186,41 +161,32 @@ function runSimulation(config, member, actions) {
         amountPaid: twoDp(currentBill.totalBillDue - currentBill.remainingPrincipal - currentBill.remainingInterest),
         totalAmount: currentBill.totalBillDue,
       }];
-
       const result = allocatePaymentInterestFirst(
         amount,
         billsForAlloc,
         config.allocationMode
       );
-
       const { billUpdates, advanceCredit: advCredit, breakdown } = result;
-
       // Apply allocation result to currentBill's mutable remaining fields.
       const upd = billUpdates[0];
       if (upd) {
         currentBill.remainingPrincipal = twoDp(upd.newPrincipalBalance);
         currentBill.remainingInterest = twoDp(upd.newInterestBalance);
       }
-
       carry.advanceCredit = twoDp(carry.advanceCredit + advCredit);
-
       // Zero-normalize to prevent phantom balances from float residuals.
       const eps = 0.005;
       const closingPrincipal = currentBill.remainingPrincipal < eps ? 0 : currentBill.remainingPrincipal;
       const closingInterest = currentBill.remainingInterest < eps ? 0 : currentBill.remainingInterest;
       const closingTotal = twoDp(closingPrincipal + closingInterest);
-
       // Apply normalized values back so next generate reads clean carry.
       currentBill.remainingPrincipal = closingPrincipal;
       currentBill.remainingInterest = closingInterest;
-
       // Reset oldestUnpaidDueDate when fully cleared.
       if (closingPrincipal <= 0) oldestUnpaidDueDate = null;
-
       // Next month's opening derives ONLY from closing state.
       carry.openingPrincipal = closingPrincipal;
       carry.openingInterest = closingInterest;
-
       const simPayment = {
         billPeriodId,
         paymentDate: isoDate(paymentDate),
@@ -230,7 +196,6 @@ function runSimulation(config, member, actions) {
         advanceCredit: twoDp(advCredit),
         breakdown,
       };
-
       const closingSnapshot = {
         paymentAmount: amount,
         interestCleared: twoDp(result.totalInterestCleared),
@@ -239,13 +204,11 @@ function runSimulation(config, member, actions) {
         closingInterest,
         closingTotal,
       };
-
       const newCarryOut = {
         openingPrincipal: closingPrincipal,
         openingInterest: closingInterest,
         advanceCredit: carry.advanceCredit,
       };
-
       if (snapshot) {
         snapshot.payment = simPayment;
         snapshot.closing = closingSnapshot;
@@ -253,7 +216,6 @@ function runSimulation(config, member, actions) {
       }
     }
   }
-
   // Final carryOut on last snapshot (if last action was a generate with no payment)
   if (snapshots.length > 0) {
     const last = snapshots[snapshots.length - 1];
@@ -265,13 +227,11 @@ function runSimulation(config, member, actions) {
       };
     }
   }
-
   const finalCarry = {
     openingPrincipal: carry.openingPrincipal,
     openingInterest: carry.openingInterest,
     advanceCredit: carry.advanceCredit,
   };
-
   // Ledger = monthly snapshot summary. Each row independent — no cumulative balance.
   // closingTotal = totalBillDue when no payment; closing.closingTotal when paid.
   const ledger = snapshots.map((s) => {
@@ -294,21 +254,16 @@ function runSimulation(config, member, actions) {
       principalCleared: s.payment ? s.payment.principalCleared : 0,
     };
   });
-
   return { snapshots, ledger, finalCarry };
 }
-
 // ---------------------------------------------------------------------------
 // Test cases
 // ---------------------------------------------------------------------------
-
 function buildTestCases(snapshots, config) {
   const results = [];
-
   function tc(name, passed, expected, actual, note = "") {
     results.push({ name, passed, expected, actual, note });
   }
-
   // 1. bill_invariant: totalBillDue === billPrincipalBalance + billInterestBalance
   {
     let allOk = true;
@@ -327,7 +282,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Every bill must satisfy the balance equation");
   }
-
   // 2. principal_accumulates: billPrincipalBalance = openingPrincipal + currentCharges
   {
     let allOk = true;
@@ -346,7 +300,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Principal includes all prior unpaid plus current charges");
   }
-
   // 3. interest_accumulates: billInterestBalance = openingInterest + currentInterest
   {
     let allOk = true;
@@ -365,7 +318,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Interest includes all prior unpaid plus new current interest");
   }
-
   // 4. bill_state_immutable: bill fields unchanged after payment (closing state is separate)
   {
     let allOk = true;
@@ -394,7 +346,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Bill snapshot must be immutable; closing derived separately");
   }
-
   // 5. closing_formula: closingPrincipal = billPrincipalBalance - principalCleared
   {
     let allOk = true;
@@ -416,7 +367,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Closing state arithmetic integrity");
   }
-
   // 6. carry_forward_source: next month opening === prev month closing
   {
     let allOk = true;
@@ -438,7 +388,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Carry-forward must derive only from previous month closing state");
   }
-
   // 7. interest_when_principal: currentInterest > 0 iff openingPrincipal > 0
   {
     let allOk = true;
@@ -462,7 +411,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Interest always applies when principal is outstanding");
   }
-
   // 8. interest_formula: currentInterest ≈ openingPrincipal × rate/1200
   {
     let allOk = true;
@@ -485,7 +433,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Simple interest: principal × annual_rate / 1200");
   }
-
   // 9. no_interest_on_interest: currentInterest based on principal only
   {
     let allOk = true;
@@ -509,7 +456,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Interest must not compound on prior interest");
   }
-
   // 10. interest_first_alloc: interest cleared before principal when INTEREST_FIRST
   {
     let allOk = true;
@@ -532,7 +478,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Payment allocation: interest first, then principal");
   }
-
   // 11. carry_non_negative: carryOut balances never negative
   {
     let allOk = true;
@@ -550,7 +495,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Carry-forward balances never go negative");
   }
-
   // 12. advance_credit: overpayment produces advance credit
   {
     let allOk = true;
@@ -570,7 +514,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Overpayment must produce advance credit");
   }
-
   // 13. ledger_snapshot: balance = totalBillDue - amountPaid per month
   {
     let allOk = true;
@@ -591,7 +534,6 @@ function buildTestCases(snapshots, config) {
       allOk ? "all pass" : failNote,
       "Monthly ledger snapshot arithmetic integrity");
   }
-
   // 14. zero_interest_rate: no interest when rate is 0
   {
     let allOk = true;
@@ -613,35 +555,28 @@ function buildTestCases(snapshots, config) {
         : "not applicable (rate > 0)",
       "Zero interest rate produces zero interest");
   }
-
   return results;
 }
-
 // ---------------------------------------------------------------------------
 // POST handler
 // ---------------------------------------------------------------------------
-
 export async function POST(request) {
   try {
     const { config, member, actions } = await request.json();
-
     if (!member || !actions?.length) {
       return NextResponse.json(
         { error: "member and actions required" },
         { status: 400 }
       );
     }
-
     const cfg = {
       interestRate: config?.interestRate ?? 18,
       interestRounding: config?.interestRounding ?? "TWO_DECIMAL",
       allocationMode: config?.allocationMode ?? "INTEREST_FIRST",
       charges: config?.charges ?? 0,
     };
-
     const { snapshots, ledger, finalCarry } = runSimulation(cfg, member, actions);
     const testCases = buildTestCases(snapshots, cfg);
-
     return NextResponse.json({
       success: true,
       config: cfg,

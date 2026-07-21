@@ -2,17 +2,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
-
 const H = {};
-
 async function adminGet(url) {
   const res = await fetch(url, { credentials: "include", headers: H });
   if (!res.ok) throw new Error((await res.json()).error || "Failed");
   return res.json();
 }
-
 const COLLECTIONS = ["bills", "members", "transactions", "billingheads", "receipts"];
-
 const COL_LABELS = {
   bills: ["Period", "Member", "Wing", "Flat", "Current Charges", "Previous Balance", "Total Due", "Balance", "Status", "Due Date", "Created"],
   members: ["Owner Name", "Wing", "Flat", "Email", "Phone", "Carpet Area", "Ownership", "Opening Balance", "Created"],
@@ -20,7 +16,6 @@ const COL_LABELS = {
   billingheads: ["Head Name", "Calculation Type", "Default Amount", "Active", "Created"],
   receipts: ["Member", "Wing", "Flat", "Period", "Amount Paid", "Payment Method", "Date", "Receipt No"],
 };
-
 function rowForCollection(item, col) {
   if (col === "bills") return [
     item.billPeriodId, item.memberId?.ownerName || "", item.memberId?.wing || item.wing || "", item.memberId?.flatNo || item.flatNo || "",
@@ -53,20 +48,17 @@ function rowForCollection(item, col) {
   ];
   return [];
 }
-
 export default function SuperAdminExportsPage() {
   const [selectedSociety, setSelectedSociety] = useState("all");
   const [selectedCollection, setSelectedCollection] = useState("bills");
   const [exporting, setExporting] = useState(false);
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-
   const { data: societiesData } = useQuery({
     queryKey: ["admin-societies"],
     queryFn: () => adminGet("/api/admin/societies"),
   });
   const societies = societiesData?.societies || [];
-
   const loadPreview = async () => {
     setPreviewLoading(true);
     setPreview(null);
@@ -85,16 +77,13 @@ export default function SuperAdminExportsPage() {
       setPreviewLoading(false);
     }
   };
-
   const handleExport = async (format) => {
     setExporting(true);
     try {
       const rows = preview;
       if (!rows?.length) { alert("Load preview first"); return; }
-
       const headers = ["Society", ...COL_LABELS[selectedCollection]];
       const dataRows = rows.map((r) => [r._societyName, ...rowForCollection(r, selectedCollection)]);
-
       if (format === "csv") {
         const csv = [headers, ...dataRows].map((row) => row.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv" });
@@ -111,21 +100,18 @@ export default function SuperAdminExportsPage() {
       setExporting(false);
     }
   };
-
   const card = (label, value, color) => (
     <div style={{ background: "#ffffff", border: `1px solid #e5e7eb`, borderRadius: 12, padding: "18px 20px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
       <div style={{ color: "#6b7280", fontSize: "13px", fontWeight: 500, marginBottom: 8 }}>{label}</div>
       <div style={{ color, fontSize: "26px", fontWeight: 700, lineHeight: 1.1 }}>{value}</div>
     </div>
   );
-
   return (
     <div style={{ padding: 0, maxWidth: 1300, margin: "0 auto", color: "#1f2937" }}>
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: "0.25rem", color: "#1f2937" }}>📦 Data Exports</h1>
       <p style={{ color: "#6b7280", fontSize: "0.85rem", marginBottom: "1.75rem" }}>
         Export any collection for any society as Excel or CSV.
       </p>
-
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.75rem" }}>
         {card("Total Societies", societies.length, "#60a5fa")}
@@ -133,7 +119,6 @@ export default function SuperAdminExportsPage() {
         {card("Trial", societies.filter((s) => s.subscription?.status === "Trial").length, "#a78bfa")}
         {card("Preview Rows", preview?.length ?? "—", "#fbbf24")}
       </div>
-
       {/* Controls */}
       <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "20px", marginBottom: "1.5rem", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto auto", gap: "1rem", alignItems: "flex-end" }}>
@@ -181,7 +166,6 @@ export default function SuperAdminExportsPage() {
           </button>
         </div>
       </div>
-
       {/* Preview table */}
       {previewLoading && (
         <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>Fetching data...</div>
@@ -224,7 +208,6 @@ export default function SuperAdminExportsPage() {
           </div>
         )
       )}
-
       {preview === null && !previewLoading && (
         <div style={{ padding: "4rem", textAlign: "center", color: "#374151", border: "2px dashed #1f2937", borderRadius: 10, fontSize: "0.9rem" }}>
           Select a society + collection, then click <strong style={{ color: "#3b82f6" }}>Preview</strong> to see data before exporting.

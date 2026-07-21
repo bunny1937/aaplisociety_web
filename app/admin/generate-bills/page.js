@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
@@ -7,7 +6,6 @@ import styles from "@/styles/GenerateBills.module.css";
 import ExcelPreviewGrid from "../../components/ExcelPreviewGrid";
 import DropZone from "components/DropZone";
 // ─── Pure billing engine functions (client-safe, no DB/React imports) ────────
-
 function buildParkingRates(heads) {
   const parkingRates = {};
   heads.forEach((h) => {
@@ -28,19 +26,16 @@ function buildParkingRates(heads) {
   });
   return parkingRates;
 }
-
 function computeCurrentCharges(member, heads, parkingRates, serviceTaxRate) {
   const area = Number(
     member.carpetAreaSqft ?? member.builtUpAreaSqft ?? member.areaSqFt ?? 0,
   );
   const charges = [];
   let subtotal = 0;
-
   for (const head of heads) {
     if (!head.headName?.trim() || head.isActive === false) continue;
     const hLower = head.headName.trim().toLowerCase();
     if (hLower.includes("parking")) continue;
-
     let amount = 0;
     if (head.calculationType === "Per Sq Ft") {
       amount = area * head.defaultAmount;
@@ -55,7 +50,6 @@ function computeCurrentCharges(member, heads, parkingRates, serviceTaxRate) {
     });
     subtotal += amount;
   }
-
   for (const slot of member.parkingSlots || []) {
     if (slot.type === "Stilt" || slot.monthlyBilling === false) continue;
     const key = `${slot.type}-${slot.vehicleType}`;
@@ -68,13 +62,11 @@ function computeCurrentCharges(member, heads, parkingRates, serviceTaxRate) {
       subtotal += rate;
     }
   }
-
   const serviceTax =
     serviceTaxRate > 0
       ? parseFloat(((subtotal * serviceTaxRate) / 100).toFixed(2))
       : 0;
   const currentBillTotal = parseFloat((subtotal + serviceTax).toFixed(2));
-
   return {
     charges,
     subtotal: parseFloat(subtotal.toFixed(2)),
@@ -82,12 +74,10 @@ function computeCurrentCharges(member, heads, parkingRates, serviceTaxRate) {
     currentBillTotal,
   };
 }
-
 function computeMonthlyInterest(principalOutstanding, annualRate) {
   if (principalOutstanding <= 0 || annualRate <= 0) return 0;
   return parseFloat(((principalOutstanding * annualRate) / 1200).toFixed(2));
 }
-
 function computeBillTotal({
   principalOutstanding,
   interestOutstanding,
@@ -108,12 +98,9 @@ function computeBillTotal({
   );
   return { billPrincipal, billInterest, totalBillDue, advApplied, grandTotal };
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
-
 const SLOT_TYPES = ["Open", "Covered", "Stilt"];
 const VEHICLE_TYPES = ["Two-Wheeler", "Four-Wheeler"];
-
 function TestConfigPanel({ members, periodLabel, onSaved }) {
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState("");
@@ -122,9 +109,7 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [applyTo, setApplyTo] = useState("next"); // "next" | "current"
-
   const activeMem = (members || []).filter((m) => !m.isDeleted);
-
   function loadMember(id) {
     setSelectedId(id);
     setMsg("");
@@ -140,7 +125,6 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
       })),
     );
   }
-
   function addSlot() {
     setSlots((prev) => [
       ...prev,
@@ -152,11 +136,9 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
       },
     ]);
   }
-
   function removeSlot(i) {
     setSlots((prev) => prev.filter((_, idx) => idx !== i));
   }
-
   function patchSlot(i, key, val) {
     setSlots((prev) =>
       prev.map((s, idx) => {
@@ -167,7 +149,6 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
       }),
     );
   }
-
   async function save() {
     if (!selectedId) return;
     setSaving(true);
@@ -195,7 +176,6 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
       setSaving(false);
     }
   }
-
   return (
     <div
       style={{
@@ -293,7 +273,6 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
               </div>
             )}
           </div>
-
           {selectedId && (
             <>
               <div
@@ -472,13 +451,10 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
     </div>
   );
 }
-
 export default function GenerateBillsPage() {
   const queryClient = useQueryClient();
-
   const [billMonth, setBillMonth] = useState(null); // 0-indexed, null until auto-detected
   const [billYear, setBillYear] = useState(null);
-
   // Flow 1: Bill Generation
   const [showPreview, setShowPreview] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
@@ -494,27 +470,22 @@ export default function GenerateBillsPage() {
   const [genProgress, setGenProgress] = useState({ current: 0, total: 0 });
   const [excelImporting, setExcelImporting] = useState(false);
   const [approvedDiffs, setApprovedDiffs] = useState(new Set());
-
   const [billsGeneratedForPeriod, setBillsGeneratedForPeriod] = useState(null); // periodLabel when bills were generated
-
   // Excel Preview Grids
   const [billGrid, setBillGrid] = useState(null);
   const [payGrid, setPayGrid] = useState(null);
-
   // Payment Collection
   const [payPreview, setPayPreview] = useState(null);
   const [payBatchKey, setPayBatchKey] = useState(null);
   const [payConfirming, setPayConfirming] = useState(false);
   const [payResults, setPayResults] = useState(null);
   const [autoGenState, setAutoGenState] = useState(null); // null | { status: "running"|"done"|"error", label, count, error }
-
   const diffIssues =
     excelValidation?.issues?.filter((i) => i.type === "diff") || [];
   const allDiffsApproved =
     diffIssues.length === 0 ||
     diffIssues.every((d) => approvedDiffs.has(d.memberId));
   const canGenerate = !excelImporting && allDiffsApproved;
-
   const runValidation = async (file) => {
     if (!file || billMonth === null || billYear === null) return;
     setExcelValidating(true);
@@ -542,18 +513,15 @@ export default function GenerateBillsPage() {
       setExcelValidating(false);
     }
   };
-
   const { data: societyData } = useQuery({
     queryKey: ["society-config"],
     queryFn: () => apiClient.get("/api/society/config"),
   });
-
   const { data: latestPeriodData, isLoading: latestPeriodLoading } = useQuery({
     queryKey: ["latest-period"],
     queryFn: () => apiClient.get("/api/bills/latest-period"),
     staleTime: 30000,
   });
-
   // Auto-detect billing period on load
   useEffect(() => {
     if (!latestPeriodData || billMonth !== null) return;
@@ -564,7 +532,6 @@ export default function GenerateBillsPage() {
       allPaid,
       nextPeriodId,
     } = latestPeriodData;
-
     let targetPeriod;
     if (!latestPeriodId) {
       // No bills ever — generate current month
@@ -573,33 +540,27 @@ export default function GenerateBillsPage() {
       // Always move to next period after latest — partial payments carry as openingPrincipal
       targetPeriod = nextPeriodId || currentPeriodId;
     }
-
     const [y, m] = targetPeriod.split("-").map(Number);
     setBillYear(y);
     setBillMonth(m - 1); // convert to 0-indexed
   }, [latestPeriodData, billMonth]);
-
   const { data: membersData } = useQuery({
     queryKey: ["members-list"],
     queryFn: () => apiClient.get("/api/members/list"),
   });
-
   const { data: billingHeadsData } = useQuery({
     queryKey: ["billing-heads"],
     queryFn: () => apiClient.get("/api/billing-heads/list"),
   });
-
   const { data: templateData } = useQuery({
     queryKey: ["bill-template-full"],
     queryFn: () => apiClient.get("/api/bill-template/get-full"),
   });
-
   const allMembers = membersData?.members || [];
   const periodLabel =
     billMonth !== null && billYear
       ? `${billYear}-${String(billMonth + 1).padStart(2, "0")}`
       : "...";
-
   const generatePreview = async () => {
     if (billMonth === null || billYear === null) return;
     const members = allMembers.filter((m) => !m.isDeleted);
@@ -608,18 +569,15 @@ export default function GenerateBillsPage() {
     await new Promise((r) => setTimeout(r, 50));
     setPreviewProgress({ current: 0, total: 0, label: "fetching" });
     await new Promise((r) => setTimeout(r, 50));
-
     try {
       const society = societyData?.society || {};
       const config = society.config || {};
       const heads = billingHeadsData?.heads || [];
-
       // Build parking rates from billing heads (source of truth), not society config
       const parkingRates = buildParkingRates(heads);
       const interestRate = parseFloat(config.interestRate) || 0;
       const interestAfterDays = config.interestAfterDays ?? 15;
       const serviceTaxRate = parseFloat(config.serviceTaxRate) || 0;
-
       const _billingMonthStr = `${billYear}-${String(billMonth + 1).padStart(2, "0")}-01T00:00:00.000Z`;
       const previousBalancesResponse = await apiClient.post(
         "/api/bills/get-previous-balances",
@@ -630,17 +588,14 @@ export default function GenerateBillsPage() {
           billDate: _billingMonthStr,
         },
       );
-
       const previousBalances = previousBalancesResponse.balances || {};
       const total = members.length;
       setPreviewProgress({ current: 0, total, label: "calculating" });
       await new Promise((r) => setTimeout(r, 0));
-
       const preview = [];
       for (let i = 0; i < members.length; i++) {
         const member = members[i];
         setPreviewProgress({ current: i + 1, total });
-
         const area = Number(
           member.carpetAreaSqft ??
             member.builtUpAreaSqft ??
@@ -649,25 +604,21 @@ export default function GenerateBillsPage() {
         );
         const flatNo = member.roomNo || member.flatNo || "";
         const memberId = member._id;
-
         const prevData = previousBalances[memberId] || {
           balance: 0,
           daysOverdue: 0,
           lastBillDate: null,
         };
-
         const principalBase = prevData.principalBalance ?? 0;
         const remInt = prevData.remInt ?? 0;
         const currInt = computeMonthlyInterest(principalBase, interestRate);
         const interestAmount = parseFloat((remInt + currInt).toFixed(2));
-
         const {
           charges: activeCharges,
           subtotal,
           serviceTax,
           currentBillTotal,
         } = computeCurrentCharges(member, heads, parkingRates, serviceTaxRate);
-
         const memberParkingCharges = (member.parkingSlots || [])
           .filter((s) => s.type !== "Stilt" && s.monthlyBilling !== false)
           .reduce(
@@ -675,7 +626,6 @@ export default function GenerateBillsPage() {
               sum + (parkingRates[`${slot.type}-${slot.vehicleType}`] ?? 0),
             0,
           );
-
         const advanceCredit = prevData.advanceCredit || 0;
         const { grandTotal: grandTotalRounded } = computeBillTotal({
           principalOutstanding: principalBase,
@@ -710,10 +660,8 @@ export default function GenerateBillsPage() {
           currentBillTotal,
           grandTotal: grandTotalRounded,
         });
-
         await new Promise((r) => setTimeout(r, 0));
       }
-
       const sortedPreview = [...preview].sort((a, b) => {
         const [wA, rA] = (a.member ?? "").split("-");
         const [wB, rB] = (b.member ?? "").split("-");
@@ -732,7 +680,6 @@ export default function GenerateBillsPage() {
       setPreviewProgress({ current: 0, total: 0 });
     }
   };
-
   const autoGenerateNextMonth = async () => {
     const nextDate = new Date(billYear, billMonth + 1, 1);
     const nextMonth = nextDate.getMonth(); // 0-indexed
@@ -742,14 +689,12 @@ export default function GenerateBillsPage() {
     const interestAfterDays = societyData?.society?.config?.interestAfterDays || 15;
     const dueDateObj = new Date(nextYear, nextMonth, 1 + interestAfterDays);
     const nextDueDate = `${dueDateObj.getFullYear()}-${String(dueDateObj.getMonth() + 1).padStart(2, "0")}-${String(dueDateObj.getDate()).padStart(2, "0")}`;
-
     setAutoGenState({
       status: "running",
       label: nextPeriodLabel,
       count: 0,
       error: null,
     });
-
     try {
       // Fetch fresh member data — user may have changed carpetArea/parking after page load
       const freshMembersRes = await apiClient.get("/api/members/list");
@@ -802,7 +747,6 @@ export default function GenerateBillsPage() {
       const interestRate = parseFloat(config.interestRate) || 0;
       const serviceTaxRate = parseFloat(config.serviceTaxRate) || 0;
       const parkingRates = buildParkingRates(heads);
-
       const billingMonthStr = `${nextYear}-${String(nextMonth + 1).padStart(2, "0")}-01T00:00:00.000Z`;
       const prevBalRes = await apiClient.post(
         "/api/bills/get-previous-balances",
@@ -814,7 +758,6 @@ export default function GenerateBillsPage() {
         },
       );
       const previousBalances = prevBalRes.balances || {};
-
       const bills = members.map((member) => {
         const memberId = member._id;
         const prevData = previousBalances[memberId] || {
@@ -828,10 +771,8 @@ export default function GenerateBillsPage() {
         const remInt = prevData.remInt ?? 0;
         const currInt = computeMonthlyInterest(principalBase, interestRate);
         const interestAmount = parseFloat((remInt + currInt).toFixed(2));
-
         const { charges, subtotal, serviceTax, currentBillTotal } =
           computeCurrentCharges(member, heads, parkingRates, serviceTaxRate);
-
         const advanceCredit = prevData.advanceCredit || 0;
         const { grandTotal } = computeBillTotal({
           principalOutstanding: principalBase,
@@ -840,7 +781,6 @@ export default function GenerateBillsPage() {
           currentBillTotal,
           advanceCredit,
         });
-
         return {
           memberId,
           totalAmount: grandTotal,
@@ -855,17 +795,14 @@ export default function GenerateBillsPage() {
           recentTransactions: prevData.recentTransactions || [],
         };
       });
-
       const payload = {
         billMonth: nextMonth,
         billYear: nextYear,
         dueDate: nextDueDate,
         bills,
       };
-
       const result = await apiClient.post("/api/bills/generate-final", payload);
       const count = result.billsGenerated ?? result.count ?? 0;
-
       // Advance UI to next month
       setBillMonth(nextMonth);
       setBillYear(nextYear);
@@ -892,21 +829,16 @@ export default function GenerateBillsPage() {
       });
     }
   };
-
   const generateMutation = useMutation({
     mutationFn: async () => {
       const billsToSend = previewData || [];
-
       const total = billsToSend.length;
       setGenProgress({ current: 0, total });
-
       if (total === 0) {
         throw new Error("No preview data available");
       }
-
       const _dueDay = societyData?.society?.config?.interestAfterDays || 15;
       const computedDueDate = `${billYear}-${String(billMonth + 1).padStart(2, "0")}-${String(_dueDay).padStart(2, "0")}`;
-
       const payload = {
         billMonth,
         billYear,
@@ -927,7 +859,6 @@ export default function GenerateBillsPage() {
           recentTransactions: b.recentTransactions,
         })),
       };
-
       let result;
       try {
         result = await apiClient.post("/api/bills/generate-final", payload);
@@ -960,14 +891,11 @@ export default function GenerateBillsPage() {
       alert("Failed to generate bills: " + error.message);
     },
   });
-
   const renderBillHTML = (billData) => {
     const template = templateData?.template;
-
     if (template?.type === "uploaded-pdf" && template?.pdfUrl) {
       const hasFormFields = template.hasFormFields || false;
       const fieldCount = template.detectedFields?.length || 0;
-
       return `
     <div style="text-align: center;">
       <div style="background: #f9fafb; padding: 2rem; border-radius: 8px; margin-bottom: 1rem;">
@@ -1159,7 +1087,6 @@ ${
     </div>
   `;
     }
-
     if (template?.type === "uploaded-image" && template?.imageUrl) {
       return `
       <div style="text-align: center;">
@@ -1180,7 +1107,6 @@ ${
       </div>
     `;
     }
-
     const society = societyData?.society || {};
     const design = template?.design || {
       headerBg: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -1206,10 +1132,8 @@ ${
       showSignature: true,
       signatureLabel: "Authorized Signatory",
     };
-
     const logoUrl = template?.logoUrl || "";
     const signatureUrl = template?.signatureUrl || "";
-
     return `
     <div style="max-width: 800px; margin: 0 auto; padding: 40px; font-family: Arial, sans-serif; background: white; border: 1px solid #e5e7eb; border-radius: 8px;">
       <div style="background: ${design.headerBg}; color: ${design.headerColor}; padding: 30px; border-radius: 8px; margin-bottom: 30px;">
@@ -1217,11 +1141,9 @@ ${
         <h1 style="margin: 0; font-size: ${design.societyNameSize}px;">${society.name || "Society Name"}</h1>
         <p style="margin: 5px 0 0 0; font-size: ${design.addressSize}px; opacity: 0.9;">${society.address || ""}</p>
       </div>
-
       <h2 style="text-align: ${design.billTitleAlign}; font-size: ${design.billTitleSize}px; margin: 0 0 20px 0; color: #1f2937;">
         MAINTENANCE BILL
       </h2>
-
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; padding: 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
         <div><strong>Bill Period:</strong> ${billYear}-${String(billMonth + 1).padStart(2, "0")}</div>
         <div><strong>Bill Date:</strong> ${new Date().toLocaleDateString("en-IN")}</div>
@@ -1230,7 +1152,6 @@ ${
         <div><strong>Name:</strong> ${billData.memberName}</div>
         <div><strong>Area:</strong> ${billData.area} sq ft</div>
       </div>
-
 ${
   Math.abs(billData.previousBalance) > 0
     ? `
@@ -1347,7 +1268,6 @@ ${
       `
     : ""
 }
-
       <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #374151; font-weight: 600;">Current Month Charges</h3>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
         <thead>
@@ -1405,7 +1325,6 @@ ${
           </tr>
         </tbody>
       </table>
-
       <div style="background: ${design.totalBg}; padding: 25px; border-radius: 8px; margin-bottom: 30px; border: 3px solid ${design.totalColor};">
         <div style="margin-bottom: 15px;">
           <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">Calculation:</div>
@@ -1445,7 +1364,6 @@ ${
     : ""
 }
       </div>
-
       ${
         design.footerText && design.footerText.length > 0
           ? `
@@ -1458,7 +1376,6 @@ ${
       `
           : ""
       }
-
       ${
         design.showSignature
           ? `
@@ -1477,19 +1394,16 @@ ${
       `
           : ""
       }
-
       <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 10px; color: #9ca3af;">
         Generated on ${new Date().toLocaleString("en-IN")} | Computer Generated Bill
       </div>
     </div>
   `;
   };
-
   const currentBill = previewData?.[previewIndex];
   const billTemplateDisabled =
     billMonth === null ||
     billYear === null;
-
   const downloadBillTemplate = async () => {
     if (billMonth === null || billYear === null) return;
     try {
@@ -1514,7 +1428,6 @@ ${
       alert("Download failed: " + e.message);
     }
   };
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -1541,7 +1454,6 @@ ${
           </p>
         </div>
       </div>
-
       {membersData?.members && (
         <div className={styles.statsBanner}>
           <div className={styles.statCard}>
@@ -1564,14 +1476,12 @@ ${
           </div>
         </div>
       )}
-
       {/* ── TEST CONFIG PANEL (temporary) ──────────────────────────────── */}
       <TestConfigPanel
         members={allMembers}
         periodLabel={periodLabel}
         onSaved={() => queryClient.invalidateQueries(["members-list"])}
       />
-
       {/* UNIFIED TEMPLATE SECTION */}
       <div
         style={{
@@ -1689,7 +1599,6 @@ ${
               </button>
             </div>
           </div>
-
           {/* Upload */}
           <div
             style={{
@@ -1722,7 +1631,6 @@ ${
               <br />- <strong>AmountPaid filled</strong> then validate both and
               generate bills plus record payments (or choose)
             </p>
-
             {/* File upload */}
             <DropZone
               accept=".xlsx,.xls"
@@ -1747,7 +1655,6 @@ ${
               hint=".xlsx or .xls — max 5MB"
               style={{ marginBottom: "1rem" }}
             />
-
             {/* Auto-validating spinner */}
             {excelValidating && (
               <div
@@ -1760,7 +1667,6 @@ ${
                 Validating...
               </div>
             )}
-
             {/* Bill grid preview */}
             {billGrid && (
               <ExcelPreviewGrid
@@ -1782,7 +1688,6 @@ ${
                 }}
               />
             )}
-
             {/* Validation results */}
             {excelValidation && (
               <div style={{ marginTop: "1.5rem" }}>
@@ -1824,7 +1729,6 @@ ${
                     </div>
                   ))}
                 </div>
-
                 {/* Issues list */}
                 {excelValidation.issues?.filter((i) => i.type !== "diff")
                   .length > 0 && (
@@ -1918,7 +1822,6 @@ ${
                     </tbody>
                   </table>
                 )}
-
                 {/* Diff approvals */}
                 {diffIssues.length > 0 && (
                   <div
@@ -2112,7 +2015,6 @@ ${
                     )}
                   </div>
                 )}
-
                 {/* Matched rows */}
                 {excelValidation.comparison?.filter((r) => !r.hasDiff).length >
                   0 && (
@@ -2250,14 +2152,12 @@ ${
                     </div>
                   </div>
                 )}
-
                 {/* Action buttons */}
                 {(() => {
                   const isPaymentOnly =
                     excelValidation.uploadMode === "PAYMENT_ONLY";
                   const hasPayments = excelValidation.hasPaymentData;
                   const hasErrors = (excelValidation.errorCount || 0) > 0;
-
                   const doGenerateBills = async () => {
                     setExcelImporting(true);
                     try {
@@ -2283,7 +2183,6 @@ ${
                       setExcelImporting(false);
                     }
                   };
-
                   const doPaymentPreview = async () => {
                     const fd = new FormData();
                     fd.append("file", excelFile);
@@ -2304,7 +2203,6 @@ ${
                         columns: payData.gridColumns,
                       });
                   };
-
                   return (
                     <div
                       style={{
@@ -2327,7 +2225,6 @@ ${
                       >
                         Re-upload
                       </button>
-
                       {isPaymentOnly &&
                         // Bills already exist — payment-only mode
                         (hasPayments ? (
@@ -2363,7 +2260,6 @@ ${
                             to record payments.
                           </div>
                         ))}
-
                       {!isPaymentOnly && (
                         <>
                           <button
@@ -2394,7 +2290,6 @@ ${
                                 ? `Approve ${diffIssues.length - approvedDiffs.size} diff(s) first`
                                 : `Generate ${excelValidation.validCount} Bills`}
                           </button>
-
                           {hasPayments && canGenerate && (
                             <button
                               className="btn btn-primary"
@@ -2428,7 +2323,6 @@ ${
                 })()}
               </div>
             )}
-
             {/* Payment preview grid */}
             {payGrid && (
               <div style={{ marginTop: "1.5rem" }}>
@@ -2452,7 +2346,6 @@ ${
                 />
               </div>
             )}
-
             {/* Payment confirmation */}
             {payPreview && payBatchKey && (
               <div
@@ -2533,7 +2426,6 @@ ${
                 </div>
               </div>
             )}
-
             {/* Payment results */}
             {payResults && (
               <div style={{ marginTop: "1.5rem" }}>
@@ -2576,7 +2468,6 @@ ${
                 </div>
               </div>
             )}
-
             {/* Auto-generate next month — always visible once a period is loaded */}
             {billMonth !== null && billYear && (
               <div style={{ marginTop: "1.5rem", padding: "1rem", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8 }}>
@@ -2613,7 +2504,6 @@ ${
           </div>
         </div>
       </div>
-
       {/* Preview Modal */}
       {showPreview && previewData && currentBill && (
         <div className={styles.modal}>
@@ -2655,7 +2545,6 @@ ${
                 X
               </button>
             </div>
-
             <div className={styles.modalBody}>
               <div
                 dangerouslySetInnerHTML={{
@@ -2663,7 +2552,6 @@ ${
                 }}
               />
             </div>
-
             <div className={styles.modalFooter}>
               <div className={styles.navigation}>
                 <button
@@ -2689,7 +2577,6 @@ ${
                   Next
                 </button>
               </div>
-
               <button
                 onClick={generateMutation.mutate}
                 disabled={generateMutation.isPending}

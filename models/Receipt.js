@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const ReceiptSchema = new mongoose.Schema(
   {
     receiptNo: { type: String, required: true, unique: true },
@@ -36,8 +35,6 @@ const ReceiptSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 ReceiptSchema.index({ memberId: 1, societyId: 1, paidAt: -1 });
-
 export default mongoose.models.Receipt ||
   mongoose.model("Receipt", ReceiptSchema);

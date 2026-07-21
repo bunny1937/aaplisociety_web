@@ -1,9 +1,7 @@
 'use client';
-
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import styles from '@/styles/DatabaseManager.module.css';
-
 export default function DatabaseManagerPage() {
   const [selectedEntity, setSelectedEntity] = useState('society');
   const [filters, setFilters] = useState({});
@@ -12,7 +10,6 @@ export default function DatabaseManagerPage() {
   const [viewMode, setViewMode] = useState('table'); // table, json
   const [selectedIds, setSelectedIds] = useState([]);
   const queryClient = useQueryClient();
-
   // Fetch data based on selected entity
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['dbData', selectedEntity, filters],
@@ -25,7 +22,6 @@ export default function DatabaseManagerPage() {
       return response.json();
     }
   });
-
   // Export mutation
   const exportMutation = useMutation({
     mutationFn: async ({ entity, format, filters }) => {
@@ -33,9 +29,7 @@ export default function DatabaseManagerPage() {
       const response = await fetch(`/api/db-manager/${entity}/export?${params}`, {
         credentials: 'include'
       });
-      
       if (!response.ok) throw new Error('Export failed');
-      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -47,19 +41,16 @@ export default function DatabaseManagerPage() {
       document.body.removeChild(a);
     }
   });
-
   // Import mutation
   const importMutation = useMutation({
     mutationFn: async ({ entity, file }) => {
       const formData = new FormData();
       formData.append('file', file);
-      
       const response = await fetch(`/api/db-manager/${entity}/import`, {
         method: 'POST',
         credentials: 'include',
         body: formData
       });
-      
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || 'Import failed');
@@ -75,25 +66,19 @@ export default function DatabaseManagerPage() {
       alert(`Import failed: ${error.message}`);
     }
   });
-
   const deleteMutation = useMutation({
   mutationFn: async ({ entity, ids }) => {
-    
     if (!ids || ids.length === 0) {
       throw new Error('No IDs selected');
     }
-    
     const response = await fetch(`/api/db-manager/${entity}/delete?ids=${ids.join(',')}`, {
       method: 'DELETE',
       credentials: 'include'
     });
-    
     const data = await response.json();
-    
     if (!response.ok) {
       throw new Error(data.error || data.details || 'Delete failed');
     }
-    
     return data;
   },
   onSuccess: (data) => {
@@ -106,25 +91,20 @@ setSelectedIds([]);
     alert(`Delete failed: ${error.message}`);
   }
 });
-
-
   // Reset/Clear all mutation
   const resetMutation = useMutation({
     mutationFn: async ({ entity }) => {
       if (!confirm(`⚠️ ARE YOU ABSOLUTELY SURE?\n\nThis will PERMANENTLY DELETE ALL ${entity.toUpperCase()} data!\n\nType "DELETE ALL" to confirm.`)) {
         throw new Error('Cancelled');
       }
-      
       const userConfirmation = prompt('Type "DELETE ALL" to confirm:');
       if (userConfirmation !== 'DELETE ALL') {
         throw new Error('Confirmation failed');
       }
-      
       const response = await fetch(`/api/db-manager/${entity}/reset`, {
         method: 'DELETE',
         credentials: 'include'
       });
-      
       if (!response.ok) throw new Error('Reset failed');
       return response.json();
     },
@@ -133,7 +113,6 @@ setSelectedIds([]);
       alert(`Reset successful! ${result.deleted || 0} records deleted.`);
     }
   });
-
   const entities = [
     { value: 'society', label: 'Society Data' },
     { value: 'members', label: 'Members' },
@@ -144,7 +123,6 @@ setSelectedIds([]);
     { value: 'auditlogs', label: 'Audit Logs' },
     { value: 'billingheads', label: 'Billing Heads' }
   ];
-
   const handleSelectAll = (checked) => {
     if (checked && data?.data) {
       setSelectedIds(data.data.map(row => row._id));
@@ -152,7 +130,6 @@ setSelectedIds([]);
       setSelectedIds([]);
     }
   };
-
   const handleSelectRow = (id, checked) => {
     if (checked) {
       setSelectedIds([...selectedIds, id]);
@@ -160,14 +137,11 @@ setSelectedIds([]);
       setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
     }
   };
-
   const renderTableView = () => {
     if (!data?.data || data.data.length === 0) {
       return <div className={styles.emptyState}>No data found</div>;
     }
-
     const columns = Object.keys(data.data[0]).filter(col => col !== '__v');
-
     return (
       <div className={styles.tableWrapper}>
         <table className={styles.dataTable}>
@@ -209,7 +183,6 @@ setSelectedIds([]);
       </div>
     );
   };
-
   const renderJsonView = () => {
     return (
       <pre className={styles.jsonView}>
@@ -217,14 +190,12 @@ setSelectedIds([]);
       </pre>
     );
   };
-
   return (
       <div className={styles.container}>
         <div className={styles.header}>
           <h1 className={styles.title}>🗄️ Database Manager</h1>
           <p className={styles.subtitle}>Complete database access - View, Import, Export, and Manage all data</p>
         </div>
-
         <div className={styles.toolbar}>
           {/* Entity Selector */}
           <div className={styles.toolbarSection}>
@@ -243,7 +214,6 @@ setSelectedIds([]);
               ))}
             </select>
           </div>
-
           {/* View Mode */}
           <div className={styles.toolbarSection}>
             <label>View:</label>
@@ -262,7 +232,6 @@ setSelectedIds([]);
               </button>
             </div>
           </div>
-
           {/* Export */}
           <div className={styles.toolbarSection}>
             <label>Export:</label>
@@ -283,7 +252,6 @@ setSelectedIds([]);
               {exportMutation.isPending ? 'Exporting...' : '⬇ Export'}
             </button>
           </div>
-
           {/* Import */}
           <div className={styles.toolbarSection}>
             <label>Import:</label>
@@ -307,17 +275,14 @@ setSelectedIds([]);
     className={`${styles.btn} ${styles.btnWarning}`}
   onClick={async () => {
   if (!confirm('Check and fix duplicate membership numbers?')) return;
-  
   try {
     const response = await fetch('/api/members/fix-duplicates', {
       method: 'POST',
       credentials: 'include'
     });
     const result = await response.json();
-    
     if (result.success) {
   const fixedCount = typeof result.fixed === 'number' ? result.fixed : result.fixed?.length || 0;
-  
   if (fixedCount > 0) {
     const fixedList = Array.isArray(result.fixed) 
       ? result.fixed.map(f => `${f.flatNo}: ${f.oldNumber} → ${f.newNumber}`).join('\n')
@@ -336,7 +301,6 @@ setSelectedIds([]);
     alert(`❌ Error: ${error.message}`);
   }
 }}
-
   >
     🔧 Fix Duplicates
   </button>
@@ -365,7 +329,6 @@ setSelectedIds([]);
                 </select>
               </>
             )}
-            
             {selectedEntity === 'transactions' && (
               <>
                 <input 
@@ -392,7 +355,6 @@ setSelectedIds([]);
                 </select>
               </>
             )}
-            
             {selectedEntity === 'bills' && (
               <>
                 <select 
@@ -407,7 +369,6 @@ setSelectedIds([]);
                 </select>
               </>
             )}
-
             <button 
               className={`${styles.btn} ${styles.btnSecondary}`}
               onClick={() => { setFilters({}); refetch(); }}
@@ -416,7 +377,6 @@ setSelectedIds([]);
             </button>
           </div>
         </div>
-
         {/* Data Display */}
         <div className={styles.dataSection}>
           <div className={styles.dataHeader}>
@@ -435,7 +395,6 @@ setSelectedIds([]);
               </button>
             </div>
           </div>
-
           {isLoading ? (
             <div className={styles.loader}>
               <div className={styles.spinner}></div>
@@ -447,7 +406,6 @@ setSelectedIds([]);
             </>
           )}
         </div>
-
         {/* Danger Zone */}
         <div className={styles.dangerZone}>
           <h3>⚠️ Danger Zone</h3>
@@ -460,7 +418,6 @@ setSelectedIds([]);
     alert('No rows selected');
     return;
   }
-  
   if (confirm(`Delete ${selectedIds.length} ${selectedEntity}?`)) {
     deleteMutation.mutate({ 
       entity: selectedEntity, 
@@ -468,12 +425,10 @@ setSelectedIds([]);
     });
   }
 }}
-
               disabled={deleteMutation.isPending || selectedIds.length === 0}
             >
               {deleteMutation.isPending ? 'Deleting...' : `🗑️ Delete Selected (${selectedIds.length})`}
             </button>
-
             <button 
               className={`${styles.btn} ${styles.btnDanger}`}
               onClick={() => resetMutation.mutate({ entity: selectedEntity })}

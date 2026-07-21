@@ -14,15 +14,12 @@ import {
   isValidPurpose,
   isSafePhotoValue,
 } from "@/lib/visitor-config";
-
 export async function POST(request) {
   const auth = requireSecurity(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const body = await request.json();
-
     const memberId = String(body.memberId || body.flatId || "").trim();
     const name = String(body.name || "").trim();
     const phone = String(body.phone || "").trim();
@@ -31,7 +28,6 @@ export async function POST(request) {
     const purposeNote = String(body.purposeNote || "").trim();
     const vehicleNumber = String(body.vehicleNumber || "").trim();
     const linkedComplaintId = body.linkedComplaintId || null;
-
     // ---- Validation ----
     if (!memberId || !name || !purpose)
       return NextResponse.json(
@@ -49,7 +45,6 @@ export async function POST(request) {
       );
     if (name.length > 100)
       return NextResponse.json({ error: "name too long" }, { status: 400 });
-
     // ---- Resolve flat (society-scoped) ----
     const member = await Member.findOne({
       _id: memberId,
@@ -62,7 +57,6 @@ export async function POST(request) {
       .lean();
     if (!member)
       return NextResponse.json({ error: "Flat not found" }, { status: 404 });
-
     // ---- Watchlist check ----
     const hit = await checkBlacklist({
       societyId: auth.user.societyId,
@@ -84,7 +78,6 @@ export async function POST(request) {
         { status: 403 },
       );
     }
-
     // ---- Create the pending visit ----
     const now = new Date();
     const visitor = await Visitor.create({
@@ -107,7 +100,6 @@ export async function POST(request) {
       blacklistReason: hit ? hit.reason : "",
       escalation: { level: 0, stopped: false, lastNotifiedAt: now, history: [] },
     });
-
     // ---- Fire the first notification wave (owner + tenant, multi-channel) ----
     const notifyResult = await notifyVisitorApproval({
       society: { _id: auth.user.societyId },
@@ -115,13 +107,11 @@ export async function POST(request) {
       visitor,
       guard: { name: auth.user.name, phone: auth.user.phone || "" },
     });
-
     // Persist the first-wave delivery log on the visit for the audit trail.
     if (notifyResult.steps?.length) {
       visitor.escalation.history.push(...notifyResult.steps);
       await visitor.save();
     }
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_CREATED", null, {
       id: visitor._id.toString(),
       memberId: member._id.toString(),
@@ -133,7 +123,6 @@ export async function POST(request) {
       gateLabel: visitor.gateLabel,
       blacklisted: !!hit,
     });
-
     return NextResponse.json({
       success: true,
       visitorId: visitor._id,

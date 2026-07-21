@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-
 const AdminLogSchema = new mongoose.Schema(
   {
     adminId: {
@@ -52,9 +51,7 @@ const AdminLogSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
 // Index for querying
 AdminLogSchema.index({ adminId: 1, timestamp: -1 });
 AdminLogSchema.index({ action: 1, timestamp: -1 });
-
 export default AdminLogSchema;

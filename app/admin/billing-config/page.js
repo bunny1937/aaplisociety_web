@@ -4,14 +4,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import styles from "@/styles/BillingConfig.module.css";
 import gridStyles from "@/styles/BillingGrid.module.css";
 import { apiClient } from "@/lib/api-client";
-
 export default function BillingConfigPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("charges");
-
   // ─── CHARGES TAB STATE ───────────────────────────────────────────────────────
   const [customCharges, setCustomCharges] = useState([]);
-
   // ─── MATRIX / GRID SHARED STATE ──────────────────────────────────────────────
   // ─── BILLING GRID TAB STATE ──────────────────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState("");
@@ -23,7 +20,6 @@ export default function BillingConfigPage() {
   const [previewMemberIndex, setPreviewMemberIndex] = useState(0);
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth() + 1);
-
   // ─── DATA FETCHING ────────────────────────────────────────────────────────────
   const { data: societyData } = useQuery({
     queryKey: ["society-config"],
@@ -41,11 +37,9 @@ export default function BillingConfigPage() {
     queryKey: ["bill-template"],
     queryFn: () => apiClient.get("/api/billing/template"),
   });
-
   const society = societyData?.society;
   const members = membersData?.members ?? [];
   const billTemplate = templateData?.template;
-
   // ─── LOAD BILLING HEADS INTO customCharges ────────────────────────────────────
   useEffect(() => {
     if (billingHeadsData?.heads) {
@@ -62,7 +56,6 @@ export default function BillingConfigPage() {
       setCustomCharges(active);
     }
   }, [billingHeadsData]);
-
   // ─── LIVE PREVIEW (matrix) auto-update ───────────────────────────────────────
   const livePreview = useMemo(() => {
     if (!members?.length) return [];
@@ -76,14 +69,12 @@ export default function BillingConfigPage() {
         if (!charge.name?.trim() || charge.isActive === false) return;
         const amount = parseFloat(charge.defaultAmount) || 0;
         const chargeName = charge.name.trim().toLowerCase();
-
         const isParkingCharge =
           chargeName.includes("parking") ||
           chargeName.includes("two-wheeler") ||
           chargeName.includes("four-wheeler") ||
           chargeName.includes("two wheeler") ||
           chargeName.includes("four wheeler");
-
         if (isParkingCharge && charge.calculationType === "Fixed") {
           const slots = member.parkingSlots ?? [];
           const matchingCount = slots.filter((slot) => {
@@ -122,7 +113,6 @@ export default function BillingConfigPage() {
       };
     });
   }, [customCharges, members]);
-
   // ─── CHARGES: SAVE ────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -152,7 +142,6 @@ export default function BillingConfigPage() {
     },
     onError: (error) => alert(`Failed to save: ${error.message}`),
   });
-
   const addCustomCharge = () =>
     setCustomCharges([
       ...customCharges,
@@ -165,12 +154,10 @@ export default function BillingConfigPage() {
         isExisting: false,
       },
     ]);
-
   const updateCharge = (id, field, value) =>
     setCustomCharges(
       customCharges.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
     );
-
   const deleteCharge = async (id) => {
     const charge = customCharges.find((c) => c.id === id);
     if (charge?.isExisting) {
@@ -184,7 +171,6 @@ export default function BillingConfigPage() {
     }
     setCustomCharges(customCharges.filter((c) => c.id !== id));
   };
-
   // ─── BILLING GRID: helpers ────────────────────────────────────────────────────
   const wings = useMemo(() => {
     const uniqueWings = [...new Set((members ?? []).map((m) => m.wing))].filter(
@@ -192,7 +178,6 @@ export default function BillingConfigPage() {
     );
     return uniqueWings.sort();
   }, [members]);
-
   const filteredMembers = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return (members ?? [])
@@ -213,7 +198,6 @@ export default function BillingConfigPage() {
         return Number(a.flatNo ?? 0) - Number(b.flatNo ?? 0);
       });
   }, [members, searchTerm, selectedWing]);
-
   const calculateRowTotal = useCallback(
     (memberId, member) => {
       const rowData = gridData[memberId] ?? {};
@@ -225,7 +209,6 @@ export default function BillingConfigPage() {
         if (!charge.name?.trim || charge.isActive === false) return;
         const amount = parseFloat(charge.defaultAmount) || 0;
         const chargeName = charge.name.trim().toLowerCase();
-
         // Detect if this is a parking charge by matching against member's actual slots
         const isParkingCharge =
           chargeName.includes("parking") ||
@@ -233,7 +216,6 @@ export default function BillingConfigPage() {
           chargeName.includes("four-wheeler") ||
           chargeName.includes("two wheeler") ||
           chargeName.includes("four wheeler");
-
         if (isParkingCharge && charge.calculationType === "Fixed") {
           // Count matching slots — skip Stilt (one-time, never billed monthly)
           const slots = member.parkingSlots ?? [];
@@ -297,7 +279,6 @@ export default function BillingConfigPage() {
     },
     [gridData, customCharges, gridCustomColumns, society],
   );
-
   const handleAddGridColumn = () => {
     const name = prompt("Enter column name");
     if (name?.trim())
@@ -306,7 +287,6 @@ export default function BillingConfigPage() {
         { id: `custom-${Date.now()}`, name: name.trim() },
       ]);
   };
-
   const handleEditGridColumn = (colId) => {
     const col = gridCustomColumns.find((c) => c.id === colId);
     if (col) {
@@ -319,7 +299,6 @@ export default function BillingConfigPage() {
         );
     }
   };
-
   const handleDeleteGridColumn = (colId) => {
     if (!confirm("Delete this column?")) return;
     setGridCustomColumns(gridCustomColumns.filter((c) => c.id !== colId));
@@ -329,7 +308,6 @@ export default function BillingConfigPage() {
     );
     setGridData(newGridData);
   };
-
   const handleCellChange = useCallback((memberId, colId, value) => {
     const numValue = parseFloat(value) || 0;
     setGridData((prev) => ({
@@ -338,7 +316,6 @@ export default function BillingConfigPage() {
     }));
     setModifiedRows((prev) => new Set(prev.add(memberId)));
   }, []);
-
   const generateGridBillsMutation = useMutation({
     mutationFn: (data) => apiClient.post("api/billing/generate", data),
     onSuccess: (data) => {
@@ -350,7 +327,6 @@ export default function BillingConfigPage() {
     },
     onError: (error) => alert(`Error: ${error.message}`),
   });
-
   const handleGridGenerate = () => {
     if (
       !confirm(
@@ -369,7 +345,6 @@ export default function BillingConfigPage() {
     });
     generateGridBillsMutation.mutate({ year, month, bills: billsData });
   };
-
   const renderGridBillPreview = () => {
     if (!billTemplate || !filteredMembers.length) return null;
     const member = filteredMembers[previewMemberIndex];
@@ -417,7 +392,6 @@ export default function BillingConfigPage() {
     html = html.replace("{{BILLING_TABLE}}", tableHtml);
     return html;
   };
-
   // ─── MATRIX: column names ─────────────────────────────────────────────────────
   const matrixColumns = useMemo(() => {
     const cols = ["Member", "Name", "Area"];
@@ -427,14 +401,12 @@ export default function BillingConfigPage() {
     cols.push("Total");
     return cols;
   }, [customCharges]);
-
   // ─── TAB NAV ──────────────────────────────────────────────────────────────────
   const tabs = [
     { id: "charges", label: "⚙️ Charge Structure" },
     { id: "matrix", label: "📊 Live Matrix" },
     { id: "grid", label: "🗃️ Billing Grid" },
   ];
-
   return (
     <div className={styles.container}>
       {/* ── HEADER ── */}
@@ -456,7 +428,6 @@ export default function BillingConfigPage() {
           </button>
         )}
       </div>
-
       {/* ── TAB BAR ── */}
       <div
         style={{
@@ -489,7 +460,6 @@ export default function BillingConfigPage() {
           </button>
         ))}
       </div>
-
       {/* ════════════════════════════════════════════════════════════════════════
           TAB 1 — CHARGE STRUCTURE
       ════════════════════════════════════════════════════════════════════════ */}
@@ -522,7 +492,6 @@ export default function BillingConfigPage() {
                 + Add Charge
               </button>
             </div>
-
             {customCharges.length === 0 ? (
               <div style={{ textAlign: "center", padding: "2rem" }}>
                 <p style={{ color: "#6b7280", marginBottom: "1rem" }}>
@@ -574,7 +543,6 @@ export default function BillingConfigPage() {
                   <span style={{ width: 60, textAlign: "center" }}>Active</span>
                   <span style={{ width: 60 }}></span>
                 </div>
-
                 {customCharges.map((charge, index) => (
                   <div
                     key={charge.id}
@@ -582,7 +550,6 @@ export default function BillingConfigPage() {
                     style={{ opacity: charge.isActive === false ? 0.5 : 1 }}
                   >
                     <div className={styles.rowNumber}>{index + 1}</div>
-
                     <input
                       type="text"
                       placeholder="Charge name (e.g. Parking, Amenities)"
@@ -593,7 +560,6 @@ export default function BillingConfigPage() {
                       className={styles.input}
                       style={{ flex: 2 }}
                     />
-
                     <select
                       value={charge.calculationType}
                       onChange={(e) =>
@@ -609,7 +575,6 @@ export default function BillingConfigPage() {
                       <option value="Fixed">Fixed (per flat)</option>
                       <option value="Per Sq Ft">Per Sq Ft</option>
                     </select>
-
                     <div
                       style={{
                         flex: 1,
@@ -645,7 +610,6 @@ export default function BillingConfigPage() {
                           : "₹/flat"}
                       </span>
                     </div>
-
                     <label
                       style={{
                         display: "flex",
@@ -663,7 +627,6 @@ export default function BillingConfigPage() {
                         }
                       />
                     </label>
-
                     <button
                       onClick={() => deleteCharge(charge.id)}
                       className={styles.deleteBtn}
@@ -677,7 +640,6 @@ export default function BillingConfigPage() {
           </div>
         </div>
       )}
-
       {/* ════════════════════════════════════════════════════════════════════════
           TAB 2 — LIVE MATRIX
       ════════════════════════════════════════════════════════════════════════ */}
@@ -711,7 +673,6 @@ export default function BillingConfigPage() {
               {livePreview.length} members
             </span>
           </div>
-
           {livePreview.length === 0 ? (
             <div
               style={{ textAlign: "center", padding: "3rem", color: "#6b7280" }}
@@ -775,7 +736,6 @@ export default function BillingConfigPage() {
           )}
         </div>
       )}
-
       {/* ════════════════════════════════════════════════════════════════════════
           TAB 3 — BILLING GRID
       ════════════════════════════════════════════════════════════════════════ */}
@@ -816,7 +776,6 @@ export default function BillingConfigPage() {
               </button>
             </div>
           </div>
-
           {/* Month/Year + Filter bar */}
           <div
             className={styles.section}
@@ -888,7 +847,6 @@ export default function BillingConfigPage() {
               </span>
             </div>
           </div>
-
           {/* Grid Table */}
           {membersLoading ? (
             <div
@@ -1016,7 +974,6 @@ export default function BillingConfigPage() {
               </table>
             </div>
           )}
-
           {/* Bottom actions */}
           <div
             style={{
@@ -1039,7 +996,6 @@ export default function BillingConfigPage() {
                 : `Generate ${filteredMembers.length} Bills`}
             </button>
           </div>
-
           {/* Grid Preview Overlay */}
           {showGridPreview && (
             <div

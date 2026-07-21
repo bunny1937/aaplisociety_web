@@ -13,15 +13,12 @@ import { logAudit } from "@/lib/audit-logger";
 import { applyProfileEditPayload } from "@/lib/profile-edit-apply";
 import { buildProfileEditDecisionNotification } from "@/lib/profile-edit-notifications";
 import { sendInApp } from "@/lib/visitor-channels";
-
 export async function POST(request, { params }) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   const { id } = await params;
   if (!mongoose.Types.ObjectId.isValid(id))
     return NextResponse.json({ error: "Valid id required" }, { status: 400 });
-
   try {
     await connectDB();
     const editRequest = await ProfileEditRequest.findOne({
@@ -31,10 +28,8 @@ export async function POST(request, { params }) {
     });
     if (!editRequest)
       return NextResponse.json({ error: "No pending request found for that id" }, { status: 404 });
-
     const member = await Member.findOne({ _id: editRequest.memberId, societyId: auth.user.societyId });
     if (!member) return NextResponse.json({ error: "Flat not found" }, { status: 404 });
-
     try {
       applyProfileEditPayload(member, editRequest);
     } catch (err) {
@@ -44,12 +39,10 @@ export async function POST(request, { params }) {
       throw err;
     }
     await member.save();
-
     editRequest.status = "Approved";
     editRequest.approvedBy = auth.user.userId;
     editRequest.approvedAt = new Date();
     await editRequest.save();
-
     const notif = buildProfileEditDecisionNotification({
       decision: "approved",
       section: editRequest.section,
@@ -69,14 +62,12 @@ export async function POST(request, { params }) {
       recipientIds: [String(member._id)],
       metadata: { profileEditRequestId: String(editRequest._id) },
     });
-
     await logAudit(auth.user.userId, auth.user.societyId, "PROFILE_EDIT_REQUEST_APPROVED", null, {
       profileEditRequestId: String(editRequest._id),
       memberId: String(member._id),
       section: editRequest.section,
       action: editRequest.action,
     });
-
     return NextResponse.json({ success: true, profileEditRequest: editRequest });
   } catch (err) {
     console.error("Profile edit request approve error", err);

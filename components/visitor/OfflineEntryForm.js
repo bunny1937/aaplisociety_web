@@ -12,9 +12,7 @@ import {
   fileToCompressedDataUrl,
   isOnline,
 } from "@/lib/visitor-outbox";
-
 const PURPOSES = ["Guest", "Delivery", "Domestic Help", "Vendor", "Cab", "Other"];
-
 const S = {
   field: { marginBottom: 12 },
   label: { display: "block", fontSize: 12.5, fontWeight: 600, color: "#374151", marginBottom: 5 },
@@ -36,12 +34,10 @@ const S = {
   cancel: { padding: "12px 16px", borderRadius: 10, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   hint: { fontSize: 12, color: "#6b7280", marginTop: 6, lineHeight: 1.4 },
 };
-
 function flatName(f) {
   const fl = (f.wing ? f.wing + "-" : "") + (f.flatNo || "");
   return f.ownerName ? fl + " · " + f.ownerName : fl;
 }
-
 export default function OfflineEntryForm({ onDone }) {
   const [flatQuery, setFlatQuery] = useState("");
   const [flatResults, setFlatResults] = useState([]);
@@ -58,7 +54,6 @@ export default function OfflineEntryForm({ onDone }) {
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(true);
   const fileRef = useRef(null);
-
   useEffect(() => {
     setOnline(isOnline());
     const on = () => setOnline(true);
@@ -70,7 +65,6 @@ export default function OfflineEntryForm({ onDone }) {
       window.removeEventListener("offline", off);
     };
   }, []);
-
   // Flat search: cache-first so it works offline, refreshed from the API online.
   useEffect(() => {
     let active = true;
@@ -102,13 +96,11 @@ export default function OfflineEntryForm({ onDone }) {
       clearTimeout(t);
     };
   }, [flatQuery]);
-
   const pick = (f) => {
     setFlat(f);
     setFlatQuery("");
     setFlatResults([]);
   };
-
   const pickPhoto = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -118,7 +110,6 @@ export default function OfflineEntryForm({ onDone }) {
       setMsg(err.message || "Could not read photo");
     }
   };
-
   const submit = async () => {
     setMsg("");
     const hasFlat = flat || (manual && flatNo.trim());
@@ -150,7 +141,6 @@ export default function OfflineEntryForm({ onDone }) {
       setBusy(false);
     }
   };
-
   return (
     <div>
       <div style={S.field}>
@@ -216,7 +206,6 @@ export default function OfflineEntryForm({ onDone }) {
           </div>
         )}
       </div>
-
       <div style={S.field}>
         <label style={S.label}>Visitor name *</label>
         <input
@@ -226,7 +215,6 @@ export default function OfflineEntryForm({ onDone }) {
           placeholder="Who is entering?"
         />
       </div>
-
       <div style={S.row}>
         <div style={Object.assign({}, S.field, S.half)}>
           <label style={S.label}>Phone</label>
@@ -252,7 +240,6 @@ export default function OfflineEntryForm({ onDone }) {
           </select>
         </div>
       </div>
-
       <div style={S.field}>
         <label style={S.label}>Note (what did they say / who are they here for?)</label>
         <textarea
@@ -262,7 +249,6 @@ export default function OfflineEntryForm({ onDone }) {
           placeholder="e.g. Says he is here to meet Mr. Sharma — delivery"
         />
       </div>
-
       <div style={S.field}>
         <label style={S.label}>Photo</label>
         <div style={S.photoRow}>
@@ -284,9 +270,7 @@ export default function OfflineEntryForm({ onDone }) {
           />
         </div>
       </div>
-
       {msg ? <div style={S.err}>{msg}</div> : null}
-
       <div style={S.actions}>
         <button style={S.submit} onClick={submit} disabled={busy}>
           {busy

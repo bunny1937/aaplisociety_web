@@ -2,39 +2,32 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Notice from "@/models/Notice";
-
 export async function POST(request, { params }) {
   try {
     await connectDB();
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded || decoded.role !== "Member") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
     const { id } = await params;
-
     const notice = await Notice.findOne({
       _id: id,
       societyId: decoded.societyId,
       isDeleted: false,
       priority: "urgent",
     });
-
     if (!notice) {
       return NextResponse.json(
         { error: "Notice not found or not urgent" },
         { status: 404 },
       );
     }
-
     const alreadyAcknowledged = notice.acknowledgedBy.some(
       (a) => a.memberId.toString() === decoded.memberId.toString(),
     );
-
     if (!alreadyAcknowledged) {
       notice.acknowledgedBy.push({
         memberId: decoded.memberId,
@@ -52,7 +45,6 @@ export async function POST(request, { params }) {
       }
       await notice.save();
     }
-
     return NextResponse.json({ success: true, message: "Acknowledged" });
   } catch (error) {
     return NextResponse.json(

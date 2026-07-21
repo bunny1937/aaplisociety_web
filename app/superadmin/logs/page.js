@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-
 const ACTION_COLOR = {
   create: "#34d399",
   update: "#60a5fa",
@@ -10,7 +9,6 @@ const ACTION_COLOR = {
   logout: "#94a3b8",
   export: "#fbbf24",
 };
-
 async function fetchLogs(filter) {
   const res = await fetch(`/api/admin/logs?filter=${filter}`, {
     credentials: "include",
@@ -19,23 +17,19 @@ async function fetchLogs(filter) {
   if (!res.ok) throw new Error("Failed to fetch logs");
   return res.json();
 }
-
 export default function SuperAdminLogsPage() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["superadmin-logs", filter],
     queryFn: () => fetchLogs(filter),
     staleTime: 30 * 1000,
   });
-
   const logs = (data?.logs || []).filter((l) =>
     search
       ? JSON.stringify(l).toLowerCase().includes(search.toLowerCase())
       : true
   );
-
   return (
     <div style={{ padding: 0, maxWidth: 1200, margin: "0 auto" }}>
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: "0.25rem", color: "#1f2937" }}>
@@ -44,7 +38,6 @@ export default function SuperAdminLogsPage() {
       <p style={{ color: "#6b7280", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
         Last 100 admin actions across all societies.
       </p>
-
       <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
         <input
           placeholder="Search logs..."
@@ -68,7 +61,6 @@ export default function SuperAdminLogsPage() {
           {logs.length} logs
         </span>
       </div>
-
       {isLoading ? (
         <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>Loading logs...</div>
       ) : error ? (

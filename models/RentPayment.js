@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 // Mirrors mobile-backend's RentPayment collection. Record-keeping only —
 // "Online" is accepted as a paymentMode value with no gateway behind it yet.
 const RentPaymentSchema = new mongoose.Schema(
@@ -15,5 +14,4 @@ const RentPaymentSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 export default mongoose.models.RentPayment || mongoose.model("RentPayment", RentPaymentSchema);

@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 // Mirrors apps/mobile-backend's RefreshToken model. A stored, revocable
 // refresh token — previously this app had none: /api/auth/refresh just
 // re-signed a new access token from any still-valid token, with no way to
@@ -13,5 +12,4 @@ const RefreshTokenSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 export default mongoose.models.RefreshToken || mongoose.model("RefreshToken", RefreshTokenSchema);

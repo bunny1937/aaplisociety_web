@@ -4,7 +4,6 @@ import Society from "@/models/Society";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import { validateAdminRequest } from "@/lib/admin-middleware";
-
 function generateSocietyId(name, area, buildDate) {
   const parts = name.trim().split(" ");
   const first = parts[0]?.slice(0, 4).toLowerCase() || "soc";
@@ -17,7 +16,6 @@ function generateSocietyId(name, area, buildDate) {
   const rand = String(Math.floor(10 + Math.random() * 90));
   return `${first}_${last}_${areaSlug}_${year}_${rand}`;
 }
-
 function generatePassword() {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const nums = "0123456789";
@@ -34,7 +32,6 @@ function generatePassword() {
     .sort(() => Math.random() - 0.5)
     .join("");
 }
-
 export async function POST(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
@@ -50,18 +47,15 @@ export async function POST(request) {
     registrationNo,
     config,
   } = body;
-
   if (!societyName || !email || !fullName) {
     return NextResponse.json({ error: "societyName, email, and fullName are required" }, { status: 400 });
   }
-
   if (registrationNo) {
     const dupe = await Society.findOne({ registrationNo, isDeleted: { $ne: true } });
     if (dupe) {
       return NextResponse.json({ error: "Registration number already exists" }, { status: 409 });
     }
   }
-
   // Generate unique societyId
   let societyId,
     attempts = 0;
@@ -71,10 +65,8 @@ export async function POST(request) {
     if (!existing) break;
     attempts++;
   } while (attempts < 10);
-
   const plainPassword = generatePassword();
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
   const society = await Society.create({
     societyId,
     name: societyName,
@@ -123,7 +115,6 @@ export async function POST(request) {
     subscription: { status: "Trial" },
     credentials: { adminEmail: email, plainPassword }, // stored temporarily for superadmin only
   });
-
   const user = await User.create({
     name: fullName,
     email,
@@ -132,7 +123,6 @@ export async function POST(request) {
     societyId: society._id,
     isActive: true,
   });
-
   return NextResponse.json({
     success: true,
     society,

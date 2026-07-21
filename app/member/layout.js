@@ -1,6 +1,5 @@
 import DashboardLayout from "components/DashboardLayout";
 import NotificationBell from "components/NotificationBell";
-
 export default function MemberLayout({ children }) {
   const navigation = [
     {
@@ -21,7 +20,6 @@ export default function MemberLayout({ children }) {
       ],
     },
   ];
-
   return (
     <DashboardLayout
       role="Member"

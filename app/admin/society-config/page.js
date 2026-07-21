@@ -1,12 +1,10 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Dashboard.module.css";
 import gridStyles from "@/styles/BillingGrid.module.css";
 import { produce } from "immer";
-
 export default function SocietyConfigPage() {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
@@ -21,12 +19,10 @@ export default function SocietyConfigPage() {
   });
   const [errors, setErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
-
   const { data: societyData, isLoading } = useQuery({
     queryKey: ["society-config"],
     queryFn: () => apiClient.get("/api/society/config"),
   });
-
   useEffect(() => {
     if (societyData?.society) {
       const c = societyData.society.config || {};
@@ -42,12 +38,10 @@ export default function SocietyConfigPage() {
       });
     }
   }, [societyData]);
-
   const updateMutation = useMutation({
     mutationFn: (data) => apiClient.put("/api/society/update", data),
     onSuccess: (data) => {
       setSuccessMessage("✅ Society configuration updated successfully!");
-
       // ✅ UPDATE FORM STATE WITH SERVER RESPONSE
       if (data.society) {
         const c = data.society.config || {};
@@ -62,7 +56,6 @@ export default function SocietyConfigPage() {
           },
         });
       }
-
       queryClient.invalidateQueries(["society-config"]);
       setTimeout(() => setSuccessMessage(""), 5000);
     },
@@ -75,7 +68,6 @@ export default function SocietyConfigPage() {
       produce(prev, (draft) => {
         const keys = path.split(".");
         let current = draft;
-
         // Navigate to the parent of the target key
         for (let i = 0; i < keys.length - 1; i++) {
           if (!current[keys[i]]) {
@@ -83,18 +75,15 @@ export default function SocietyConfigPage() {
           }
           current = current[keys[i]];
         }
-
         // Set the final value
         current[keys[keys.length - 1]] = value;
         console.log(`✅ Updated ${path} to:`, value);
       }),
     );
-
     if (errors[path]) {
       setErrors((prev) => ({ ...prev, [path]: "" }));
     }
   };
-
   const validate = () => {
     const newErrors = {};
     if (!formData.name || formData.name.trim().length < 2)
@@ -111,16 +100,13 @@ export default function SocietyConfigPage() {
       newErrors.interestAfterDays = "Interest after days must be 0–365";
     return newErrors;
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
     }
-
     try {
       await updateMutation.mutateAsync({
         ...formData,
@@ -133,7 +119,6 @@ export default function SocietyConfigPage() {
       setErrors({ submit: error.message });
     }
   };
-
   if (isLoading) {
     return (
       <div
@@ -143,7 +128,6 @@ export default function SocietyConfigPage() {
       </div>
     );
   }
-
   return (
     <div>
       <form onSubmit={handleSubmit}>
@@ -178,7 +162,6 @@ export default function SocietyConfigPage() {
             </button>
           </div>
         </div>
-
         {successMessage && (
           <div
             className="toast toast-success"
@@ -187,19 +170,16 @@ export default function SocietyConfigPage() {
             {successMessage}
           </div>
         )}
-
         {errors.submit && (
           <div className={gridStyles.errorList}>
             <div className={gridStyles.errorListTitle}>❌ Update Failed</div>
             <div>{errors.submit}</div>
           </div>
         )}
-
         <div className={styles.contentCard}>
           <div className={styles.cardHeader}>
             <h2 className={styles.cardTitle}>Basic Information</h2>
           </div>
-
           <div className={gridStyles.configForm}>
             <div className={gridStyles.formGroup}>
               <label className="label">Society Name *</label>
@@ -212,7 +192,6 @@ export default function SocietyConfigPage() {
               />
               {errors.name && <p className="error-text">{errors.name}</p>}
             </div>
-
             <div className={gridStyles.formRow}>
               <div className={gridStyles.formGroup}>
                 <label className="label">Registration Number</label>
@@ -227,7 +206,6 @@ export default function SocietyConfigPage() {
                 />
               </div>
             </div>
-
             <div className={gridStyles.formGroup}>
               <label className="label">Address</label>
               <textarea
@@ -240,12 +218,10 @@ export default function SocietyConfigPage() {
             </div>
           </div>
         </div>
-
         <div className={styles.contentCard}>
           <div className={styles.cardHeader}>
             <h2 className={styles.cardTitle}>Financial Parameters</h2>
           </div>
-
           <div className={gridStyles.formRow}>
             {/* Interest Rate on Arrears */}
             <div className={gridStyles.formGroup}>
@@ -279,7 +255,6 @@ export default function SocietyConfigPage() {
                 Annual interest rate on overdue payments (e.g., 21% p.a.)
               </span>
             </div>
-
             <div className="config-field">
               <label>Interest Rounding</label>
               <select
@@ -300,7 +275,6 @@ export default function SocietyConfigPage() {
                 Society never spares even ₹0.01 — use Round Up
               </p>
             </div>
-
             <div className="config-field">
               <label>Interest Use Mode</label>
               <select
@@ -318,7 +292,6 @@ export default function SocietyConfigPage() {
                 </option>
               </select>
             </div>
-
             <div className="config-field">
               <label>Member Payment Breakdown Visible</label>
               <input
@@ -335,7 +308,6 @@ export default function SocietyConfigPage() {
               />
               <span>Show members how much goes to interest vs principal</span>
             </div>
-
             {/* Service Tax Rate */}
             <div className={gridStyles.formGroup}>
               <label className="label">Service Tax Rate (%)</label>
@@ -368,7 +340,6 @@ export default function SocietyConfigPage() {
                 Tax applied on total charges (e.g., GST 2%)
               </span>
             </div>
-
             {/* Interest After Days — display label only, no logic gate */}
             <div style={{ gridColumn: "1 / -1", border: "1px solid #c7d2fe", borderRadius: "10px", padding: "1.25rem", background: "#f5f3ff" }}>
               <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", color: "#4338ca", fontWeight: 700 }}>
@@ -390,7 +361,6 @@ export default function SocietyConfigPage() {
                 {errors.interestAfterDays && <span style={{ color: "#dc2626", fontSize: "0.8rem" }}>{errors.interestAfterDays}</span>}
               </div>
             </div>
-
           </div>
         </div>
       </form>

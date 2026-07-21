@@ -3,10 +3,8 @@ import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import mongoose from "mongoose";
-
 // billMonth is 0-indexed: 0=Jan, 3=Apr, 11=Dec
 // FY Apr(3)→Mar(2): months 3..11 of fyStart year, then 0..2 of fyStart+1 year
-
 function fyMonths(fy) {
   // Returns array of { year, month0, label, periodId } in FY order
   const months = [];
@@ -18,37 +16,30 @@ function fyMonths(fy) {
   }
   return months;
 }
-
 function periodId(year, month0) {
   return `${year}-${String(month0 + 1).padStart(2, "0")}`;
 }
-
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 function monthLabel(month0, year) {
   return `${MONTH_NAMES[month0]} ${year}`;
 }
-
 export async function GET(request) {
   const token = getTokenFromRequest(request);
   const user = token ? verifyToken(token) : null;
   if (!user || !["Admin", "SuperAdmin"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   const { searchParams } = new URL(request.url);
   const societyId = user.societyId || searchParams.get("societyId");
   const fy = parseInt(searchParams.get("fy") || (() => {
     const now = new Date();
     return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   })());
-
   await connectDB();
   if (!societyId || !mongoose.Types.ObjectId.isValid(societyId)) {
     return NextResponse.json({ error: "Invalid society context" }, { status: 400 });
   }
   const sid = new mongoose.Types.ObjectId(societyId);
-
   // All bills for this FY
   const bills = await Bill.find({
     societyId: sid,
@@ -58,7 +49,6 @@ export async function GET(request) {
       { billYear: fy + 1, billMonth: { $lte: 2 } },
     ],
   }).lean();
-
   // Bills before this FY with outstanding balance
   const priorBills = await Bill.find({
     societyId: sid,
@@ -69,7 +59,6 @@ export async function GET(request) {
       { billYear: fy, billMonth: { $lt: 3 } },
     ],
   }).lean();
-
   // Group current FY bills by periodId
   const byPeriod = {};
   for (const b of bills) {
@@ -77,7 +66,6 @@ export async function GET(request) {
     if (!byPeriod[pid]) byPeriod[pid] = [];
     byPeriod[pid].push(b);
   }
-
   // Build monthly timeline
   const timeline = fyMonths(fy).map(({ year, month0, label, periodId: pid }) => {
     const periodBills = byPeriod[pid] || [];
@@ -95,18 +83,15 @@ export async function GET(request) {
       const c = b.charges instanceof Map ? Object.fromEntries(b.charges) : (b.charges || {});
       return s + parseFloat(c.repairFund || c["Repair Fund"] || c["Repair & Maintenance"] || 0);
     }, 0);
-
     const allPaid = generated && periodBills.every((b) => b.status === "Paid");
     const allUnpaid = generated && periodBills.every((b) => ["Unpaid", "Overdue"].includes(b.status));
     const partial = generated && !allPaid && !allUnpaid;
     const paidCount = periodBills.filter((b) => b.status === "Paid").length;
     const unpaidCount = periodBills.filter((b) => ["Unpaid", "Overdue", "Partial"].includes(b.status)).length;
-
     // Opening balance = sum of openingPrincipal + openingInterest seeded into this period's bills
     const openingPrincipal = periodBills.reduce((s, b) => s + (b.openingPrincipal || 0), 0);
     const openingInterest = periodBills.reduce((s, b) => s + (b.openingInterest || 0), 0);
     const openingTotal = openingPrincipal + openingInterest;
-
     return {
       year, month0, label, periodId: pid,
       generated, billCount: periodBills.length,
@@ -125,7 +110,6 @@ export async function GET(request) {
       isMarch: month0 === 2,
     };
   });
-
   // FY-wide aggregates
   let totalBilled = 0, totalCollected = 0, totalPending = 0, totalInterest = 0, totalSinking = 0, totalRepair = 0;
   for (const row of timeline) {
@@ -141,7 +125,6 @@ export async function GET(request) {
   const interestOutstanding = bills
     .filter(b => b.status !== "Paid")
     .reduce((s, b) => s + (b.billInterestBalance ?? b.interestBalance ?? 0), 0);
-
   // ── Closing scenario analysis ──────────────────────────────────────────
   // Find last generated month, last fully-paid month
   const generatedMonths = timeline.filter((m) => m.generated);
@@ -150,7 +133,6 @@ export async function GET(request) {
   const lastFullyPaid = paidMonths[paidMonths.length - 1] || null;
   const marchRow = timeline.find((m) => m.isMarch);
   const firstGenerated = generatedMonths[0] || null;
-
   // What scenario are we in?
   let closingScenario;
   if (!generatedMonths.length) {
@@ -162,19 +144,16 @@ export async function GET(request) {
   } else {
     closingScenario = "MID_YEAR";             // Haven't reached March yet
   }
-
   // Mark months before the first generated bill as "opening balance" months (not real billing gaps)
   const firstGenIdx = firstGenerated ? timeline.findIndex((m) => m.periodId === firstGenerated.periodId) : -1;
   for (let i = 0; i < timeline.length; i++) {
     timeline[i].isOpeningMonth = firstGenIdx > 0 && i < firstGenIdx;
   }
-
   // Next to generate = first ungenerated month AFTER the last generated one (not before)
   const lastGenIdx = lastGenerated ? timeline.findIndex((m) => m.periodId === lastGenerated.periodId) : -1;
   const nextToGenerate = lastGenIdx >= 0
     ? timeline.slice(lastGenIdx + 1).find((m) => !m.generated) || null
     : null;
-
   // Available FY years for picker
   const yearGroups = await Bill.aggregate([
     { $match: { societyId: sid } },
@@ -189,7 +168,6 @@ export async function GET(request) {
     // If bills exist for month <= 2 (Jan-Mar) in year y, that's FY y-1
     return [y, y - 1];
   }).flat())].sort((a, b) => b - a).slice(0, 8);
-
   return NextResponse.json({
     success: true,
     fy,

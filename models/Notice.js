@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const NoticeSchema = new mongoose.Schema(
   {
     societyId: {
@@ -14,7 +13,6 @@ const NoticeSchema = new mongoose.Schema(
       required: true,
     },
     createdByName: { type: String, required: true },
-
     type: {
       type: String,
       required: true,
@@ -52,9 +50,7 @@ const NoticeSchema = new mongoose.Schema(
       minlength: 30,
       maxlength: 2000,
     },
-
     pinned: { type: Boolean, default: false, index: true },
-
     // Read tracking
     viewedBy: [
       {
@@ -62,7 +58,6 @@ const NoticeSchema = new mongoose.Schema(
         viewedAt: { type: Date, default: Date.now },
       },
     ],
-
     // Acknowledge tracking (urgent notices)
     acknowledgedBy: [
       {
@@ -70,18 +65,14 @@ const NoticeSchema = new mongoose.Schema(
         acknowledgedAt: { type: Date, default: Date.now },
       },
     ],
-
     expiresAt: { type: Date },
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },
 );
-
 // TTL index — MongoDB auto-removes expired notices
 NoticeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-
 // Compound for main feed query
 NoticeSchema.index({ societyId: 1, isDeleted: 1, pinned: -1, createdAt: -1 });
 NoticeSchema.index({ societyId: 1, priority: 1, isDeleted: 1 });
-
 export default mongoose.models.Notice || mongoose.model("Notice", NoticeSchema);

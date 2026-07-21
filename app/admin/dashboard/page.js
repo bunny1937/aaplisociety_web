@@ -3,13 +3,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import styles from "@/styles/Dashboard.module.css";
-
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
 function fmt(n) {
   return (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 function Ring({ pct, color = "#3B82F6", size = 80, stroke = 8 }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
@@ -27,7 +24,6 @@ function Ring({ pct, color = "#3B82F6", size = 80, stroke = 8 }) {
     </svg>
   );
 }
-
 function BarChart({ data, height = 120 }) {
   if (!data || data.length === 0) return <div style={{ color: "#9CA3AF", padding: "1rem", textAlign: "center" }}>No data</div>;
   const maxVal = Math.max(...data.map((d) => Math.max(d.totalBilled || 0, d.totalCollected || 0)), 1);
@@ -55,7 +51,6 @@ function BarChart({ data, height = 120 }) {
     </div>
   );
 }
-
 export default function AdminDashboardPage() {
   const router = useRouter();
   const now = new Date();
@@ -64,14 +59,11 @@ export default function AdminDashboardPage() {
   const [yearOptions, setYearOptions] = useState([now.getFullYear()]);
   const [minYear, setMinYear] = useState(now.getFullYear());
   const [minMonth, setMinMonth] = useState(1);
-
   // FY starts Apr — compute current FY year
   const currentFyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   const [fyYear, setFyYear] = useState(currentFyYear);
-
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
-
   useEffect(() => {
     fetch("/api/billing/year-range", { credentials: "include" })
       .then((r) => r.json())
@@ -85,7 +77,6 @@ export default function AdminDashboardPage() {
       })
       .catch(() => {});
   }, []);
-
   // When year changes, clamp month to current month if we're on the current year
   const handleYearChange = (newYear) => {
     setFilterYear(newYear);
@@ -95,7 +86,6 @@ export default function AdminDashboardPage() {
       setFilterMonth(minMonth);
     }
   };
-
   // Months available: clamp start at minMonth for minYear, clamp end at currentMonth for currentYear
   const availableMonths = MONTHS.map((m, i) => ({
     label: m,
@@ -105,7 +95,6 @@ export default function AdminDashboardPage() {
     if (filterYear === currentYear && m.value > currentMonth) return false;
     return true;
   });
-
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats", filterMonth, filterYear, fyYear],
     queryFn: async () => {
@@ -118,7 +107,6 @@ export default function AdminDashboardPage() {
     },
     staleTime: 60_000,
   });
-
   const outstanding = stats?.outstanding || {};
   const period = stats?.period || {};
   const fy = stats?.fy || {};
@@ -126,10 +114,8 @@ export default function AdminDashboardPage() {
   const recentPayments = stats?.recentPayments || [];
   const paymentModes = stats?.paymentModes || [];
   const totalMembers = stats?.totalMembers || 0;
-
   const collectionRate = period.collectionRate || 0;
   const fyCollectionRate = fy.collectionRate || 0;
-
   const fyYearOptions = useMemo(() => {
     const opts = [];
     const minFy = yearOptions[0] || currentYear - 2;
@@ -137,18 +123,15 @@ export default function AdminDashboardPage() {
     for (let y = minFy; y <= currentFyYear; y++) opts.push(y);
     return opts;
   }, [yearOptions, currentFyYear]);
-
   const periodLabel = filterMonth && filterYear
     ? `${MONTHS[filterMonth - 1]} ${filterYear}`
     : filterYear || "All";
-
   const cardStyle = {
     background: "#fff",
     borderRadius: 12,
     border: "1px solid #E5E7EB",
     boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
   };
-
   const quickLinks = [
     { label: "Generate Bills", icon: "📄", path: "/admin/generate-bills", color: "#3B82F6" },
     { label: "Record Payment", icon: "💳", path: "/admin/payments", color: "#059669" },
@@ -159,7 +142,6 @@ export default function AdminDashboardPage() {
     { label: "Bill Template", icon: "📝", path: "/admin/bill-template", color: "#EC4899" },
     { label: "Society Config", icon: "🏢", path: "/admin/society-config", color: "#14B8A6" },
   ];
-
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
       {/* ── Header ── */}
@@ -202,11 +184,9 @@ export default function AdminDashboardPage() {
           </select>
         </div>
       </div>
-
       {isLoading && (
         <div style={{ textAlign: "center", padding: "2rem", color: "#6B7280" }}>Loading...</div>
       )}
-
       {/* ── Top KPI Row ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
         {/* Total Members */}
@@ -222,7 +202,6 @@ export default function AdminDashboardPage() {
           </div>
           <div style={{ fontSize: "0.75rem", color: "#9CA3AF", marginTop: 4 }}>Active flats</div>
         </div>
-
         {/* All-time Outstanding */}
         <div
           style={{ ...cardStyle, padding: "1.25rem", borderLeft: "4px solid #DC2626", cursor: "pointer" }}
@@ -238,7 +217,6 @@ export default function AdminDashboardPage() {
             {outstanding.unpaidBillCount || 0} unpaid bills &bull; ₹{fmt(outstanding.interest)} interest
           </div>
         </div>
-
         {/* Period Collected */}
         <div
           style={{ ...cardStyle, padding: "1.25rem", borderLeft: "4px solid #059669", cursor: "pointer" }}
@@ -254,7 +232,6 @@ export default function AdminDashboardPage() {
             of ₹{fmt(period.totalBilled)} billed &bull; {collectionRate}% collected
           </div>
         </div>
-
         {/* FY Progress */}
         <div
           style={{ ...cardStyle, padding: "1.25rem", borderLeft: "4px solid #7C3AED" }}
@@ -270,7 +247,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </div>
-
       {/* ── Second Row: Period Detail + Collection Ring + Bar Chart ── */}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr", gap: "1rem", marginBottom: "1.5rem" }}>
         {/* Period Detail Card */}
@@ -294,7 +270,6 @@ export default function AdminDashboardPage() {
             ))}
           </div>
         </div>
-
         {/* Collection Rate Ring */}
         <div style={{ ...cardStyle, padding: "1.25rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.75rem" }}>
           <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#1F2937", textAlign: "center" }}>
@@ -320,7 +295,6 @@ export default function AdminDashboardPage() {
             ))}
           </div>
         </div>
-
         {/* 6-Month Bar Chart */}
         <div style={{ ...cardStyle, padding: "1.25rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
@@ -344,7 +318,6 @@ export default function AdminDashboardPage() {
           )}
         </div>
       </div>
-
       {/* ── Quick Actions ── */}
       <div style={{ ...cardStyle, padding: "1rem", marginBottom: "1.5rem" }}>
         <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#1F2937", marginBottom: "0.75rem" }}>Quick Actions</div>
@@ -377,7 +350,6 @@ export default function AdminDashboardPage() {
           ))}
         </div>
       </div>
-
       {/* ── FY Summary Row ── */}
       <div style={{ ...cardStyle, padding: "1.25rem", marginBottom: "1.5rem" }}>
         <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#1F2937", marginBottom: "1rem" }}>
@@ -398,7 +370,6 @@ export default function AdminDashboardPage() {
           ))}
         </div>
       </div>
-
       {/* ── Bottom Row: Recent Payments + Trend Table ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
         {/* Recent Payments */}
@@ -459,7 +430,6 @@ export default function AdminDashboardPage() {
             )}
           </div>
         </div>
-
         {/* 6-Month Trend Table */}
         <div style={{ ...cardStyle, overflow: "hidden" }}>
           <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center" }}>

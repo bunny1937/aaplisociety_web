@@ -2,12 +2,10 @@
 // CHANGE 15 — NEW PAGE
 // Shows all members past billPayFinalDate.
 // Admin can record payments manually (admin payments/record has NO date guard).
-
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-
 const MONTH_NAMES = [
   "",
   "Jan",
@@ -23,17 +21,14 @@ const MONTH_NAMES = [
   "Nov",
   "Dec",
 ];
-
 function fmt(n) {
   return parseFloat(n || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
-
 export default function LatePaymentsPage() {
   const qc = useQueryClient();
-
   // Payment modal state
   const [modal, setModal] = useState(null); // { member, bill }
   const [payAmt, setPayAmt] = useState("");
@@ -43,16 +38,13 @@ export default function LatePaymentsPage() {
   const [bankName, setBankName] = useState("");
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-
   // Fetch all members with unpaid bills past billPayFinalDate
   const { data, isLoading } = useQuery({
     queryKey: ["late-payments-list"],
     queryFn: () => apiClient.get("/api/payments/late-list"),
     refetchOnWindowFocus: false,
   });
-
   const lateMembers = data?.members || [];
-
   // Record payment mutation (uses admin payments/record — no date block)
   const payMutation = useMutation({
     mutationFn: (payload) => apiClient.post("/api/payments/record", payload),
@@ -69,7 +61,6 @@ export default function LatePaymentsPage() {
       setError(e?.message || "Payment failed");
     },
   });
-
   function openModal(member) {
     setError(null);
     setSuccess(null);
@@ -80,7 +71,6 @@ export default function LatePaymentsPage() {
     setChequeNo("");
     setBankName("");
   }
-
   function handlePay() {
     if (!payAmt || isNaN(parseFloat(payAmt)) || parseFloat(payAmt) <= 0) {
       setError("Enter valid amount");
@@ -95,7 +85,6 @@ export default function LatePaymentsPage() {
       bankName: payMode === "Cheque" ? bankName : undefined,
     });
   }
-
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 0 }}>
       <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: "#0f172a", letterSpacing: "-0.01em" }}>
@@ -106,7 +95,6 @@ export default function LatePaymentsPage() {
         window is closed for them — record cash/cheque payments manually here.
         Interest-satisfy-first allocation applied automatically.
       </p>
-
       {success && (
         <div
           style={{
@@ -122,7 +110,6 @@ export default function LatePaymentsPage() {
           ✅ {success}
         </div>
       )}
-
       {isLoading ? (
         <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>
           Loading late payments…
@@ -203,7 +190,6 @@ export default function LatePaymentsPage() {
           </table>
         </div>
       )}
-
       {/* Payment Modal */}
       {modal && (
         <div
@@ -242,7 +228,6 @@ export default function LatePaymentsPage() {
               {modal.wing}-{modal.flatNo} — {modal.ownerName} — Oldest:{" "}
               {modal.oldestPeriod}
             </p>
-
             {/* Outstanding summary */}
             <div
               style={{
@@ -302,7 +287,6 @@ export default function LatePaymentsPage() {
                 {fmt(modal.interestOutstanding)} interest first, then principal.
               </p>
             </div>
-
             {error && (
               <div
                 style={{
@@ -318,7 +302,6 @@ export default function LatePaymentsPage() {
                 ❌ {error}
               </div>
             )}
-
             <div
               style={{
                 display: "flex",
@@ -337,7 +320,6 @@ export default function LatePaymentsPage() {
                   step={0.01}
                 />
               </div>
-
               <div>
                 <label style={label}>Payment Mode</label>
                 <select
@@ -353,7 +335,6 @@ export default function LatePaymentsPage() {
                   <option value="RTGS">RTGS</option>
                 </select>
               </div>
-
               {payMode === "Cheque" && (
                 <>
                   <div>
@@ -374,7 +355,6 @@ export default function LatePaymentsPage() {
                   </div>
                 </>
               )}
-
               <div>
                 <label style={label}>Notes (optional)</label>
                 <input
@@ -385,7 +365,6 @@ export default function LatePaymentsPage() {
                 />
               </div>
             </div>
-
             <div
               style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}
             >
@@ -432,7 +411,6 @@ export default function LatePaymentsPage() {
     </div>
   );
 }
-
 const th = {
   padding: "10px 12px",
   textAlign: "left",

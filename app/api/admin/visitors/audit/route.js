@@ -5,17 +5,14 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import AuditLog from "@/models/AuditLog";
 import { requireRoles } from "@/lib/authz";
-
 const OFFLINE_ACTIONS = [
   "VISITOR_OFFLINE_ENTRY",
   "VISITOR_ENTRY_CONFIRMED",
   "VISITOR_ENTRY_FLAGGED",
 ];
-
 export async function GET(request) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
@@ -27,7 +24,6 @@ export async function GET(request) {
       100,
       parseInt(searchParams.get("limit") || "25", 10),
     );
-
     const query = {
       societyId: auth.user.societyId,
       action: OFFLINE_ACTIONS.includes(action)
@@ -43,7 +39,6 @@ export async function GET(request) {
         query.timestamp.$lte = end;
       }
     }
-
     const [logs, total] = await Promise.all([
       AuditLog.find(query)
         .sort({ timestamp: -1 })
@@ -53,7 +48,6 @@ export async function GET(request) {
         .lean(),
       AuditLog.countDocuments(query),
     ]);
-
     return NextResponse.json({
       success: true,
       logs,

@@ -6,21 +6,17 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import PushSubscription from "@/models/PushSubscription";
 import { requireAuth } from "@/lib/authz";
-
 export async function GET() {
   return NextResponse.json({ publicKey: process.env.VAPID_PUBLIC_KEY || null });
 }
-
 export async function POST(request) {
   const auth = requireAuth(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { subscription } = await request.json();
     if (!subscription || !subscription.endpoint || !subscription.keys)
       return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
-
     await PushSubscription.findOneAndUpdate(
       { endpoint: subscription.endpoint },
       {
@@ -33,18 +29,15 @@ export async function POST(request) {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
-
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("push subscribe error", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 export async function DELETE(request) {
   const auth = requireAuth(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { endpoint } = await request.json();

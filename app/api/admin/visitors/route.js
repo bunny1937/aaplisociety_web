@@ -6,11 +6,9 @@ import connectDB from "@/lib/mongodb";
 import Visitor from "@/models/Visitor";
 import { requireRoles } from "@/lib/authz";
 import { VISITOR_STATUSES, VISITOR_PURPOSES } from "@/lib/visitor-config";
-
 export async function GET(request) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
@@ -26,7 +24,6 @@ export async function GET(request) {
       100,
       parseInt(searchParams.get("limit") || "25", 10),
     );
-
     const query = { societyId: auth.user.societyId };
     if (status && VISITOR_STATUSES.includes(status)) query.status = status;
     if (purpose && VISITOR_PURPOSES.includes(purpose)) query.purpose = purpose;
@@ -49,7 +46,6 @@ export async function GET(request) {
         { vehicleNumber: { $regex: q, $options: "i" } },
       ];
     }
-
     const [visitors, total, summary] = await Promise.all([
       Visitor.find(query)
         .sort({ createdAt: -1 })
@@ -76,7 +72,6 @@ export async function GET(request) {
         "offlineMeta.confirmation.status": "Flagged",
       }),
     ]);
-
     return NextResponse.json({
       success: true,
       visitors,

@@ -3,30 +3,24 @@ import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Transaction from "@/models/Transaction";
 import BillingHead from "@/models/BillingHead";
-
 export async function GET(request, { params }) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const { id } = await params;
-
     if (!id || !id.match(/^[a-f\d]{24}$/i)) {
       return NextResponse.json(
         { error: "Invalid transaction id" },
         { status: 400 },
       );
     }
-
     const transaction = await Transaction.findOne({
       _id: id,
       societyId: decoded.societyId,
@@ -37,14 +31,12 @@ export async function GET(request, { params }) {
       )
       .populate("createdBy", "name email role")
       .lean();
-
     if (!transaction) {
       return NextResponse.json(
         { error: "Transaction not found" },
         { status: 404 },
       );
     }
-
     // If this is a bill, fetch breakdown
     let breakdown = null;
     if (transaction.category === "Maintenance" && transaction.billPeriodId) {
@@ -54,7 +46,6 @@ export async function GET(request, { params }) {
       })
         .sort({ order: 1 })
         .lean();
-
       breakdown = billingHeads.map((head) => {
         let amount = 0;
         if (head.calculationType === "Fixed") {
@@ -69,7 +60,6 @@ export async function GET(request, { params }) {
         };
       });
     }
-
     // Audit trail (for now just created info; extend with edit/reversal logs later)
     const auditTrail = [
       {
@@ -78,14 +68,12 @@ export async function GET(request, { params }) {
         timestamp: transaction.createdAt,
       },
     ];
-
     if (transaction.isReversed && transaction.reversalTransactionId) {
       const reversalTxn = await Transaction.findOne({
         transactionId: transaction.reversalTransactionId,
       })
         .populate("createdBy", "name")
         .lean();
-
       if (reversalTxn) {
         auditTrail.push({
           action: "Reversed",
@@ -94,7 +82,6 @@ export async function GET(request, { params }) {
         });
       }
     }
-
     return NextResponse.json({
       success: true,
       transaction,

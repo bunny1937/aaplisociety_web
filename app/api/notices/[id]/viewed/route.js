@@ -2,21 +2,17 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Notice from "@/models/Notice";
-
 export async function POST(request, { params }) {
   try {
     await connectDB();
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded || decoded.role !== "Member") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
     const { id } = await params;
-
     // Add to viewedBy only if not already present (idempotent)
     await Notice.updateOne(
       {
@@ -31,7 +27,6 @@ export async function POST(request, { params }) {
         },
       },
     );
-
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

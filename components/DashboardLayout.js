@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,7 +6,6 @@ import { LogOut } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import RouteLoadingBar from "./RouteLoadingBar";
 import styles from "@/styles/Dashboard.module.css";
-
 export default function DashboardLayout({
   children,
   role,
@@ -21,7 +19,6 @@ export default function DashboardLayout({
   const [user, setUser] = useState(null);
   const [navigating, setNavigating] = useState(false);
   const navTimeoutRef = useRef(null);
-
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -36,7 +33,6 @@ export default function DashboardLayout({
         },
       }),
   );
-
   useEffect(() => {
     if (pathname.includes("/login")) return;
     const fetchUser = async () => {
@@ -54,13 +50,11 @@ export default function DashboardLayout({
     };
     fetchUser();
   }, []);
-
   // Clear navigating state when route actually changes
   useEffect(() => {
     setNavigating(false);
     clearTimeout(navTimeoutRef.current);
   }, [pathname]);
-
   const handleNav = useCallback((path) => {
     if (pathname === path) return;
     setNavigating(true);
@@ -68,13 +62,11 @@ export default function DashboardLayout({
     navTimeoutRef.current = setTimeout(() => setNavigating(false), 3000);
     router.push(path);
   }, [pathname, router]);
-
   const handleLogout = async () => {
     localStorage.removeItem("userWing");
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/auth/login");
   };
-
   if (!user) {
     return (
       <div className={styles.fullPageLoader}>
@@ -86,17 +78,14 @@ export default function DashboardLayout({
       </div>
     );
   }
-
   const LayoutUI = (
     <div className={styles.dashboardContainer}>
       <RouteLoadingBar />
-
       {navigating && (
         <div className={styles.navLoadingOverlay}>
           <div className={styles.navLoadingSpinner} />
         </div>
       )}
-
       {/* SIDEBAR */}
       <aside className={styles.sidebar}>
         {/* Logo */}
@@ -107,7 +96,6 @@ export default function DashboardLayout({
             <div className={styles.sidebarSubtitle}>{subtitle}</div>
           </div>
         </div>
-
         {/* Nav */}
         <nav className={styles.sidebarNav}>
           {navigation.map((group, i) => (
@@ -130,7 +118,6 @@ export default function DashboardLayout({
             </div>
           ))}
         </nav>
-
         {/* User footer */}
         <div className={styles.sidebarFooter}>
           <div className={styles.userInfo}>
@@ -147,7 +134,6 @@ export default function DashboardLayout({
           </div>
         </div>
       </aside>
-
       {/* MAIN AREA */}
       <div className={styles.mainWrapper}>
         {/* Top Header — transparent, sticky, right-aligned */}
@@ -163,14 +149,12 @@ export default function DashboardLayout({
             </div>
           </div>
         </header>
-
         <main key={pathname} className={styles.mainContent}>
           {children}
         </main>
       </div>
     </div>
   );
-
   return withQueryClient ? (
     <QueryClientProvider client={queryClient}>{LayoutUI}</QueryClientProvider>
   ) : (

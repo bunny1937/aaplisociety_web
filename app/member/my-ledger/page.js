@@ -3,11 +3,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Dashboard.module.css";
-
 export default function MyLedgerPage() {
   const [page, setPage] = useState(1);
   const [financialYear, setFinancialYear] = useState("all");
-
   const { data, isLoading } = useQuery({
     queryKey: ["my-ledger", page, financialYear],
     queryFn: () =>
@@ -15,11 +13,9 @@ export default function MyLedgerPage() {
         `/api/member/ledger?page=${page}&limit=30&financialYear=${financialYear}`,
       ),
   });
-
   const transactions = data?.transactions || [];
   const summary = data?.summary || {};
   const pagination = data?.pagination || {};
-
   const currentYear = new Date().getFullYear();
   const fyOptions = Array.from({ length: 4 }, (_, i) => {
     const y = currentYear - i;
@@ -27,7 +23,6 @@ export default function MyLedgerPage() {
       new Date().getMonth() >= 3 ? `FY${y}-${y + 1}` : `FY${y - 1}-${y}`;
     return label;
   });
-
   return (
     <div>
       <div className={styles.pageHeader}>
@@ -54,7 +49,6 @@ export default function MyLedgerPage() {
           ))}
         </select>
       </div>
-
       {/* Summary Cards */}
       <div className={styles.statsGrid} style={{ marginBottom: "1.5rem" }}>
         <div
@@ -108,7 +102,6 @@ export default function MyLedgerPage() {
           </h2>
         </div>
       </div>
-
       <div className={styles.contentCard}>
         {isLoading ? (
           <div style={{ padding: "3rem", textAlign: "center" }}>

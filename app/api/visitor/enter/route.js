@@ -8,17 +8,14 @@ import Member from "@/models/Member";
 import { requireSecurity } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { sendInApp } from "@/lib/visitor-channels";
-
 export async function PATCH(request) {
   const auth = requireSecurity(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { visitorId } = await request.json();
     if (!visitorId || !mongoose.Types.ObjectId.isValid(visitorId))
       return NextResponse.json({ error: "Valid visitorId required" }, { status: 400 });
-
     // Allow admitting an Approved visit. (Pass entries are already 'Entered'.)
     const visitor = await Visitor.findOneAndUpdate(
       {
@@ -34,9 +31,7 @@ export async function PATCH(request) {
         { error: "Visitor not found or not approved yet" },
         { status: 404 },
       );
-
     const member = await Member.findById(visitor.memberId).select("flatNo wing").lean();
-
     // Tell the resident the visitor is now inside.
     await sendInApp({
       societyId: auth.user.societyId,
@@ -50,12 +45,10 @@ export async function PATCH(request) {
       actionUrl: "/member/visitors",
       metadata: { visitorId: visitor._id.toString() },
     });
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_ENTERED", null, {
       visitorId: visitor._id.toString(),
       flat: member ? `${member.wing || ""}-${member.flatNo}` : "",
     });
-
     return NextResponse.json({ success: true, status: visitor.status });
   } catch (err) {
     console.error("Visitor enter error", err);

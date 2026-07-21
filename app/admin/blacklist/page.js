@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -19,7 +18,6 @@ import {
   tokens,
   fmtTime,
 } from "@/components/visitor/ui";
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -33,9 +31,7 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const BLANK = { name: "", phone: "", reason: "", severity: "block", photo: "" };
-
 const S = {
   layout: { display: "grid", gridTemplateColumns: "360px 1fr", gap: 20, alignItems: "start" },
   formGrid: { display: "grid", gap: 14 },
@@ -65,7 +61,6 @@ const S = {
   spacer: { height: 14 },
   switchRow: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: tokens.sub, cursor: "pointer" },
 };
-
 export default function BlacklistPage() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,9 +68,7 @@ export default function BlacklistPage() {
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
-
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -87,11 +80,9 @@ export default function BlacklistPage() {
       setLoading(false);
     }
   }, [showInactive]);
-
   useEffect(() => {
     load();
   }, [load]);
-
   async function submit(e) {
     e.preventDefault();
     if (!form.reason.trim()) {
@@ -123,7 +114,6 @@ export default function BlacklistPage() {
       setSaving(false);
     }
   }
-
   async function remove(id) {
     try {
       await api(`/api/admin/blacklist?id=${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -133,14 +123,12 @@ export default function BlacklistPage() {
       setToast({ type: "error", message: err.message });
     }
   }
-
   return (
     <div>
       <PageHeader
         title="Watchlist"
         subtitle="Flag or block visitors by name or phone. Blocked entries are denied at the gate automatically."
       />
-
       <div style={S.layout}>
         {/* Add form */}
         <Card>
@@ -189,7 +177,6 @@ export default function BlacklistPage() {
             </Button>
           </form>
         </Card>
-
         {/* List */}
         <Card>
           <div style={S.listHead}>
@@ -206,7 +193,6 @@ export default function BlacklistPage() {
               Show deactivated
             </label>
           </div>
-
           {loading ? (
             <div style={S.center}>
               <Spinner />
@@ -249,7 +235,6 @@ export default function BlacklistPage() {
           )}
         </Card>
       </div>
-
       {toast ? <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> : null}
     </div>
   );

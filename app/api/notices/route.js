@@ -3,7 +3,7 @@ import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Notice from "@/models/Notice";
 import Member from "@/models/Member";
-
+import { notifyNoticePosted } from "@/lib/v1/notify";
 // POST /api/notices — Admin creates notice
 export async function POST(request) {
   try {
@@ -11,7 +11,6 @@ export async function POST(request) {
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded || !["Admin", "Secretary"].includes(decoded.role)) {
       return NextResponse.json(
@@ -19,7 +18,6 @@ export async function POST(request) {
         { status: 403 },
       );
     }
-
     const {
       type,
       priority,
@@ -29,7 +27,6 @@ export async function POST(request) {
       expiryOption,
       customExpiryDate,
     } = await request.json();
-
     // Validation
     const validTypes = [
       "maintenance",
@@ -43,7 +40,6 @@ export async function POST(request) {
       "custom",
     ];
     const validPriorities = ["low", "medium", "high", "urgent"];
-
     if (!validTypes.includes(type))
       return NextResponse.json(
         { error: "Invalid notice type" },
@@ -65,7 +61,6 @@ export async function POST(request) {
         { error: "Description must be 30–2000 characters" },
         { status: 400 },
       );
-
     // Calculate expiry
     let expiresAt = null;
     const now = new Date();
@@ -83,7 +78,6 @@ export async function POST(request) {
         );
       expiresAt = parsed;
     }
-
     const notice = await Notice.create({
       societyId: decoded.societyId,
       createdBy: decoded.userId,
@@ -95,21 +89,17 @@ export async function POST(request) {
       pinned: !!pinned,
       expiresAt,
     });
-    // Notify all members of society about new notice
+    // Notify all members of society about new notice — creates one
+    // Notification row (recipientType "all") + sends FCM to the society.
+    // notifyNoticePosted is already non-blocking internally (swallows its own
+    // errors), the outer try/catch is belt-and-suspenders.
     try {
-      const { sendNotification } = await import("@/lib/notify");
-      await sendNotification({
+      await notifyNoticePosted({
+        noticeId: notice._id,
         societyId: decoded.societyId,
+        title: title.trim(),
         createdBy: decoded.userId,
         createdByName: decoded.name || "Admin",
-        type: "NOTICE_POSTED",
-        title: `New Notice: ${title.trim()}`,
-        message:
-          description.trim().substring(0, 120) +
-          (description.length > 120 ? "..." : ""),
-        recipientType: "all",
-        recipientIds: [],
-        actionUrl: "/member/notices",
       });
     } catch (notifyErr) {
       console.warn(
@@ -126,7 +116,6 @@ export async function POST(request) {
     );
   }
 }
-
 // GET /api/notices — List notices (members + admin)
 export async function GET(request) {
   try {
@@ -134,24 +123,20 @@ export async function GET(request) {
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const searchParams = new URL(request.url).searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
     const type = searchParams.get("type");
     const priority = searchParams.get("priority");
-
     const query = {
       societyId: decoded.societyId,
       isDeleted: false,
     };
     if (type && type !== "all") query.type = type;
     if (priority && priority !== "all") query.priority = priority;
-
     // Total member count for view stats (admin only)
     let totalMembers = 0;
     if (["Admin", "Secretary"].includes(decoded.role)) {
@@ -159,7 +144,6 @@ export async function GET(request) {
         societyId: decoded.societyId,
       });
     }
-
     const [notices, total] = await Promise.all([
       Notice.find(query)
         .sort({ pinned: -1, createdAt: -1 })
@@ -170,7 +154,6 @@ export async function GET(request) {
         .lean(),
       Notice.countDocuments(query),
     ]);
-
     // For admin: get view counts separately
     let enrichedNotices = notices;
     if (["Admin", "Secretary"].includes(decoded.role)) {
@@ -194,7 +177,6 @@ export async function GET(request) {
       // For members: show whether they personally viewed/acknowledged
       enrichedNotices = notices.map((n) => ({ ...n }));
     }
-
     return NextResponse.json({
       success: true,
       notices: enrichedNotices,

@@ -4,24 +4,20 @@
   color: #fff;
   padding: 2rem;
 }
-
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
 }
-
 .header h1 {
   margin: 0 0 0.5rem 0;
   font-size: 2rem;
 }
-
 .header p {
   color: #999;
   margin: 0;
 }
-
 .backBtn {
   background: #333;
   color: #fff;
@@ -30,17 +26,14 @@
   border-radius: 6px;
   cursor: pointer;
 }
-
 .backBtn:hover {
   background: #444;
 }
-
 .filters {
   display: flex;
   gap: 1rem;
   margin-bottom: 2rem;
 }
-
 .filters button {
   background: #1a1a1a;
   color: #fff;
@@ -50,17 +43,14 @@
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .filters button:hover {
   background: #252525;
   border-color: #4CAF50;
 }
-
 .activeFilter {
   background: #4CAF50 !important;
   border-color: #4CAF50 !important;
 }
-
 .loading,
 .empty {
   text-align: center;
@@ -68,19 +58,16 @@
   color: #999;
   font-size: 1.2rem;
 }
-
 .table {
   background: #1a1a1a;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #333;
 }
-
 .table table {
   width: 100%;
   border-collapse: collapse;
 }
-
 .table th {
   background: #252525;
   padding: 1rem;
@@ -88,16 +75,13 @@
   font-weight: 600;
   border-bottom: 1px solid #333;
 }
-
 .table td {
   padding: 1rem;
   border-bottom: 1px solid #2a2a2a;
 }
-
 .table tr:hover {
   background: #1f1f1f;
 }
-
 .badge {
   background: #333;
   padding: 0.25rem 0.75rem;
@@ -105,21 +89,17 @@
   font-size: 0.85rem;
   text-transform: uppercase;
 }
-
 .daysRemaining {
   color: #ffa500;
   font-weight: 600;
 }
-
 .restored {
   color: #4CAF50;
   font-weight: 600;
 }
-
 .active {
   color: #999;
 }
-
 .restoreBtn {
   background: #4CAF50;
   color: #fff;
@@ -129,7 +109,6 @@
   cursor: pointer;
   font-size: 0.9rem;
 }
-
 .restoreBtn:hover {
   background: #45a049;
 }

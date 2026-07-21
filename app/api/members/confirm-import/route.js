@@ -10,53 +10,42 @@ import { randomBytes } from "crypto";
 import { resolve, sep } from "path";
 import cache from "@/lib/cache";
 import { requireRoles, SOCIETY_ADMIN_ROLES } from "@/lib/authz";
-
 function generatePassword() {
   return randomBytes(6).toString("base64url").toUpperCase();
 }
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const auth = requireRoles(request, SOCIETY_ADMIN_ROLES);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { tempFilePath } = await request.json();
-
     if (!tempFilePath) {
       return NextResponse.json(
         { error: "No temp file specified" },
         { status: 400 },
       );
     }
-
     // Guard: only allow files inside the designated temp directory
     const tempDir = resolve(process.cwd(), "temp");
     const resolvedPath = resolve(tempFilePath);
     if (!resolvedPath.startsWith(tempDir + sep)) {
       return NextResponse.json({ error: "Invalid file path" }, { status: 400 });
     }
-
     // Read temp file
     const buffer = await readFile(resolvedPath);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
-
     const firstSheet = workbook.worksheets[0];
     const isEnhancedTemplate = firstSheet.name.includes("Basic Info");
-
     let result;
     if (isEnhancedTemplate) {
       result = await processEnhancedImport(workbook, decoded);
     } else {
       result = await processSimpleImport(workbook, decoded);
     }
-
     // Delete temp file
     await unlink(resolvedPath);
-
     // Audit log
     await AuditLog.create({
       userId: decoded.userId,
@@ -85,5 +74,4 @@ export async function POST(request) {
     );
   }
 }
-
 // ... (Keep your existing processEnhancedImport and processSimpleImport functions)

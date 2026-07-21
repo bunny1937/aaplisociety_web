@@ -10,7 +10,6 @@
  * DO NOT import React or any DB models here — this file must remain
  * server-compatible and side-effect-free.
  */
-
 /**
  * Build a parking rates lookup from billing heads.
  * Source of truth is billing heads, NOT society.config.parkingRates.
@@ -39,7 +38,6 @@ export function buildParkingRates(heads) {
   });
   return parkingRates;
 }
-
 /**
  * Compute current-month charges for a single member.
  *
@@ -55,13 +53,11 @@ export function computeCurrentCharges(member, heads, parkingRates, serviceTaxRat
   );
   const charges = [];
   let subtotal = 0;
-
   for (const head of heads) {
     if (!head.headName?.trim() || head.isActive === false) continue;
     const hLower = head.headName.trim().toLowerCase();
     const isParkingHead = hLower.includes("parking");
     if (isParkingHead) continue;
-
     let amount = 0;
     if (head.calculationType === "Per Sq Ft") {
       amount = area * head.defaultAmount;
@@ -77,7 +73,6 @@ export function computeCurrentCharges(member, heads, parkingRates, serviceTaxRat
     });
     subtotal += amount;
   }
-
   // Parking slots — skip Stilt and non-billable
   for (const slot of member.parkingSlots || []) {
     if (slot.type === "Stilt" || slot.monthlyBilling === false) continue;
@@ -91,13 +86,11 @@ export function computeCurrentCharges(member, heads, parkingRates, serviceTaxRat
       subtotal += rate;
     }
   }
-
   const serviceTax =
     serviceTaxRate > 0
       ? parseFloat(((subtotal * serviceTaxRate) / 100).toFixed(2))
       : 0;
   const currentBillTotal = parseFloat((subtotal + serviceTax).toFixed(2));
-
   return {
     charges,
     subtotal: parseFloat(subtotal.toFixed(2)),
@@ -105,7 +98,6 @@ export function computeCurrentCharges(member, heads, parkingRates, serviceTaxRat
     currentBillTotal,
   };
 }
-
 /**
  * Compute previous principal and interest outstanding.
  *
@@ -155,7 +147,6 @@ export function computePreviousBalances(unpaidBills, anyPriorBill, memberOpening
     ),
   };
 }
-
 /**
  * Compute this month's interest on the outstanding principal.
  *
@@ -167,7 +158,6 @@ export function computeMonthlyInterest(principalOutstanding, annualRate) {
   if (principalOutstanding <= 0 || annualRate <= 0) return 0;
   return parseFloat(((principalOutstanding * annualRate) / 1200).toFixed(2));
 }
-
 /**
  * Compute the grand total bill amounts.
  *

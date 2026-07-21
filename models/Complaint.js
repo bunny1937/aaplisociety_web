@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const ComplaintSchema = new mongoose.Schema(
   {
     societyId: {
@@ -66,13 +65,10 @@ const ComplaintSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 // TTL index — MongoDB auto-expires approved complaints after expiresAt
 ComplaintSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-
 // Compound indexes
 ComplaintSchema.index({ societyId: 1, status: 1, createdAt: -1 });
 ComplaintSchema.index({ societyId: 1, memberId: 1, createdAt: -1 });
-
 export default mongoose.models.Complaint ||
   mongoose.model("Complaint", ComplaintSchema);

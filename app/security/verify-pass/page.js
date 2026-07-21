@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import {
   Card,
@@ -13,7 +12,6 @@ import {
   Toast,
   tokens,
 } from "@/components/visitor/ui";
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -27,7 +25,6 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Verification failed");
   return data;
 }
-
 const S = {
   layout: { display: "grid", gridTemplateColumns: "minmax(280px, 420px) 1fr", gap: 16, alignItems: "start" },
   h3: { fontSize: 16, fontWeight: 700, color: tokens.text, margin: "0 0 4px" },
@@ -57,7 +54,6 @@ const S = {
   otpInput: { fontSize: 22, letterSpacing: 6, textAlign: "center", fontWeight: 700 },
   submitWrap: { marginTop: 16 },
 };
-
 function tabBtnStyle(active) {
   return {
     flex: 1,
@@ -71,7 +67,6 @@ function tabBtnStyle(active) {
     fontSize: 14,
   };
 }
-
 export default function VerifyPassPage() {
   const [tab, setTab] = useState("otp");
   const [otp, setOtp] = useState("");
@@ -79,9 +74,7 @@ export default function VerifyPassPage() {
   const [busy, setBusy] = useState(false);
   const [visitor, setVisitor] = useState(null);
   const [toast, setToast] = useState(null);
-
   const notify = (message, type = "info") => setToast({ message, type });
-
   const verify = async (e) => {
     e.preventDefault();
     setBusy(true);
@@ -104,7 +97,6 @@ export default function VerifyPassPage() {
       setBusy(false);
     }
   };
-
   return (
     <div>
       <PageHeader title="Verify Gate Pass" subtitle="Validate a pre-approved visitor's OTP or QR" />
@@ -144,7 +136,6 @@ export default function VerifyPassPage() {
             </div>
           </form>
         </Card>
-
         <Card>
           {visitor ? (
             <div style={S.resultWrap}>

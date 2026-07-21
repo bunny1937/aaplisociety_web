@@ -4,7 +4,6 @@ import Visitor from "@/models/Visitor";
 import Member from "@/models/Member";
 import { requireRoles } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
-
 const ALLOWED_PURPOSES = [
   "Guest",
   "Delivery",
@@ -13,14 +12,11 @@ const ALLOWED_PURPOSES = [
   "Cab",
   "Other",
 ];
-
 export async function GET(request) {
   const auth = requireRoles(request, ["Security"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
-
     const visitors = await Visitor.find({
       societyId: auth.user.societyId,
     })
@@ -28,7 +24,6 @@ export async function GET(request) {
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
-
     return NextResponse.json({ success: true, visitors });
   } catch (err) {
     console.error("Fetch visitors error", err);
@@ -38,14 +33,11 @@ export async function GET(request) {
     );
   }
 }
-
 export async function POST(request) {
   const auth = requireRoles(request, ["Security"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
-
     const body = await request.json();
     const name = String(body.name || "").trim();
     const phone = String(body.phone || "").trim();
@@ -53,11 +45,9 @@ export async function POST(request) {
     const purpose = String(body.purpose || "").trim();
     const purposeNote = String(body.purposeNote || "").trim();
     const memberId = String(body.memberId || body.flatId || "").trim();
-
     if (!ALLOWED_PURPOSES.includes(purpose)) {
       return NextResponse.json({ error: "Invalid purpose" }, { status: 400 });
     }
-
     if (!name || !memberId || !purpose) {
       return NextResponse.json(
         { error: "name, memberId, purpose required" },
@@ -71,11 +61,9 @@ export async function POST(request) {
     })
       .select("flatNo wing ownerName ownershipType currentTenant")
       .lean();
-
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
-
     const visitor = await Visitor.create({
       societyId: auth.user.societyId,
       memberId: member._id,
@@ -89,7 +77,6 @@ export async function POST(request) {
       enteredBy: auth.user.userId,
       gateLabel: auth.user.gateLabel || "Main Gate",
     });
-
     await logAudit(
       auth.user.userId,
       auth.user.societyId,
@@ -106,7 +93,6 @@ export async function POST(request) {
         gateLabel: visitor.gateLabel,
       },
     );
-
     return NextResponse.json({
       success: true,
       visitor: {

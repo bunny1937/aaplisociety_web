@@ -1,10 +1,8 @@
 "use client";
-
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/BillTemplate.module.css";
-
 // 3 DEFAULT TEMPLATES
 const DEFAULT_TEMPLATES = {
   modern: {
@@ -85,14 +83,11 @@ const DEFAULT_TEMPLATES = {
     },
   },
 };
-
 export default function BillTemplateDesigner() {
   const queryClient = useQueryClient();
-
   const [activeTab, setActiveTab] = useState("select"); // select, design, upload
   const [selectedTemplate, setSelectedTemplate] = useState("modern");
   const [template, setTemplate] = useState(DEFAULT_TEMPLATES.modern.design);
-
   // Upload states
   const [uploadedPDF, setUploadedPDF] = useState(null);
   const [pdfHasFormFields, setPdfHasFormFields] = useState(false);
@@ -100,24 +95,20 @@ export default function BillTemplateDesigner() {
   const [uploadedImage, setUploadedImage] = useState(null);
   const [uploadedLogo, setUploadedLogo] = useState(null);
   const [uploadedSignature, setUploadedSignature] = useState(null);
-
   // PDF Editor states
   const [showPDFEditor, setShowPDFEditor] = useState(false);
   const [pdfFields, setPdfFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-
   // Fetch society
   const { data: societyData } = useQuery({
     queryKey: ["society-config"],
     queryFn: () => apiClient.get("/api/society/config"),
   });
-
   const { data: billingHeadsData } = useQuery({
     queryKey: ["billing-heads"],
     queryFn: () => apiClient.get("/api/billing-heads/list"),
   });
-
   // Fetch saved template
   const { data: savedTemplateData } = useQuery({
     queryKey: ["bill-template-full"],
@@ -132,7 +123,6 @@ export default function BillTemplateDesigner() {
   useEffect(() => {
     if (savedTemplateData?.template) {
       const saved = savedTemplateData.template;
-
       if (saved.type === "custom" && saved.design) {
         setActiveTab("design");
         setTemplate(saved.design);
@@ -145,17 +135,14 @@ export default function BillTemplateDesigner() {
         setActiveTab("upload");
         setUploadedImage(saved.imageUrl);
       }
-
       setUploadedLogo(saved.logoUrl);
       setUploadedSignature(saved.signatureUrl);
     }
   }, [savedTemplateData]);
-
   // Save template mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
       let templateData = {};
-
       if (activeTab === "select" || activeTab === "design") {
         templateData = {
           type: "custom",
@@ -182,7 +169,6 @@ export default function BillTemplateDesigner() {
           };
         }
       }
-
       return apiClient.post("/api/bill-template/save-full", templateData);
     },
     onSuccess: () => {
@@ -193,29 +179,22 @@ export default function BillTemplateDesigner() {
       alert("Failed to save: " + error.message);
     },
   });
-
   // SMART PDF UPLOAD - Auto-detect form fields
   const handlePDFUpload = async (file) => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
       const response = await fetch("/api/bill-template/upload-pdf-smart", {
         method: "POST",
         credentials: "include",
         body: formData,
       });
-
       if (!response.ok) throw new Error("Upload failed");
-
       const data = await response.json();
-
       setUploadedPDF(data.url);
       setPdfHasFormFields(data.hasFormFields);
       setDetectedFields(data.detectedFields || []);
-
       if (data.hasFormFields) {
         alert(
           `✅ PDF uploaded! Auto-detected ${data.detectedFields.length} fillable fields.\n\nSystem will auto-fill these when generating bills.`,
@@ -229,26 +208,20 @@ export default function BillTemplateDesigner() {
       alert("Upload failed: " + error.message);
     }
   };
-
   // Upload other files
   const handleFileUpload = async (file, type) => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append("file", file);
     formData.append("type", type);
-
     try {
       const response = await fetch("/api/bill-template/upload-file", {
         method: "POST",
         credentials: "include",
         body: formData,
       });
-
       if (!response.ok) throw new Error("Upload failed");
-
       const data = await response.json();
-
       if (type === "image") {
         setUploadedImage(data.url);
       } else if (type === "logo") {
@@ -256,25 +229,21 @@ export default function BillTemplateDesigner() {
       } else if (type === "signature") {
         setUploadedSignature(data.url);
       }
-
       alert(`✅ ${type} uploaded successfully!`);
     } catch (error) {
       alert("Upload failed: " + error.message);
     }
   };
-
   // Apply default template
   const applyDefaultTemplate = (key) => {
     setSelectedTemplate(key);
     setTemplate(DEFAULT_TEMPLATES[key].design);
     setActiveTab("design");
   };
-
   // Update template field
   const updateTemplate = (key, value) => {
     setTemplate({ ...template, [key]: value });
   };
-
   // Add/Remove footer text
   const addFooterLine = () => {
     setTemplate({
@@ -282,26 +251,22 @@ export default function BillTemplateDesigner() {
       footerText: [...template.footerText, "New instruction"],
     });
   };
-
   const updateFooterLine = (index, value) => {
     const newFooter = [...template.footerText];
     newFooter[index] = value;
     setTemplate({ ...template, footerText: newFooter });
   };
-
   const removeFooterLine = (index) => {
     setTemplate({
       ...template,
       footerText: template.footerText.filter((_, i) => i !== index),
     });
   };
-
   // Generate preview HTML (same as before, but with dynamic billing heads)
   const generatePreviewHTML = () => {
     const society = societyData?.society || {};
     const config = society.config || {};
     const heads = billingHeadsData?.heads || [];
-
     // Build charges from billing heads
     const charges = [];
     charges.push({ name: "Maintenance", amount: 3600, rate: 3, perSqFt: true });
@@ -317,7 +282,6 @@ export default function BillTemplateDesigner() {
       rate: 0.5,
       perSqFt: true,
     });
-
     // Add custom heads
     heads.forEach((head) => {
       if (head.calculationType === "Fixed") {
@@ -368,7 +332,6 @@ export default function BillTemplateDesigner() {
         ).toFixed(2);
       },
     };
-
     // Full preview HTML
     return `
       <div style="max-width: 800px; margin: 0 auto; padding: 40px; font-family: Arial, sans-serif; background: white;">
@@ -378,12 +341,10 @@ export default function BillTemplateDesigner() {
           <h1 style="margin: 0; font-size: ${template.societyNameSize}px;">${sampleData.societyName}</h1>
           <p style="margin: 5px 0 0 0; font-size: ${template.addressSize}px; opacity: 0.9;">${sampleData.societyAddress}</p>
         </div>
-
         <!-- Bill Title -->
         <h2 style="text-align: ${template.billTitleAlign}; font-size: ${template.billTitleSize}px; margin: 0 0 20px 0;">
           MAINTENANCE BILL
         </h2>
-
         <!-- Bill Info -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; padding: 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
           <div><strong>Bill Period:</strong> ${sampleData.billPeriod}</div>
@@ -393,7 +354,6 @@ export default function BillTemplateDesigner() {
           <div><strong>Name:</strong> ${sampleData.memberName}</div>
           <div><strong>Area:</strong> ${sampleData.area} sq ft</div>
         </div>
-
         <!-- Previous Balance Section -->
         ${
           sampleData.previousBalance > 0
@@ -429,7 +389,6 @@ export default function BillTemplateDesigner() {
         `
             : ""
         }
-
         <!-- Current Charges Table -->
         <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #374151;">Current Month Charges</h3>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -483,7 +442,6 @@ export default function BillTemplateDesigner() {
             </tr>
           </tbody>
         </table>
-
         <!-- Grand Total -->
         <div style="background: ${template.totalBg}; padding: 25px; border-radius: 8px; margin-bottom: 30px; border: 2px solid ${template.totalColor};">
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -498,7 +456,6 @@ export default function BillTemplateDesigner() {
             </div>
           </div>
         </div>
-
         <!-- Footer Instructions -->
         ${
           template.footerText && template.footerText.length > 0
@@ -512,7 +469,6 @@ export default function BillTemplateDesigner() {
         `
             : ""
         }
-
         <!-- Signature -->
         ${
           template.showSignature
@@ -535,7 +491,6 @@ export default function BillTemplateDesigner() {
       </div>
     `;
   };
-
   // Open PDF Editor
   const openPDFEditor = () => {
     if (!uploadedPDF) {
@@ -544,7 +499,6 @@ export default function BillTemplateDesigner() {
     }
     setShowPDFEditor(true);
   };
-
   // Add field to PDF
   const addFieldToPDF = (fieldName) => {
     const newField = {
@@ -560,7 +514,6 @@ export default function BillTemplateDesigner() {
     setPdfFields([...pdfFields, newField]);
     setSelectedField(newField.id);
   };
-
   // Update field position
   const updateFieldPosition = (fieldId, x, y) => {
     setPdfFields(
@@ -569,7 +522,6 @@ export default function BillTemplateDesigner() {
       ),
     );
   };
-
   // Update field properties
   const updateFieldProperty = (fieldId, property, value) => {
     setPdfFields(
@@ -578,7 +530,6 @@ export default function BillTemplateDesigner() {
       ),
     );
   };
-
   // Delete field
   const deleteField = (fieldId) => {
     setPdfFields(pdfFields.filter((field) => field.id !== fieldId));
@@ -586,7 +537,6 @@ export default function BillTemplateDesigner() {
       setSelectedField(null);
     }
   };
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -602,7 +552,6 @@ export default function BillTemplateDesigner() {
           {saveMutation.isPending ? "⏳ Saving..." : "💾 Save Template"}
         </button>
       </div>
-
       {/* Tabs */}
       <div className={styles.tabs}>
         <button
@@ -624,7 +573,6 @@ export default function BillTemplateDesigner() {
           📤 Upload Custom PDF/Image
         </button>
       </div>
-
       {/* Tab 1: Select Default Template */}
       {activeTab === "select" && (
         <div className={styles.templateGrid}>
@@ -693,7 +641,6 @@ export default function BillTemplateDesigner() {
           ))}
         </div>
       )}
-
       {/* Tab 2: Design Customization */}
       {activeTab === "design" && (
         <div className={styles.workspace}>
@@ -727,7 +674,6 @@ export default function BillTemplateDesigner() {
               }
               className={styles.input}
             />
-
             <h3>Table</h3>
             <label>Header Background</label>
             <input
@@ -763,7 +709,6 @@ export default function BillTemplateDesigner() {
                 updateTemplate("tableBorderColor", e.target.value)
               }
             />
-
             <h3>Total Box</h3>
             <label>Background</label>
             <input
@@ -790,7 +735,6 @@ export default function BillTemplateDesigner() {
               onChange={(e) => updateTemplate("totalSize", +e.target.value)}
               className={styles.input}
             />
-
             <h3>Footer</h3>
             {template.footerText?.map((line, i) => (
               <div
@@ -822,7 +766,6 @@ export default function BillTemplateDesigner() {
             >
               + Add Line
             </button>
-
             <h3>Signature</h3>
             <label
               style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
@@ -847,7 +790,6 @@ export default function BillTemplateDesigner() {
                 placeholder="Authorized Signatory"
               />
             )}
-
             <h3>Logo / Signature Image</h3>
             <label>Upload Logo</label>
             <input
@@ -862,7 +804,6 @@ export default function BillTemplateDesigner() {
               onChange={(e) => handleFileUpload(e.target.files[0], "signature")}
             />
           </div>
-
           {/* Preview with FULL DATA */}
           <div className={styles.previewPanel}>
             <h2>👁️ Live Preview (with Interest & Previous Balance)</h2>
@@ -874,7 +815,6 @@ export default function BillTemplateDesigner() {
           </div>
         </div>
       )}
-
       {/* Tab 3: Upload PDF - SMART VERSION */}
       {activeTab === "upload" && (
         <div className={styles.uploadSection}>
@@ -898,14 +838,12 @@ export default function BillTemplateDesigner() {
               <li>✅ Calculate interest & previous balance</li>
               <li>✅ No manual field mapping needed!</li>
             </ul>
-
             <input
               type="file"
               accept=".pdf"
               onChange={(e) => handlePDFUpload(e.target.files[0])}
               style={{ marginBottom: "1rem" }}
             />
-
             {uploadedPDF && (
               <div className={styles.uploadedPreview}>
                 <p
@@ -917,7 +855,6 @@ export default function BillTemplateDesigner() {
                 >
                   ✅ PDF Template Uploaded Successfully!
                 </p>
-
                 {pdfHasFormFields ? (
                   <div
                     style={{
@@ -988,7 +925,6 @@ export default function BillTemplateDesigner() {
                     </p>
                   </div>
                 )}
-
                 <iframe
                   src={uploadedPDF}
                   style={{
@@ -1002,7 +938,6 @@ export default function BillTemplateDesigner() {
               </div>
             )}
           </div>
-
           <div className={styles.uploadCard}>
             <h3>🖼️ Or Upload Image Template</h3>
             <p>Upload bill as JPG/PNG. System will overlay text on it.</p>

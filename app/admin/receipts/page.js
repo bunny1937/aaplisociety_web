@@ -1,7 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-
 // ── helpers ────────────────────────────────────────────────────────────────
 const fmt = (n) =>
   "₹" +
@@ -9,7 +8,6 @@ const fmt = (n) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-
 const fmtDate = (d) =>
   d
     ? new Date(d).toLocaleDateString("en-IN", {
@@ -18,7 +16,6 @@ const fmtDate = (d) =>
         year: "numeric",
       })
     : "—";
-
 const fmtDateFull = (d) =>
   d
     ? new Date(d).toLocaleDateString("en-IN", {
@@ -27,7 +24,6 @@ const fmtDateFull = (d) =>
         year: "numeric",
       })
     : "—";
-
 const fmtDateTime = (d) =>
   d
     ? new Date(d).toLocaleString("en-IN", {
@@ -38,7 +34,6 @@ const fmtDateTime = (d) =>
         minute: "2-digit",
       })
     : "—";
-
 const MONTHS = [
   "Jan",
   "Feb",
@@ -57,7 +52,6 @@ const currentFY = () => {
   const now = new Date();
   return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
 };
-
 // ── Print receipt component ─────────────────────────────────────────────────
 function BillReceiptPrint({ receipt, society, member, bill, customDate }) {
   const date = customDate || receipt?.paidAt || new Date();
@@ -99,7 +93,6 @@ function BillReceiptPrint({ receipt, society, member, bill, customDate }) {
           PAYMENT RECEIPT
         </div>
       </div>
-
       {/* Receipt meta */}
       <div
         style={{
@@ -116,7 +109,6 @@ function BillReceiptPrint({ receipt, society, member, bill, customDate }) {
           <strong>Date:</strong> {fmtDateFull(date)}
         </div>
       </div>
-
       {/* Member details */}
       <div
         style={{
@@ -139,7 +131,6 @@ function BillReceiptPrint({ receipt, society, member, bill, customDate }) {
           {receipt?.billPeriodId || bill?.billPeriodId || "—"}
         </div>
       </div>
-
       {/* Amount table */}
       <table
         style={{
@@ -204,7 +195,6 @@ function BillReceiptPrint({ receipt, society, member, bill, customDate }) {
           </tr>
         </tbody>
       </table>
-
       <div
         style={{
           fontSize: "0.78rem",
@@ -225,7 +215,6 @@ function BillReceiptPrint({ receipt, society, member, bill, customDate }) {
           <strong>Notes:</strong> {receipt?.notes}
         </div>
       )}
-
       <div
         style={{
           borderTop: "1px dashed #94a3b8",
@@ -243,12 +232,10 @@ function BillReceiptPrint({ receipt, society, member, bill, customDate }) {
     </div>
   );
 }
-
 function TransactionalReceiptPrint({ entry, society, customDate }) {
   const date = customDate || entry?.date || new Date();
   const isIncome = entry?.entryKind === "income";
   const fyYear = entry?.fy;
-
   return (
     <div
       style={{
@@ -287,7 +274,6 @@ function TransactionalReceiptPrint({ entry, society, customDate }) {
           {isIncome ? "INCOME RECEIPT" : "EXPENDITURE BILL"}
         </div>
       </div>
-
       {/* Meta */}
       <div
         style={{
@@ -304,7 +290,6 @@ function TransactionalReceiptPrint({ entry, society, customDate }) {
           <strong>FY:</strong> {fyYear}–{fyYear ? fyYear + 1 : ""}
         </div>
       </div>
-
       {/* Details */}
       <div
         style={{
@@ -336,7 +321,6 @@ function TransactionalReceiptPrint({ entry, society, customDate }) {
           </div>
         )}
       </div>
-
       {/* Amount */}
       <table
         style={{
@@ -371,7 +355,6 @@ function TransactionalReceiptPrint({ entry, society, customDate }) {
           </tr>
         </tbody>
       </table>
-
       <div
         style={{
           borderTop: "1px dashed #94a3b8",
@@ -389,7 +372,6 @@ function TransactionalReceiptPrint({ entry, society, customDate }) {
     </div>
   );
 }
-
 // ── Row action button ───────────────────────────────────────────────────────
 function ReceiptActions({ onPrint }) {
   return (
@@ -410,24 +392,20 @@ function ReceiptActions({ onPrint }) {
     </button>
   );
 }
-
 // ── Main Page ───────────────────────────────────────────────────────────────
 export default function ReceiptsPage() {
   const [tab, setTab] = useState("bills"); // "bills" | "transactional"
   const [selectedFY, setSelectedFY] = useState(currentFY());
-
   // For bill receipts: member filter
   const [billMemberSearch, setBillMemberSearch] = useState("");
   const [billMemberId, setBillMemberId] = useState("");
   const [billMemberLabel, setBillMemberLabel] = useState("");
   const [showMemberDrop, setShowMemberDrop] = useState(false);
-
   // Print target
   const printRef = useRef();
   const [printing, setPrinting] = useState(null);
   const [customDate, setCustomDate] = useState("");
   const [dateMode, setDateMode] = useState("current");
-
   // Society info
   const { data: societyData } = useQuery({
     queryKey: ["society-config-receipts"],
@@ -440,7 +418,6 @@ export default function ReceiptsPage() {
     staleTime: 300_000,
   });
   const society = societyData?.society || null;
-
   // Members list for search
   const { data: membersData } = useQuery({
     queryKey: ["members-list-receipts"],
@@ -461,7 +438,6 @@ export default function ReceiptsPage() {
           m.wing?.toLowerCase().includes(billMemberSearch.toLowerCase()),
       )
     : allMembers.slice(0, 10);
-
   // Bill receipts
   const { data: billReceiptsData, isLoading: billLoading } = useQuery({
     queryKey: ["bill-receipts", billMemberId],
@@ -476,7 +452,6 @@ export default function ReceiptsPage() {
     staleTime: 60_000,
     enabled: tab === "bills",
   });
-
   // Bills for context (when printing)
   const { data: billsData } = useQuery({
     queryKey: ["all-bills-receipts", billMemberId],
@@ -491,7 +466,6 @@ export default function ReceiptsPage() {
     staleTime: 60_000,
     enabled: tab === "bills",
   });
-
   // Transactional entries
   const { data: entriesData, isLoading: entriesLoading } = useQuery({
     queryKey: ["society-entries-receipts", selectedFY],
@@ -504,20 +478,16 @@ export default function ReceiptsPage() {
     staleTime: 60_000,
     enabled: tab === "transactional",
   });
-
   const billReceipts = billReceiptsData?.receipts || [];
   const entries = entriesData?.entries || [];
-
   const getBillForReceipt = (r) =>
     billsData?.bills?.find(
       (b) => b._id === r.billId?.toString?.() || b._id === r.billId,
     ) || null;
-
   const getMemberForReceipt = (r) => {
     const mid = r.memberId?.toString?.() || r.memberId;
     return allMembers.find((m) => m._id?.toString() === mid) || null;
   };
-
   const handlePrint = () => {
     const content = printRef.current;
     if (!content) return;
@@ -542,13 +512,11 @@ export default function ReceiptsPage() {
     document.body.removeChild(root);
     document.head.removeChild(styleEl);
   };
-
   const triggerPrint = (type, data) => {
     setPrinting({ type, data });
     setDateMode("current");
     setCustomDate("");
   };
-
   const getEffectiveDate = () => {
     if (dateMode === "current") return new Date();
     if (dateMode === "original") {
@@ -558,14 +526,12 @@ export default function ReceiptsPage() {
     if (dateMode === "manual" && customDate) return new Date(customDate);
     return new Date();
   };
-
   const cardStyle = {
     background: "#fff",
     borderRadius: 10,
     border: "1px solid #e2e8f0",
     overflow: "hidden",
   };
-
   const thStyle = {
     padding: "8px 12px",
     textAlign: "left",
@@ -583,11 +549,9 @@ export default function ReceiptsPage() {
     borderBottom: "1px solid #f1f5f9",
     verticalAlign: "middle",
   };
-
   // FY options: simple range
   const fyOptions = [];
   for (let y = currentFY() - 3; y <= currentFY(); y++) fyOptions.push(y);
-
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       {/* Header */}
@@ -620,7 +584,6 @@ export default function ReceiptsPage() {
           </p>
         </div>
       </div>
-
       {/* Tabs */}
       <div
         style={{
@@ -656,7 +619,6 @@ export default function ReceiptsPage() {
           </button>
         ))}
       </div>
-
       {/* ── BILL RECEIPTS TAB ── */}
       {tab === "bills" && (
         <div>
@@ -769,7 +731,6 @@ export default function ReceiptsPage() {
               </div>
             )}
           </div>
-
           {/* Receipts table */}
           <div style={cardStyle}>
             {billLoading ? (
@@ -890,7 +851,6 @@ export default function ReceiptsPage() {
           </div>
         </div>
       )}
-
       {/* ── TRANSACTIONAL TAB ── */}
       {tab === "transactional" && (
         <div>
@@ -928,7 +888,6 @@ export default function ReceiptsPage() {
               Showing custom income/expenditure entries from Balance Sheet
             </span>
           </div>
-
           <div style={cardStyle}>
             {entriesLoading ? (
               <div
@@ -1040,7 +999,6 @@ export default function ReceiptsPage() {
           </div>
         </div>
       )}
-
       {/* ── PRINT MODAL ── */}
       {printing && (
         <div
@@ -1129,7 +1087,6 @@ export default function ReceiptsPage() {
                 />
               )}
             </div>
-
             {/* Hidden print area */}
             <div ref={printRef} style={{ padding: "0.5rem" }}>
               {printing.type === "bill" && (
@@ -1149,7 +1106,6 @@ export default function ReceiptsPage() {
                 />
               )}
             </div>
-
             {/* Actions */}
             <div
               style={{

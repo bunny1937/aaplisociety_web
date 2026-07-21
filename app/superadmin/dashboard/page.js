@@ -1,16 +1,13 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { adminApi } from "@/lib/admin-api";
-
 export default function AdminDashboard() {
   const [admin, setAdmin] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const router = useRouter();
-
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
@@ -21,23 +18,19 @@ export default function AdminDashboard() {
       })
       .catch(() => router.push("/superadmin/login"));
   }, [router]);
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-societies"],
     queryFn: adminApi.fetchSocieties,
     staleTime: 5 * 60 * 1000,
     enabled: !!admin,
   });
-
   const societies = data?.societies || [];
-
   const stats = {
     totalSocieties: societies.length,
     totalMembers: societies.reduce((sum, s) => sum + (s.stats?.members || 0), 0),
     totalBills: societies.reduce((sum, s) => sum + (s.stats?.bills || 0), 0),
     activeSocieties: societies.filter((s) => s.subscription?.status === "Active").length,
   };
-
   const filteredSocieties = societies.filter((s) => {
     const matchesSearch =
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -47,7 +40,6 @@ export default function AdminDashboard() {
       statusFilter === "all" || s.subscription?.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
-
   if (!admin) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280", background: "#0f172a", minHeight: "100vh" }}>
@@ -55,7 +47,6 @@ export default function AdminDashboard() {
       </div>
     );
   }
-
   if (isLoading) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280", background: "#0f172a", minHeight: "100vh" }}>
@@ -63,7 +54,6 @@ export default function AdminDashboard() {
       </div>
     );
   }
-
   if (error) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "#ef4444", background: "#0f172a", minHeight: "100vh" }}>
@@ -71,7 +61,6 @@ export default function AdminDashboard() {
       </div>
     );
   }
-
   const statusBadgeStyle = (status) => {
     const map = {
       Active: { background: "#10b98122", color: "#10b981" },
@@ -81,10 +70,8 @@ export default function AdminDashboard() {
     };
     return { padding: "2px 10px", borderRadius: 10, fontSize: "0.75rem", fontWeight: 700, ...(map[status] || map.Trial) };
   };
-
   const filterCount = (status) =>
     status === "all" ? societies.length : societies.filter((s) => s.subscription?.status === status).length;
-
   return (
     <div style={{ padding: 0, maxWidth: 1400, margin: "0 auto", color: "#1f2937" }}>
       {/* Header */}
@@ -94,7 +81,6 @@ export default function AdminDashboard() {
           Managing {stats.totalSocieties} societies · Cached data (refreshes every 5 min)
         </p>
       </div>
-
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
@@ -112,7 +98,6 @@ export default function AdminDashboard() {
           </div>
         ))}
       </div>
-
       {/* Search & Filters */}
       <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
         <input
@@ -154,7 +139,6 @@ export default function AdminDashboard() {
           ))}
         </div>
       </div>
-
       {/* Table */}
       <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>

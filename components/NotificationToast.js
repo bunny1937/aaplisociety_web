@@ -1,7 +1,6 @@
 "use client";
 import { useEffect } from "react";
 import styles from "@/styles/NotificationToast.module.css";
-
 const TYPE_ICONS = {
   BILL_GENERATED: "🧾",
   PAYMENT_RECEIVED: "✅",
@@ -14,13 +13,11 @@ const TYPE_ICONS = {
   ADMIN_MESSAGE: "📣",
   CUSTOM: "🔔",
 };
-
 export default function NotificationToast({ notification, onDismiss }) {
   useEffect(() => {
     const timer = setTimeout(onDismiss, 5000);
     return () => clearTimeout(timer);
   }, [onDismiss]);
-
   return (
     <div className={styles.toast}>
       <div className={styles.icon}>{TYPE_ICONS[notification.type] || "🔔"}</div>

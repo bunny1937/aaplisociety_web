@@ -4,24 +4,19 @@ import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Transaction from "@/models/Transaction";
 import Member from "@/models/Member";
 import User from "@/models/User";
-
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const url = new URL(request.url);
     const searchParams = url.searchParams;
-
     const memberId = searchParams.get("memberId");
     const category = searchParams.get("category");
     const startDate = searchParams.get("startDate");
@@ -32,13 +27,11 @@ export async function GET(request) {
       Math.max(1, parseInt(searchParams.get("limit") || "100")),
     );
     const skip = (page - 1) * limit;
-
     // ✅ ALWAYS scope to society + exclude reversed
     const query = {
       societyId: decoded.societyId,
       isReversed: { $ne: true },
     };
-
     // ✅ Member: honour both role-scoped (Member token) and explicit param
     if (decoded.role === "Member" && decoded.memberId) {
       query.memberId = decoded.memberId;
@@ -50,11 +43,9 @@ export async function GET(request) {
         query.memberId = memberId; // fallback
       }
     }
-
     if (category && category !== "all") {
       query.category = category;
     }
-
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -64,7 +55,6 @@ export async function GET(request) {
         query.date.$lte = end;
       }
     }
-
     // ✅ Run count + paginated fetch in parallel
     const [total, transactions] = await Promise.all([
       Transaction.countDocuments(query),
@@ -76,7 +66,6 @@ export async function GET(request) {
         .limit(limit)
         .lean(), // ← lean() avoids circular-ref serialization crashes
     ]);
-
     // aggregate does not auto-cast strings → ObjectId, must cast manually
     const aggQuery = { ...query };
     if (aggQuery.memberId && typeof aggQuery.memberId === "string") {
@@ -85,7 +74,6 @@ export async function GET(request) {
         aggQuery.memberId = new Types.ObjectId(aggQuery.memberId);
       } catch {}
     }
-
     // ✅ Summary calculated from this page's slice — also compute society-wide totals
     // for the filtered query (not just current page)
     let aggResult;
@@ -116,10 +104,8 @@ export async function GET(request) {
       console.error("Ledger aggregate error:", aggErr);
       aggResult = null;
     }
-
     const totalDebit = aggResult?.totalDebit || 0;
     const totalCredit = aggResult?.totalCredit || 0;
-
     // Opening balance only meaningful for single-member view
     let openingBalance = 0;
     const effectiveMemberId =
@@ -130,9 +116,7 @@ export async function GET(request) {
         .lean();
       openingBalance = member?.openingBalance || 0;
     }
-
     const netBalance = openingBalance + totalDebit - totalCredit;
-
     return NextResponse.json({
       success: true,
       transactions,

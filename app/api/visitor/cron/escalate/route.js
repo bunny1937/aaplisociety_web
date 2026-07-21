@@ -4,7 +4,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { runEscalationSweep } from "@/lib/escalation";
-
 function authorize(request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // must be configured to enable the endpoint
@@ -13,7 +12,6 @@ function authorize(request) {
   const token = header.replace(/^Bearer\s+/i, "");
   return token === secret;
 }
-
 async function handle(request) {
   if (!authorize(request))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,7 +24,6 @@ async function handle(request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 export async function GET(request) {
   return handle(request);
 }

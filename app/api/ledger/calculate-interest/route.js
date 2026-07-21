@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-
 export async function POST(request) {
   // ❌ DISABLED — system uses monthly bill-time interest only.
   // Daily interest accrual removed per new billing model.

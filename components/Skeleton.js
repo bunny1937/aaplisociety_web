@@ -1,5 +1,4 @@
 "use client";
-
 export function Skeleton({ width = "100%", height = 14, radius = 6, className = "", style = {} }) {
   return (
     <div
@@ -8,7 +7,6 @@ export function Skeleton({ width = "100%", height = 14, radius = 6, className = 
     />
   );
 }
-
 export function SkeletonCard({ rows = 3 }) {
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -19,7 +17,6 @@ export function SkeletonCard({ rows = 3 }) {
     </div>
   );
 }
-
 export function SkeletonTable({ rows = 5, cols = 5 }) {
   return (
     <div className="table-container">
@@ -48,7 +45,6 @@ export function SkeletonTable({ rows = 5, cols = 5 }) {
     </div>
   );
 }
-
 export function SkeletonStats({ count = 4 }) {
   return (
     <div style={{
@@ -66,7 +62,6 @@ export function SkeletonStats({ count = 4 }) {
     </div>
   );
 }
-
 export function SkeletonPageHeader() {
   return (
     <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>

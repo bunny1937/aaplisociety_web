@@ -25,30 +25,25 @@ export async function POST(request) {
     const decoded = verifyToken(token);
     if (!decoded || !decoded.memberId)
       return NextResponse.json({ error: "Not a member" }, { status: 403 });
-
     const {
       billIds,
       paymentMode = "Online",
       amount,
       notes = "",
     } = await request.json();
-
     if (!billIds || billIds.length === 0)
       return NextResponse.json({ error: "Bill IDs required" }, { status: 400 });
-
     const bills = await Bill.find({
       _id: { $in: billIds },
       memberId: decoded.memberId,
       societyId: decoded.societyId,
       status: { $in: ["Unpaid", "Partial", "Overdue"] },
     });
-
     if (bills.length === 0)
       return NextResponse.json(
         { error: "No payable bills found" },
         { status: 400 },
       );
-
     const member = await Member.findById(decoded.memberId).lean();
     const lastTxn = await Transaction.findOne({
       memberId: decoded.memberId,
@@ -59,13 +54,11 @@ export async function POST(request) {
       .lean();
     let currentBalance =
       lastTxn?.balanceAfterTransaction ?? member?.openingBalance ?? 0;
-
     // After fetching bills, sort oldest-first
     bills.sort((a, b) => {
       if (a.billYear !== b.billYear) return a.billYear - b.billYear;
       return a.billMonth - b.billMonth;
     });
-
     // ✅ Check BillPayFinalDate for member route too
     const society = await Society.findById(decoded.societyId)
       .select("config")
@@ -89,17 +82,14 @@ export async function POST(request) {
         );
       }
     }
-
     // Normalize balanceAmount to include previousBalance FIRST
     bills.forEach((b) => {
       // Snapshot original previousBalance BEFORE any mutation
       b._originalPreviousBalance = b.previousBalance ?? 0;
-
       // True remaining due
       b.balanceAmount = parseFloat(
         Math.max(0, (b.totalAmount ?? 0) - (b.amountPaid ?? 0)).toFixed(2),
       );
-
       const sumParts = parseFloat(
         (
           (b.principalBalance ?? 0) +
@@ -123,7 +113,6 @@ export async function POST(request) {
         );
       }
     });
-
     const fullDue = bills.reduce((s, b) => s + b.balanceAmount, 0);
     const totalPayAmt =
       amount && amount > 0 && amount <= fullDue ? amount : fullDue;
@@ -134,7 +123,6 @@ export async function POST(request) {
         bills,
         society?.config?.adjustmentApplicationMode || "INTEREST_FIRST",
       );
-
     // Store original amountPaid before mutation for receipt calculation
     const originalAmountPaid = {};
     const originalPreviousBalance = {};
@@ -145,14 +133,12 @@ export async function POST(request) {
       originalPreviousBalance[String(bill._id)] =
         bill._originalPreviousBalance ?? 0;
       const balanceBeforePayment = bill.balanceAmount;
-
       bill.interestBalance = update.newInterestBalance;
       bill.principalBalance = update.newPrincipalBalance;
       bill.previousBalance = update.newPreviousBalance;
       bill.balanceAmount = update.newBalanceAmount;
       bill.status = update.newStatus;
       bill.lastModifiedAt = new Date();
-
       const clearedThisPayment = parseFloat(
         (balanceBeforePayment - update.newBalanceAmount).toFixed(2),
       );
@@ -163,16 +149,13 @@ export async function POST(request) {
       );
       await bill.save();
     }
-
     if (advanceCredit > 0) {
       await Member.findByIdAndUpdate(decoded.memberId, {
         $inc: { advanceCredit },
       });
     }
-
     const newBalance = currentBalance - totalPayAmt;
     const transactionId = Transaction.generateTransactionId();
-
     await Transaction.create({
       transactionId,
       date: new Date(),
@@ -188,10 +171,8 @@ export async function POST(request) {
       financialYear: getFinancialYear(new Date()),
       paymentBreakdown: breakdown,
     });
-
     const showBreakdown =
       society?.config?.memberPaymentBreakdownVisible !== false;
-
     // Receipt per bill (keep existing receipt logic, just loop over billUpdates)
     const receipts = [];
     for (const update of billUpdates) {
@@ -209,7 +190,6 @@ export async function POST(request) {
           /[^a-zA-Z0-9_\-]/g,
           "_",
         );
-
       const receipt = await Receipt.create({
         receiptNo,
         filename,
@@ -232,7 +212,6 @@ export async function POST(request) {
         billPeriodId: bill.billPeriodId,
       });
     }
-
     return NextResponse.json({
       success: true,
       message: "Payment recorded successfully",

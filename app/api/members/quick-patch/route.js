@@ -6,7 +6,6 @@ import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import cache from "@/lib/cache";
 import { calculateMemberCharges } from "@/lib/calculate-member-bill";
-
 export async function POST(request) {
   try {
     await connectDB();
@@ -16,23 +15,18 @@ export async function POST(request) {
     if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     if (decoded.role !== "Admin")
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
-
     const { memberId, carpetAreaSqft, parkingSlots, recalcBillPeriodId } = await request.json();
     if (!memberId) return NextResponse.json({ error: "memberId required" }, { status: 400 });
-
     const patch = {};
     if (carpetAreaSqft !== undefined) patch.carpetAreaSqft = Number(carpetAreaSqft);
     if (parkingSlots !== undefined) patch.parkingSlots = parkingSlots;
-
     const member = await Member.findOneAndUpdate(
       { _id: memberId, societyId: decoded.societyId },
       { $set: patch },
       { new: true },
     );
-
     if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 });
     await cache.delPattern(`members:list:${decoded.societyId}:*`);
-
     let billRecalculated = false;
     if (recalcBillPeriodId) {
       const existingBill = await Bill.findOne({
@@ -47,7 +41,6 @@ export async function POST(request) {
           isActive: true,
           isDeleted: false,
         }).sort({ order: 1 }).lean();
-
         const { subtotal, breakdown } = calculateMemberCharges(member.toObject(), heads);
         const newCurrentCharges = parseFloat(subtotal.toFixed(2));
         const prevPrincipal = parseFloat((existingBill.openingPrincipal || 0).toFixed(2));
@@ -60,7 +53,6 @@ export async function POST(request) {
         const advApplied = parseFloat((existingBill.advanceApplied || 0).toFixed(2));
         const newBalance = parseFloat(Math.max(0, newTotalBillDue - alreadyPaid - advApplied).toFixed(2));
         const newStatus = newBalance <= 0.005 ? "Paid" : alreadyPaid > 0 || advApplied > 0 ? "Partial" : "Unpaid";
-
         await Bill.findByIdAndUpdate(existingBill._id, {
           $set: {
             currentCharges: newCurrentCharges,
@@ -78,7 +70,6 @@ export async function POST(request) {
         billRecalculated = true;
       }
     }
-
     return NextResponse.json({ member: member.toObject(), billRecalculated });
   } catch (err) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

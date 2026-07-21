@@ -1,15 +1,12 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Dashboard.module.css";
 import gridStyles from "@/styles/BillingGrid.module.css";
 import Select from "react-select";
-
 export default function AdvancedPaymentPage() {
   const queryClient = useQueryClient();
-
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("Cash");
@@ -18,17 +15,14 @@ export default function AdvancedPaymentPage() {
   );
   const [notes, setNotes] = useState("");
   const [paymentDetails, setPaymentDetails] = useState({});
-
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [allocationStrategy, setAllocationStrategy] = useState("oldest-first");
   const [showForecast, setShowForecast] = useState(false);
-
   // Fetch members
   const { data: membersData } = useQuery({
     queryKey: ["members"],
     queryFn: () => apiClient.get("/api/members/list"),
   });
-
   // Fetch outstanding info when member selected
   const { data: outstandingData, isLoading: outstandingLoading } = useQuery({
     queryKey: ["outstanding", selectedMemberId],
@@ -36,7 +30,6 @@ export default function AdvancedPaymentPage() {
       apiClient.get(`/api/payments/outstanding?memberId=${selectedMemberId}`),
     enabled: !!selectedMemberId,
   });
-
   // Fetch payment history for selected member
   const { data: paymentHistory } = useQuery({
     queryKey: ["payment-history", selectedMemberId],
@@ -46,7 +39,6 @@ export default function AdvancedPaymentPage() {
       ),
     enabled: !!selectedMemberId,
   });
-
   // Record payment mutation
   const recordPaymentMutation = useMutation({
     mutationFn: (data) => apiClient.post("/api/payments/record", data),
@@ -61,7 +53,6 @@ export default function AdvancedPaymentPage() {
       alert(`❌ Error: ${error.message}`);
     },
   });
-
   const resetForm = () => {
     setSelectedMemberId("");
     setPaymentAmount("");
@@ -69,22 +60,18 @@ export default function AdvancedPaymentPage() {
     setPaymentDetails({});
     setShowReceiptPreview(false);
   };
-
   const handleQuickPayment = (percentage) => {
     if (outstandingData?.totalOutstanding) {
       const amount = (outstandingData.totalOutstanding * percentage) / 100;
       setPaymentAmount(Math.round(amount));
     }
   };
-
   const handleSubmit = (e) => {
     e.preventDefault();
-
     if (!selectedMemberId || !paymentAmount) {
       alert("Please select member and enter amount");
       return;
     }
-
     // Guard: check if payment window is closed (billPayFinalDate from outstanding API)
     if (outstandingData?.billPayFinalDate) {
       const finalDate = new Date(outstandingData.billPayFinalDate);
@@ -97,7 +84,6 @@ export default function AdvancedPaymentPage() {
         return;
       }
     }
-
     const payload = {
       memberId: selectedMemberId,
       amount: parseFloat(paymentAmount),
@@ -106,10 +92,8 @@ export default function AdvancedPaymentPage() {
       paymentDetails,
       notes,
     };
-
     recordPaymentMutation.mutate(payload);
   };
-
   // Transform members data for React Select
   const memberOptions =
     membersData?.members
@@ -117,7 +101,6 @@ export default function AdvancedPaymentPage() {
         // ✅ PROPER NUMERIC SORTING
         const wingCompare = (a.wing || "").localeCompare(b.wing || "");
         if (wingCompare !== 0) return wingCompare;
-
         const roomA = parseInt(a.roomNo) || 0;
         const roomB = parseInt(b.roomNo) || 0;
         return roomA - roomB;
@@ -129,12 +112,10 @@ export default function AdvancedPaymentPage() {
         } sq.ft`,
         member: member,
       })) || [];
-
   // ✅ ADD THIS: Find the currently selected member
   const selectedMember = membersData?.members?.find(
     (m) => m._id === selectedMemberId,
   );
-
   const forecastInterest = (days) => {
     if (!outstandingData?.principalAmount) return 0;
     const rate = outstandingData.interestRate / 100;
@@ -144,7 +125,6 @@ export default function AdvancedPaymentPage() {
       outstandingData.principalAmount * Math.pow(1 + rate / n, n * t);
     return Math.round((amount - outstandingData.principalAmount) * 100) / 100;
   };
-
   return (
     <div>
       {/* PAGE HEADER */}
@@ -156,7 +136,6 @@ export default function AdvancedPaymentPage() {
           </p>
         </div>
       </div>
-
       <div
         style={{
           display: "grid",
@@ -169,7 +148,6 @@ export default function AdvancedPaymentPage() {
           <div className={styles.cardHeader}>
             <h2 className={styles.cardTitle}>🔍 Member Selection</h2>
           </div>
-
           <form onSubmit={handleSubmit} style={{ padding: "1.5rem" }}>
             {/* MEMBER SELECTOR WITH SEARCH */}
             <div className={gridStyles.formGroup}>
@@ -223,7 +201,6 @@ export default function AdvancedPaymentPage() {
                 Type to search
               </p>
             </div>
-
             {/* OUTSTANDING INFO BOX */}
             {outstandingLoading && selectedMemberId && (
               <div
@@ -238,7 +215,6 @@ export default function AdvancedPaymentPage() {
                 <p>Calculating outstanding amount...</p>
               </div>
             )}
-
             {outstandingData && outstandingData.totalOutstanding > 0 && (
               <div
                 style={{
@@ -298,7 +274,6 @@ export default function AdvancedPaymentPage() {
                     </p>
                   </div>
                 </div>
-
                 {/* OUTSTANDING BREAKDOWN */}
                 <div style={{ fontSize: "0.9375rem" }}>
                   <div
@@ -313,7 +288,6 @@ export default function AdvancedPaymentPage() {
                       ₹{outstandingData.principalAmount.toLocaleString("en-IN")}
                     </strong>
                   </div>
-
                   {outstandingData.interestAmount > 0 && (
                     <>
                       <div
@@ -355,9 +329,7 @@ export default function AdvancedPaymentPage() {
                       </div>
                     </>
                   )}
-
                   <hr style={{ margin: "0.75rem 0", borderColor: "#D1D5DB" }} />
-
                   <div
                     style={{
                       display: "flex",
@@ -374,7 +346,6 @@ export default function AdvancedPaymentPage() {
                     </span>
                   </div>
                 </div>
-
                 {/* QUICK PAYMENT BUTTONS */}
                 <div style={{ marginTop: "1rem" }}>
                   <p
@@ -406,7 +377,6 @@ export default function AdvancedPaymentPage() {
                     ))}
                   </div>
                 </div>
-
                 {/* FORECAST TOGGLE */}
                 <button
                   type="button"
@@ -424,7 +394,6 @@ export default function AdvancedPaymentPage() {
                 >
                   {showForecast ? "▲ Hide" : "▼ Show"} Interest Forecast
                 </button>
-
                 {showForecast && (
                   <div
                     style={{
@@ -533,7 +502,6 @@ export default function AdvancedPaymentPage() {
                 </p>
               )}
             </div>
-
             {/* PAYMENT MODE */}
             <div className={gridStyles.formGroup}>
               <label className="label">Payment Mode *</label>
@@ -550,7 +518,6 @@ export default function AdvancedPaymentPage() {
                 <option value="RTGS">RTGS</option>
               </select>
             </div>
-
             {/* PAYMENT DATE */}
             <div className={gridStyles.formGroup}>
               <label className="label">Payment Date *</label>
@@ -561,7 +528,6 @@ export default function AdvancedPaymentPage() {
                 className="input"
               />
             </div>
-
             {/* NOTES */}
             <div className={gridStyles.formGroup}>
               <label className="label">Notes (Optional)</label>
@@ -573,7 +539,6 @@ export default function AdvancedPaymentPage() {
                 placeholder="Add any additional notes..."
               />
             </div>
-
             {/* SUBMIT BUTTON */}
             <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
               <button
@@ -605,7 +570,6 @@ export default function AdvancedPaymentPage() {
             </div>
           </form>
         </div>
-
         {/* RIGHT PANEL: PAYMENT HISTORY */}
         <div>
           {selectedMemberId && paymentHistory?.transactions?.length > 0 && (

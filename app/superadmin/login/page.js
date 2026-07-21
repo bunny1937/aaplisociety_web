@@ -1,8 +1,6 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -10,12 +8,10 @@ export default function AdminLogin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
       const res = await fetch("/api/admin/auth/login", {
         method: "POST",
@@ -25,15 +21,12 @@ export default function AdminLogin() {
         },
         body: JSON.stringify({ email, password, adminKey }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || "Login failed");
         setLoading(false);
         return;
       }
-
       // 🔥 FIXED: redirect based on role
       if (data.user?.role === "SuperAdmin") {
         router.push("/superadmin/dashboard");
@@ -45,7 +38,6 @@ export default function AdminLogin() {
       setLoading(false);
     }
   };
-
   return (
     <div
       style={{
@@ -70,7 +62,6 @@ export default function AdminLogin() {
         >
           🔐 Admin Access
         </h1>
-
         {error && (
           <div
             style={{
@@ -84,7 +75,6 @@ export default function AdminLogin() {
             {error}
           </div>
         )}
-
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: "20px" }}>
             <label
@@ -107,7 +97,6 @@ export default function AdminLogin() {
               }}
             />
           </div>
-
           <div style={{ marginBottom: "20px" }}>
             <label
               style={{ color: "#aaa", display: "block", marginBottom: "8px" }}
@@ -129,7 +118,6 @@ export default function AdminLogin() {
               }}
             />
           </div>
-
           <div style={{ marginBottom: "20px" }}>
             <label
               style={{ color: "#aaa", display: "block", marginBottom: "8px" }}
@@ -152,7 +140,6 @@ export default function AdminLogin() {
               }}
             />
           </div>
-
           <button
             type="submit"
             disabled={loading}

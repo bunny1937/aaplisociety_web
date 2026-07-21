@@ -1,15 +1,12 @@
 "use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import ExcelPreviewGrid from "../../components/ExcelPreviewGrid";
-
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n) => (Number(n) || 0).toFixed(2);
 const periodOf = (m, y) => `${y}-${String(m + 1).padStart(2, "0")}`;
 const tw = (n) => parseFloat((Number(n) || 0).toFixed(2));
-
 // ─── shared bill calc (pure) ─────────────────────────────────────────────────
 // Returns per-member expected bill breakdown given live DB balance data
 function calcExpected({ member, prevData, heads, parkingRates, interestRate, serviceTaxRate }) {
@@ -18,10 +15,8 @@ function calcExpected({ member, prevData, heads, parkingRates, interestRate, ser
   const remInt = prevData.remInt ?? 0;
   const currInt = principalBase > 0 ? tw((principalBase * interestRate) / 1200) : 0;
   const interestAmount = tw(remInt + currInt);
-
   const billableSlots = (member.parkingSlots ?? []).filter(s => s.monthlyBilling !== false && s.type !== "Stilt");
   const charges = [];
-
   heads.forEach(head => {
     if (!head.headName?.trim() || head.isActive === false) return;
     const hl = head.headName.trim().toLowerCase();
@@ -37,20 +32,17 @@ function calcExpected({ member, prevData, heads, parkingRates, interestRate, ser
       charges.push({ name: head.headName, amount: rate, formula: `Fixed ₹${rate}` });
     }
   });
-
   billableSlots.forEach(slot => {
     const key = `${slot.type}-${slot.vehicleType}`;
     const amount = parkingRates[key] ?? 0;
     if (amount > 0) charges.push({ name: `${slot.type} Parking - ${slot.vehicleType} (${slot.slotNumber})`, amount, formula: `Fixed ₹${amount}` });
   });
-
   const subtotal = charges.reduce((s, c) => s + c.amount, 0);
   const serviceTax = serviceTaxRate > 0 ? tw(subtotal * serviceTaxRate / 100) : 0;
   const currentBillTotal = subtotal + serviceTax;
   const advanceCredit = prevData.advanceCredit || 0;
   const rawTotal = (prevData.balance || 0) + currInt + currentBillTotal;
   const grandTotal = tw(Math.max(0, rawTotal - advanceCredit));
-
   return {
     area, principalBase, remInt, currInt, interestAmount, charges, subtotal, serviceTax,
     currentBillTotal, advanceCredit, rawTotal, grandTotal,
@@ -58,13 +50,11 @@ function calcExpected({ member, prevData, heads, parkingRates, interestRate, ser
     unpaidBills: prevData.unpaidBills || [],
   };
 }
-
 // ─── Expected Bill Panel ──────────────────────────────────────────────────────
 function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxRate, billMonth, billYear, label }) {
   const [prevBalances, setPrevBalances] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState("");
-
   const fetch_ = useCallback(async () => {
     if (!members.length) return;
     setLoading(true);
@@ -80,13 +70,10 @@ function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxR
       setLoading(false);
     }
   }, [members, billMonth, billYear]);
-
   useEffect(() => { fetch_(); }, [billMonth, billYear]);
-
   const member = members.find(m => m._id === selectedId) || members[0];
   const prevData = (prevBalances && member) ? (prevBalances[member._id] || {}) : {};
   const calc = member && prevBalances ? calcExpected({ member, prevData, heads, parkingRates, interestRate, serviceTaxRate }) : null;
-
   return (
     <div style={{ background: "#0f172a", borderRadius: 12, padding: "1.25rem", height: "100%", minHeight: 400 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
@@ -97,13 +84,10 @@ function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxR
           {loading ? "..." : "Refresh"}
         </button>
       </div>
-
       <select value={selectedId} onChange={e => setSelectedId(e.target.value)} style={{ width: "100%", padding: "5px 8px", borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: "0.8rem", marginBottom: "0.75rem" }}>
         {members.map(m => <option key={m._id} value={m._id}>{m.wing}-{m.flatNo} {m.ownerName}</option>)}
       </select>
-
       {!calc && <div style={{ color: "#475569", fontSize: "0.75rem" }}>{loading ? "Loading..." : "No data"}</div>}
-
       {calc && (
         <div style={{ fontSize: "0.75rem" }}>
           {/* Previous balance */}
@@ -122,7 +106,6 @@ function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxR
               <span style={{ color: calc.prevBalance > 0 ? "#ef4444" : "#22c55e", fontWeight: 700 }}>₹{fmt(calc.prevBalance)}</span>
             </div>
           </div>
-
           {/* Interest this month */}
           <div style={{ background: "#1e293b", borderRadius: 8, padding: "0.6rem 0.75rem", marginBottom: "0.5rem" }}>
             <div style={{ color: "#64748b", marginBottom: 4, fontSize: "0.65rem", fontWeight: 700 }}>INTEREST THIS MONTH</div>
@@ -137,7 +120,6 @@ function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxR
               <div style={{ color: "#94a3b8", marginTop: 2 }}>+ carried ₹{fmt(calc.remInt)} = total ₹{fmt(calc.interestAmount)}</div>
             )}
           </div>
-
           {/* Current charges */}
           <div style={{ background: "#1e293b", borderRadius: 8, padding: "0.6rem 0.75rem", marginBottom: "0.5rem" }}>
             <div style={{ color: "#64748b", marginBottom: 4, fontSize: "0.65rem", fontWeight: 700 }}>CURRENT CHARGES ({calc.area} sqft)</div>
@@ -158,7 +140,6 @@ function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxR
               <span style={{ color: "#818cf8", fontWeight: 700 }}>₹{fmt(calc.currentBillTotal)}</span>
             </div>
           </div>
-
           {/* Grand total formula */}
           <div style={{ background: "#172554", borderRadius: 8, padding: "0.75rem", border: "1px solid #1d4ed8" }}>
             <div style={{ color: "#93c5fd", fontSize: "0.65rem", fontWeight: 700, marginBottom: 6 }}>GRAND TOTAL FORMULA</div>
@@ -172,7 +153,6 @@ function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxR
               </div>
             </div>
           </div>
-
           {/* Unpaid bills list */}
           {calc.unpaidBills.length > 0 && (
             <div style={{ marginTop: "0.5rem", background: "#1e293b", borderRadius: 8, padding: "0.6rem 0.75rem" }}>
@@ -190,7 +170,6 @@ function ExpectedPanel({ members, heads, parkingRates, interestRate, serviceTaxR
     </div>
   );
 }
-
 // ─── Parking Config Panel ─────────────────────────────────────────────────────
 function ParkingConfigPanel({ members, heads, parkingRates, interestRate, serviceTaxRate, billMonth, billYear, onSaved }) {
   const queryClient = useQueryClient();
@@ -200,9 +179,7 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [previewBal, setPreviewBal] = useState(null); // prevBalances for this member
-
   const member = members.find(m => m._id === selectedId);
-
   // Load member & their balance when selected
   useEffect(() => {
     if (!member) return;
@@ -217,28 +194,21 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
       billDate: `${billYear}-${String(billMonth + 1).padStart(2, "0")}-01T00:00:00.000Z`,
     }).then(r => setPreviewBal(r.balances?.[member._id] || {})).catch(() => {});
   }, [member?._id, billMonth, billYear]);
-
   const addSlot = () => {
     setEditSlots(prev => [...prev, { slotNumber: "", type: "Open", vehicleType: "Two-Wheeler", monthlyBilling: true, _new: true }]);
   };
-
   const removeSlot = (idx) => setEditSlots(prev => prev.filter((_, i) => i !== idx));
-
   const updateSlot = (idx, field, val) =>
     setEditSlots(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
-
   // Live preview calc using editSlots & carpetArea
   const previewMember = member ? { ...member, parkingSlots: editSlots, carpetAreaSqft: Number(carpetArea) || member.carpetAreaSqft } : null;
   const previewCalc = previewMember && previewBal != null
     ? calcExpected({ member: previewMember, prevData: previewBal, heads, parkingRates, interestRate, serviceTaxRate })
     : null;
-
   const origCalc = member && previewBal != null
     ? calcExpected({ member, prevData: previewBal, heads, parkingRates, interestRate, serviceTaxRate })
     : null;
-
   const diff = previewCalc && origCalc ? tw(previewCalc.grandTotal - origCalc.grandTotal) : null;
-
   const save = async () => {
     if (!member) return;
     const hasEmpty = editSlots.some(s => !s.slotNumber?.trim());
@@ -272,10 +242,8 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
       setBusy(false);
     }
   };
-
   const typeOptions = ["Open", "Covered", "Stilt"];
   const vehicleOptions = ["Two-Wheeler", "Four-Wheeler"];
-
   return (
     <div style={{ background: "#fff", border: "2px solid #fce7f3", borderRadius: 12, padding: "1.25rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
@@ -286,7 +254,6 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
           </span>
         )}
       </div>
-
       {/* Member select */}
       <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setMsg(null); }} style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db", marginBottom: "0.75rem", fontSize: "0.85rem" }}>
         <option value="">-- select member --</option>
@@ -294,7 +261,6 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
           <option key={m._id} value={m._id}>{m.wing}-{m.flatNo} {m.ownerName}</option>
         ))}
       </select>
-
       {member && (
         <>
           {/* Carpet area */}
@@ -309,7 +275,6 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
               )}
             </div>
           </div>
-
           {/* Parking slots editor */}
           <div style={{ marginBottom: "0.75rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -318,11 +283,9 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
                 + Add Slot
               </button>
             </div>
-
             {editSlots.length === 0 && (
               <div style={{ fontSize: "0.75rem", color: "#9ca3af", padding: "0.5rem", background: "#f9fafb", borderRadius: 6, textAlign: "center" }}>No parking slots</div>
             )}
-
             {editSlots.map((slot, idx) => (
               <div key={idx} style={{ background: slot._new ? "#fdf2f8" : "#f9fafb", border: `1px solid ${slot._new ? "#fbcfe8" : "#e5e7eb"}`, borderRadius: 8, padding: "0.6rem 0.75rem", marginBottom: "0.4rem" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto auto", gap: "0.4rem", alignItems: "center" }}>
@@ -353,7 +316,6 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
               </div>
             ))}
           </div>
-
           {/* Live diff preview */}
           {previewCalc && origCalc && (
             <div style={{ background: "#f5f3ff", border: "1px solid #c4b5fd", borderRadius: 8, padding: "0.75rem", marginBottom: "0.75rem", fontSize: "0.78rem" }}>
@@ -386,7 +348,6 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
               ))}
             </div>
           )}
-
           <button onClick={save} disabled={busy} style={{ width: "100%", padding: "8px", background: "#be185d", color: "white", border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 700, fontSize: "0.85rem", opacity: busy ? 0.6 : 1 }}>
             {busy ? "Saving..." : "Save Member Config"}
           </button>
@@ -395,7 +356,6 @@ function ParkingConfigPanel({ members, heads, parkingRates, interestRate, servic
     </div>
   );
 }
-
 // ─── Member Stats Bar ─────────────────────────────────────────────────────────
 function MemberStatsBar({ members, onRefresh }) {
   return (
@@ -422,12 +382,10 @@ function MemberStatsBar({ members, onRefresh }) {
     </div>
   );
 }
-
 // ─── Ledger Strip ─────────────────────────────────────────────────────────────
 function LedgerStrip({ members }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const load = useCallback(async () => {
     if (!members?.length) return;
     setLoading(true);
@@ -445,9 +403,7 @@ function LedgerStrip({ members }) {
       setRows(flat.slice(0, 20));
     } finally { setLoading(false); }
   }, [members]);
-
   useEffect(() => { load(); }, [members]);
-
   return (
     <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: "1rem", marginTop: "0.75rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -485,12 +441,10 @@ function LedgerStrip({ members }) {
     </div>
   );
 }
-
 // ─── Bills Table ──────────────────────────────────────────────────────────────
 function BillsTable({ members, refreshTick }) {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -498,9 +452,7 @@ function BillsTable({ members, refreshTick }) {
       setBills(res.bills || []);
     } finally { setLoading(false); }
   }, []);
-
   useEffect(() => { load(); }, [refreshTick]);
-
   return (
     <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: "1rem", marginTop: "0.75rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -547,14 +499,12 @@ function BillsTable({ members, refreshTick }) {
     </div>
   );
 }
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function BillingTestPage() {
   const queryClient = useQueryClient();
   const NOW = new Date();
   const [billMonth, setBillMonth] = useState(NOW.getMonth());
   const [billYear, setBillYear] = useState(NOW.getFullYear());
-
   const [phase, setPhase] = useState("idle");
   const [previewData, setPreviewData] = useState(null);
   const [excelValidation, setExcelValidation] = useState(null);
@@ -567,16 +517,12 @@ export default function BillingTestPage() {
   const [showBills, setShowBills] = useState(false);
   const [showLedger, setShowLedger] = useState(false);
   const [rightPanel, setRightPanel] = useState("expected"); // "expected" | "parking"
-
   const fileRef = useRef();
-
   const log = (msg, type = "info") =>
     setStatusLog(prev => [{ msg, type, t: new Date().toLocaleTimeString() }, ...prev].slice(0, 50));
-
   const { data: societyData } = useQuery({ queryKey: ["society-config"], queryFn: () => apiClient.get("/api/society/config") });
   const { data: membersData, refetch: refetchMembers } = useQuery({ queryKey: ["members-list"], queryFn: () => apiClient.get("/api/members/list?limit=1000") });
   const { data: billingHeadsData } = useQuery({ queryKey: ["billing-heads"], queryFn: () => apiClient.get("/api/billing-heads/list") });
-
   const society = societyData?.society || {};
   const config = society.config || {};
   const members = (membersData?.members || []).filter(m => !m.isDeleted);
@@ -586,7 +532,6 @@ export default function BillingTestPage() {
   const interestRate = parseFloat(config.interestRate) || 0;
   const serviceTaxRate = parseFloat(config.serviceTaxRate) || 0;
   const dueDate = new Date(billYear, billMonth + 1, config.billDueDay || 10).toISOString().split("T")[0];
-
   // ── build preview ─────────────────────────────────────────────────────────
   const buildPreview = useCallback(async () => {
     setPhase("previewing"); log("Fetching previous balances...");
@@ -617,7 +562,6 @@ export default function BillingTestPage() {
       log(`Preview ready for ${preview.length} members`, "ok");
     } catch (e) { log("Preview failed: " + e.message, "err"); setPhase("idle"); }
   }, [members, billMonth, billYear, heads, interestRate, serviceTaxRate, parkingRates]);
-
   // ── generate bills ────────────────────────────────────────────────────────
   const generateBills = useCallback(async (force = false) => {
     if (!previewData) return;
@@ -645,7 +589,6 @@ export default function BillingTestPage() {
       } else { log("Generate failed: " + e.message, "err"); setPhase("bill-ready"); }
     }
   }, [previewData, billMonth, billYear, dueDate, periodLabel]);
-
   // ── download template ─────────────────────────────────────────────────────
   const downloadTemplate = useCallback(async () => {
     setPhase("downloading"); log("Downloading template...");
@@ -659,7 +602,6 @@ export default function BillingTestPage() {
       log("Template downloaded", "ok"); setPhase("done-gen");
     } catch (e) { log("Download failed: " + e.message, "err"); setPhase("done-gen"); }
   }, [members, billMonth, billYear, periodLabel]);
-
   // ── validate excel ────────────────────────────────────────────────────────
   const runValidation = useCallback(async (file) => {
     setPhase("validating"); setBillGrid(null); setPayGrid(null); setExcelValidation(null); setApprovedDiffs(new Set());
@@ -687,7 +629,6 @@ export default function BillingTestPage() {
       }
     } catch (e) { log("Validation error: " + e.message, "err"); setPhase("done-gen"); }
   }, [billMonth, billYear]);
-
   // ── generate from excel ───────────────────────────────────────────────────
   const generateFromExcel = useCallback(async (force = false) => {
     if (!excelValidation?.bills?.length) return;
@@ -703,7 +644,6 @@ export default function BillingTestPage() {
       } else { log("Excel gen failed: " + e.message, "err"); setPhase("validated"); }
     }
   }, [excelValidation, billMonth, billYear, dueDate, periodLabel]);
-
   // ── confirm payments ──────────────────────────────────────────────────────
   const confirmPayments = useCallback(async () => {
     if (!payBatchKey) return;
@@ -721,7 +661,6 @@ export default function BillingTestPage() {
       setPhase("payments-done"); setRefreshTick(t => t + 1); await refetchMembers();
     } catch (e) { log("Confirm failed: " + e.message, "err"); setPhase("payment-preview"); }
   }, [payBatchKey, refetchMembers]);
-
   // ── auto generate next month ──────────────────────────────────────────────
   const autoGenNext = useCallback(async () => {
     const nextDate = new Date(billYear, billMonth + 1, 1);
@@ -753,7 +692,6 @@ export default function BillingTestPage() {
       setRefreshTick(t => t + 1);
     } catch (e) { log("Auto-gen failed: " + e.message, "err"); setPhase("payments-done"); }
   }, [members, billMonth, billYear, heads, interestRate, serviceTaxRate, parkingRates, config]);
-
   // ── export ────────────────────────────────────────────────────────────────
   const exportBills = useCallback(async () => {
     log("Exporting...");
@@ -766,14 +704,11 @@ export default function BillingTestPage() {
       URL.revokeObjectURL(url); log("Exported", "ok");
     } catch (e) { log("Export failed: " + e.message, "err"); }
   }, []);
-
   const phaseLabel = { idle: "Ready", previewing: "Working...", "bill-ready": "Preview Ready", downloading: "Downloading", "done-gen": "Bills Generated", validating: "Validating...", validated: "Validated", "payment-preview-ready": "Payment Ready", "payment-preview": "Payment Preview", confirming: "Confirming...", "payments-done": "Payments Done" }[phase] || phase;
   const phaseColor = ["previewing", "downloading", "validating", "confirming"].includes(phase) ? "#d97706" : ["done-gen", "payments-done"].includes(phase) ? "#059669" : ["bill-ready", "validated", "payment-preview-ready", "payment-preview"].includes(phase) ? "#4f46e5" : "#64748b";
-
   const diffIssues = excelValidation?.issues?.filter(i => i.type === "diff") || [];
   const allDiffsApproved = diffIssues.length === 0 || diffIssues.every(d => approvedDiffs.has(d.memberId));
   const canGenFromExcel = allDiffsApproved && excelValidation?.canProceed !== false && (excelValidation?.bills?.length ?? 0) > 0;
-
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: 0 }}>
       {/* ── Header ── */}
@@ -791,13 +726,10 @@ export default function BillingTestPage() {
           <button onClick={exportBills} style={{ padding: "5px 12px", border: "2px solid #374151", background: "white", color: "#374151", borderRadius: 7, cursor: "pointer", fontWeight: 600, fontSize: "0.75rem" }}>Export Excel</button>
         </div>
       </div>
-
       {/* ── Member Stats ── */}
       <MemberStatsBar members={members} onRefresh={refetchMembers} />
-
       {/* ── Main 2-column layout ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "0.75rem", alignItems: "start" }}>
-
         {/* ── LEFT: Flow panel ── */}
         <div style={{ background: "#fff", border: "2px solid #c7d2fe", borderRadius: 12, padding: "1.25rem" }}>
           {/* Period selector + step buttons */}
@@ -810,7 +742,6 @@ export default function BillingTestPage() {
             </select>
             <input type="number" value={billYear} onChange={e => { setBillYear(parseInt(e.target.value)); setPhase("idle"); setPreviewData(null); }} min={2020} max={2035} style={{ width: 75, padding: "4px 7px", border: "1px solid #d1d5db", borderRadius: 5 }} />
           </div>
-
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
             {[
               ["1. Preview Bills", buildPreview, "#4f46e5", phase === "previewing"],
@@ -838,7 +769,6 @@ export default function BillingTestPage() {
               </button>
             )}
           </div>
-
           {/* Preview table */}
           {previewData && (
             <div style={{ overflowX: "auto", marginBottom: "0.75rem" }}>
@@ -869,7 +799,6 @@ export default function BillingTestPage() {
               </table>
             </div>
           )}
-
           {/* Validation results */}
           {excelValidation && (
             <div style={{ marginBottom: "0.75rem" }}>
@@ -899,14 +828,12 @@ export default function BillingTestPage() {
               )}
             </div>
           )}
-
           {billGrid && (
             <ExcelPreviewGrid title={`Template Preview — ${periodLabel}`} columns={billGrid.columns} rows={billGrid.gridRows}
               onReupload={() => { setExcelValidation(null); setBillGrid(null); setApprovedDiffs(new Set()); }}
               onContinue={() => {}}
               onCancel={() => { setExcelValidation(null); setBillGrid(null); setApprovedDiffs(new Set()); }} />
           )}
-
           {payGrid && (
             <div style={{ marginTop: "0.75rem" }}>
               <ExcelPreviewGrid title="Payment Upload Preview" columns={payGrid.columns} rows={payGrid.gridRows}
@@ -915,7 +842,6 @@ export default function BillingTestPage() {
                 onCancel={() => { setPayGrid(null); setPayBatchKey(null); setPhase("done-gen"); }} />
             </div>
           )}
-
           {/* Status log */}
           <div style={{ background: "#0f172a", borderRadius: 8, padding: "0.75rem", maxHeight: 130, overflowY: "auto", marginTop: "0.75rem" }}>
             <div style={{ color: "#475569", fontSize: "0.65rem", marginBottom: "0.3rem", fontWeight: 700 }}>LOG</div>
@@ -927,7 +853,6 @@ export default function BillingTestPage() {
             ))}
           </div>
         </div>
-
         {/* ── RIGHT: Expected + Parking tabs ── */}
         <div>
           {/* Tab switcher */}
@@ -939,7 +864,6 @@ export default function BillingTestPage() {
               </button>
             ))}
           </div>
-
           {rightPanel === "expected" && (
             <ExpectedPanel
               members={members}
@@ -952,7 +876,6 @@ export default function BillingTestPage() {
               label={periodLabel}
             />
           )}
-
           {rightPanel === "parking" && (
             <ParkingConfigPanel
               members={members}
@@ -967,10 +890,8 @@ export default function BillingTestPage() {
           )}
         </div>
       </div>
-
       {/* ── Bills Table ── */}
       {showBills && <BillsTable members={members} refreshTick={refreshTick} />}
-
       {/* ── Ledger ── */}
       {showLedger && <LedgerStrip members={members} />}
     </div>

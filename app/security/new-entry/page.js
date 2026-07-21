@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Card,
@@ -18,7 +17,6 @@ import {
   tokens,
 } from "@/components/visitor/ui";
 import { VISITOR_PURPOSES } from "@/lib/visitor-config";
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -32,11 +30,9 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const PURPOSES = Array.isArray(VISITOR_PURPOSES)
   ? VISITOR_PURPOSES
   : ["Guest", "Delivery", "Domestic Help", "Vendor", "Cab", "Other"];
-
 const S = {
   layout: {
     display: "grid",
@@ -76,7 +72,6 @@ const S = {
   channels: { fontSize: 12, color: tokens.sub, marginTop: 8 },
   watch: { fontSize: 12, color: tokens.danger, marginTop: 8, fontWeight: 600 },
 };
-
 function flatRow(active) {
   return {
     display: "flex",
@@ -89,13 +84,11 @@ function flatRow(active) {
     background: active ? "#eef2ff" : "transparent",
   };
 }
-
 export default function NewEntryPage() {
   const [q, setQ] = useState("");
   const [flats, setFlats] = useState([]);
   const [searching, setSearching] = useState(false);
   const [flat, setFlat] = useState(null);
-
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -108,10 +101,8 @@ export default function NewEntryPage() {
   const [result, setResult] = useState(null);
   const [toast, setToast] = useState(null);
   const pollRef = useRef(null);
-
   const notify = (message, type = "info") => setToast({ message, type });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
   useEffect(() => {
     if (!q || q.length < 1) {
       setFlats([]);
@@ -130,7 +121,6 @@ export default function NewEntryPage() {
     }, 300);
     return () => clearTimeout(t);
   }, [q]);
-
   const pollStatus = useCallback((visitorId) => {
     clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
@@ -147,9 +137,7 @@ export default function NewEntryPage() {
       } catch (_) {}
     }, 5000);
   }, []);
-
   useEffect(() => () => clearInterval(pollRef.current), []);
-
   const submit = async (e) => {
     e.preventDefault();
     if (!flat) return notify("Select a flat first", "error");
@@ -182,7 +170,6 @@ export default function NewEntryPage() {
       setSubmitting(false);
     }
   };
-
   return (
     <div>
       <PageHeader title="New Visitor Entry" subtitle="Log a walk-in visitor and notify the resident" />
@@ -220,7 +207,6 @@ export default function NewEntryPage() {
             )}
           </div>
         </Card>
-
         <Card>
           <h3 style={S.h3}>2 &middot; Visitor details</h3>
           {flat && (
@@ -281,7 +267,6 @@ export default function NewEntryPage() {
               </Button>
             </div>
           </form>
-
           {result && (
             <div style={S.resultBox}>
               <div style={S.resultHead}>

@@ -5,17 +5,13 @@ import Transaction from "@/models/Transaction";
 import Member from "@/models/Member";
 import mongoose from "mongoose";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     // Cast societyId string → ObjectId for aggregate pipelines
     const { societyId: societyIdStr } = decoded;
     if (!societyIdStr || !mongoose.Types.ObjectId.isValid(societyIdStr)) {
@@ -26,11 +22,9 @@ export async function GET(request) {
     const month = parseInt(searchParams.get("month") || "0"); // 1-12, 0 = all
     const year = parseInt(searchParams.get("year") || "0");   // 0 = all
     const fyYear = parseInt(searchParams.get("fyYear") || String(new Date().getFullYear()));
-
     // FY = Apr fyYear → Mar fyYear+1
     const fyStart = new Date(fyYear, 3, 1);   // Apr 1
     const fyEnd = new Date(fyYear + 1, 2, 31, 23, 59, 59, 999); // Mar 31
-
     // Month-specific bill filter (billMonth is 0-indexed)
     // societyId is already cast to ObjectId — safe for both find() and aggregate()
     const monthBillFilter = { societyId, isDeleted: { $ne: true } };
@@ -40,7 +34,6 @@ export async function GET(request) {
     } else if (year) {
       monthBillFilter.billYear = year;
     }
-
     // ── Parallel aggregations ────────────────────────────────────────────────
     const [
       totalMembers,
@@ -62,7 +55,6 @@ export async function GET(request) {
       paymentModeAgg,
     ] = await Promise.all([
       Member.countDocuments({ societyId, isDeleted: { $ne: true } }),
-
       // ALL outstanding (unpaid/partial/overdue) across all periods
       Bill.aggregate([
         {
@@ -82,7 +74,6 @@ export async function GET(request) {
           },
         },
       ]),
-
       // Bills for selected month/period
       Bill.aggregate([
         { $match: monthBillFilter },
@@ -111,7 +102,6 @@ export async function GET(request) {
           },
         },
       ]),
-
       // FY collections (Credit transactions)
       Transaction.aggregate([
         {
@@ -131,7 +121,6 @@ export async function GET(request) {
           },
         },
       ]),
-
       // FY billed
       Bill.aggregate([
         {
@@ -171,7 +160,6 @@ export async function GET(request) {
           },
         },
       ]),
-
       // Month collections
       (() => {
         const txFilter = {
@@ -196,7 +184,6 @@ export async function GET(request) {
           },
         ]);
       })(),
-
       // Last 6 months bill trend (bills generated, month by month)
       Bill.aggregate([
         {
@@ -217,7 +204,6 @@ export async function GET(request) {
         { $sort: { "_id.billYear": -1, "_id.billMonth": -1 } },
         { $limit: 6 },
       ]),
-
       // Recent 10 payments
       Transaction.find({
         societyId,
@@ -230,7 +216,6 @@ export async function GET(request) {
         .sort({ date: -1, createdAt: -1 })
         .limit(10)
         .lean(),
-
       // Payment mode breakdown for period
       (() => {
         const txFilter = {
@@ -257,7 +242,6 @@ export async function GET(request) {
         ]);
       })(),
     ]);
-
     const outstanding = outstandingAgg[0] || {
       totalPrincipal: 0,
       totalInterest: 0,
@@ -282,17 +266,14 @@ export async function GET(request) {
     };
     const fyCollections = fyCollectionsAgg[0] || { total: 0, count: 0 };
     const monthCollections = monthCollectionsAgg[0] || { total: 0, count: 0 };
-
     const collectionRate =
       period.totalBilled > 0
         ? Math.round((period.totalCollected / period.totalBilled) * 100)
         : 0;
-
     const fyCollectionRate =
       fyBilled.totalBilled > 0
         ? Math.round((fyBilled.totalCollected / fyBilled.totalBilled) * 100)
         : 0;
-
     // Sort trend ascending for chart
     const trend = [...monthlyTrendAgg].reverse().map((t) => ({
       billYear: t._id.billYear,
@@ -306,7 +287,6 @@ export async function GET(request) {
       totalBalance: t.totalBalance,
       count: t.count,
     }));
-
     return NextResponse.json({
       success: true,
       totalMembers,

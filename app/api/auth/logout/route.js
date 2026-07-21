@@ -2,7 +2,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { revokeRefreshToken, clearRefreshCookie } from "@/lib/refresh-token";
-
 export async function POST(request) {
   const refreshCookie = request.cookies.get("refreshToken")?.value;
   if (refreshCookie) {
@@ -16,7 +15,6 @@ export async function POST(request) {
       console.error("Refresh token revocation failed during logout:", err);
     }
   }
-
   const res = NextResponse.json({ success: true });
   res.cookies.set("token", "", {
     maxAge: 0,

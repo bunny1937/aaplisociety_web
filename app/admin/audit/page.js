@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import DropZone from "../../../components/DropZone";
-
 // Helper: compute required audit window for display
 function getAuditWindow(joinMonth, joinYear) {
   if (!joinMonth || !joinYear) return null;
@@ -35,7 +34,6 @@ function getAuditWindow(joinMonth, joinYear) {
     months,
   };
 }
-
 const MONTH_NAMES = [
   "",
   "Jan",
@@ -51,7 +49,6 @@ const MONTH_NAMES = [
   "Nov",
   "Dec",
 ];
-
 export default function AuditPage() {
   const now = new Date();
   const [joinMonth, setJoinMonth] = useState(now.getMonth() + 1);
@@ -59,15 +56,12 @@ export default function AuditPage() {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [uploading, setUploading] = useState(false);
-
   const window = getAuditWindow(joinMonth, joinYear);
-
   const { data: reportData, refetch } = useQuery({
     queryKey: ["audit-report-status"],
     queryFn: () => apiClient.get("/api/admin/audit-report"),
   });
   const report = reportData?.report;
-
   const handleSubmit = async () => {
     if (!file) return alert("Please select the audit Excel file");
     setUploading(true);
@@ -91,13 +85,11 @@ export default function AuditPage() {
       setUploading(false);
     }
   };
-
   const statusColor = {
     Pending: "#f59e0b",
     Approved: "#10b981",
     Rejected: "#ef4444",
   };
-
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 0 }}>
       <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: "#0f172a", letterSpacing: "-0.01em" }}>
@@ -108,7 +100,6 @@ export default function AuditPage() {
         requirement. Bills must cover from April of the previous FY up to the
         month before your society joined.
       </p>
-
       {/* Existing report status */}
       {report && (
         <div
@@ -167,7 +158,6 @@ export default function AuditPage() {
           )}
         </div>
       )}
-
       {/* Step 1: Set join date */}
       <div
         style={{
@@ -246,7 +236,6 @@ export default function AuditPage() {
           </div>
         )}
       </div>
-
       {/* Step 2: Upload */}
       <div
         style={{
@@ -308,7 +297,6 @@ export default function AuditPage() {
           {uploading ? "Validating & Submitting..." : "Validate & Submit"}
         </button>
       </div>
-
       {/* Result */}
       {result && (
         <div

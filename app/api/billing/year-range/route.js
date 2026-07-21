@@ -3,23 +3,18 @@ import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import cache from "@/lib/cache";
-
 export async function GET(request) {
   try {
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const cacheKey = `billing:year-range:${decoded.societyId}`;
     const cached = await cache.get(cacheKey);
     if (cached) return NextResponse.json(cached);
-
     await connectDB();
-
     const [minDoc, maxDoc] = await Promise.all([
       Bill.findOne({ societyId: decoded.societyId })
         .sort({ billYear: 1, billMonth: 1 })
@@ -30,14 +25,12 @@ export async function GET(request) {
         .select("billYear")
         .lean(),
     ]);
-
     const now = new Date();
     const responseData = {
       minYear: minDoc?.billYear || now.getFullYear(),
       minMonth: minDoc ? minDoc.billMonth + 1 : 1, // billMonth is 0-indexed → convert to 1-12
       maxYear: maxDoc?.billYear || now.getFullYear(),
     };
-
     await cache.set(cacheKey, responseData, 300);
     return NextResponse.json(responseData);
   } catch (err) {

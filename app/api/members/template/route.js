@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { generateEnhancedMemberTemplate } from '@/lib/excel-handler';
-
 export async function GET() {
   try {
     const buffer = await generateEnhancedMemberTemplate();
-    
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

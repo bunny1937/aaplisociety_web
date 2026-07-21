@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import styles from "@/styles/MyComplaints.module.css";
 import Link from "next/link";
-
 const STATUS_CONFIG = {
   PENDING: { label: "Pending", cls: "yellow" },
   APPROVED: { label: "Approved", cls: "green" },
@@ -10,7 +9,6 @@ const STATUS_CONFIG = {
   CLOSED: { label: "Closed", cls: "gray" },
   EXPIRED: { label: "Expired", cls: "gray" },
 };
-
 export default function MyComplaintsPage() {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,12 +16,10 @@ export default function MyComplaintsPage() {
   const [replying, setReplying] = useState({});
   const [toast, setToast] = useState(null);
   const [expanded, setExpanded] = useState({});
-
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
-
   const fetchMyComplaints = async () => {
     setLoading(true);
     try {
@@ -34,11 +30,9 @@ export default function MyComplaintsPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchMyComplaints();
   }, []);
-
   const handleReply = async (complaintId) => {
     const message = replyText[complaintId]?.trim();
     if (!message || message.length < 10) {
@@ -63,7 +57,6 @@ export default function MyComplaintsPage() {
       setReplying({ ...replying, [complaintId]: false });
     }
   };
-
   return (
     <div className={styles.page}>
       {toast && (
@@ -71,7 +64,6 @@ export default function MyComplaintsPage() {
           {toast.msg}
         </div>
       )}
-
       <div className={styles.topBar}>
         <div>
           <h1>My Complaints</h1>
@@ -81,7 +73,6 @@ export default function MyComplaintsPage() {
           + New
         </Link>
       </div>
-
       {loading ? (
         <div className={styles.loading}>
           {[1, 2, 3].map((i) => (
@@ -105,7 +96,6 @@ export default function MyComplaintsPage() {
               (r) => r.authorRole === "Member",
             );
             const canReply = isRejected && memberReplies.length < 3;
-
             return (
               <div key={c._id} className={styles.card}>
                 <div className={styles.cardHeader}>
@@ -119,13 +109,11 @@ export default function MyComplaintsPage() {
                     {new Date(c.createdAt).toLocaleDateString("en-IN")}
                   </span>
                 </div>
-
                 <h3 className={styles.title}>{c.title}</h3>
                 <p className={styles.desc}>{c.description}</p>
                 <p className={styles.anonName}>
                   Posted as: <strong>{c.anonymousName}</strong>
                 </p>
-
                 {/* Rejection reason */}
                 {isRejected && c.adminRejectionReason && (
                   <div className={styles.rejectionBox}>
@@ -133,7 +121,6 @@ export default function MyComplaintsPage() {
                     <p>{c.adminRejectionReason}</p>
                   </div>
                 )}
-
                 {/* Reply thread */}
                 {(c.replies?.length > 0 || isRejected) && (
                   <div className={styles.thread}>
@@ -146,7 +133,6 @@ export default function MyComplaintsPage() {
                       {expanded[c._id] ? "▲ Hide" : "▼ Show"} Thread (
                       {c.replies?.length || 0} replies)
                     </button>
-
                     {expanded[c._id] && (
                       <>
                         {c.replies.map((r) => (
@@ -165,7 +151,6 @@ export default function MyComplaintsPage() {
                             </span>
                           </div>
                         ))}
-
                         {canReply && (
                           <div className={styles.replyForm}>
                             <textarea

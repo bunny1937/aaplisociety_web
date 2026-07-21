@@ -8,24 +8,20 @@ import connectDB from "@/lib/mongodb";
 import TenantRequest from "@/models/TenantRequest";
 import { requireRoles } from "@/lib/authz";
 import { presignTenantDocumentDownload } from "@/lib/tenant-storage";
-
 const FIELD_TO_KEY = {
   contract: "contractKey",
   signature: "signatureKey",
   aadhaar: "aadhaarKey",
   policeVerification: "policeVerificationKey",
 };
-
 export async function GET(request, { params }) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   const { id, field } = await params;
   const keyField = FIELD_TO_KEY[field];
   if (!keyField) return NextResponse.json({ error: "Unknown document field" }, { status: 400 });
   if (!mongoose.Types.ObjectId.isValid(id))
     return NextResponse.json({ error: "Valid id required" }, { status: 400 });
-
   try {
     await connectDB();
     const tenantRequest = await TenantRequest.findOne({
@@ -33,10 +29,8 @@ export async function GET(request, { params }) {
       societyId: auth.user.societyId,
     }).lean();
     if (!tenantRequest) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
     const key = tenantRequest.documents?.[keyField];
     if (!key) return NextResponse.json({ error: "Document not uploaded" }, { status: 404 });
-
     const url = await presignTenantDocumentDownload(key);
     return NextResponse.json({ success: true, url });
   } catch (err) {

@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -12,7 +11,6 @@ import {
   tokens,
   fmtTime,
 } from "@/components/visitor/ui";
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -26,14 +24,12 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const DOCUMENT_FIELDS = [
   { field: "contract", label: "Lease contract" },
   { field: "signature", label: "Signature" },
   { field: "aadhaar", label: "Aadhaar card" },
   { field: "policeVerification", label: "Police verification" },
 ];
-
 const S = {
   row: { padding: "14px 0", borderBottom: `1px solid ${tokens.border}` },
   rowHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" },
@@ -43,13 +39,11 @@ const S = {
   actionsRow: { display: "flex", gap: 8, marginTop: 12 },
   center: { display: "flex", justifyContent: "center", padding: 48 },
 };
-
 export default function TenantRequestsPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [busyId, setBusyId] = useState(null);
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -61,11 +55,9 @@ export default function TenantRequestsPage() {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     load();
   }, [load]);
-
   async function viewDocument(requestId, field) {
     try {
       const data = await api(`/api/admin/tenant-requests/${requestId}/documents/${field}`);
@@ -74,7 +66,6 @@ export default function TenantRequestsPage() {
       setToast({ type: "error", message: err.message });
     }
   }
-
   async function approve(requestId) {
     setBusyId(requestId);
     try {
@@ -90,7 +81,6 @@ export default function TenantRequestsPage() {
       setBusyId(null);
     }
   }
-
   async function reject(requestId) {
     const reason = window.prompt("Reason for rejection (shown to the owner):", "");
     if (reason === null) return; // cancelled
@@ -108,14 +98,12 @@ export default function TenantRequestsPage() {
       setBusyId(null);
     }
   }
-
   return (
     <div>
       <PageHeader
         title="Tenant Requests"
         subtitle="Review documents and approve or reject tenant onboarding requests submitted from the mobile app."
       />
-
       <Card>
         {loading ? (
           <div style={S.center}>
@@ -136,7 +124,6 @@ export default function TenantRequestsPage() {
                 </div>
                 <Badge color={tokens.sub}>{item.status}</Badge>
               </div>
-
               <div style={S.docsRow}>
                 {DOCUMENT_FIELDS.map(({ field, label }) => (
                   <Button key={field} variant="ghost" size="sm" onClick={() => viewDocument(item._id, field)}>
@@ -144,7 +131,6 @@ export default function TenantRequestsPage() {
                   </Button>
                 ))}
               </div>
-
               <div style={S.actionsRow}>
                 <Button disabled={busyId === item._id} onClick={() => approve(item._id)}>
                   Approve
@@ -157,7 +143,6 @@ export default function TenantRequestsPage() {
           ))
         )}
       </Card>
-
       {toast ? <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> : null}
     </div>
   );

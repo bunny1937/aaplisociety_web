@@ -1,11 +1,9 @@
 const baseIgnore =
   "node_modules,.next,dist,build,.git,*.module.css,*.log,.env*,coverage";
-
 module.exports = {
   full: {
     include: ["app/**"],
   },
-
   shared: {
     include: [
       // "lib/**",
@@ -32,7 +30,6 @@ module.exports = {
       "lib/pdf-generator.js",
       "lib/bill-status-manager.js",
       "lib/excel-handler.js",
-
       "models/Bill.js",
       "models/BillingHead.js",
       "models/Transaction.js",
@@ -45,7 +42,6 @@ module.exports = {
     ],
     memberDashboard: [
       "app/member/**",
-
       "app/api/member/**",
       "app/api/ledger/**",
       "app/api/payments/**",
@@ -66,18 +62,15 @@ module.exports = {
       "app/member/make-payment/**",
       "models/Transaction.js",
     ],
-
     // 🟣 AUTH (VERY IMPORTANT)
     auth: [
       "app/api/auth/**",
       "app/auth/**",
-
       "lib/jwt.js",
       "lib/mongodb.js",
       "middleware.js",
       "models/User.js",
     ],
-
     // 🟠 ADMIN SYSTEM
     admin: ["app/admin/**", "app/api/admin/**", "models/User.js"],
     superadmin: [
@@ -91,10 +84,8 @@ module.exports = {
       "app/admin/society-config/**",
       "models/Society.js",
     ],
-
     // ⚫ DATABASE MANAGER
     db: ["app/api/db-manager/**", "app/admin/database-manager/**"],
   },
-
   baseIgnore,
 };

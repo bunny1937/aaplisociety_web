@@ -1,25 +1,19 @@
 "use client";
-
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
 async function fetchBalanceSheet(fy) {
   const res = await fetch(`/api/billing/balance-sheet?fy=${fy}`, { credentials: "include" });
   if (!res.ok) throw new Error((await res.json()).error || "Failed");
   return res.json();
 }
-
 const currentFY = () => {
   const now = new Date();
   return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
 };
-
 const fmt = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n, d) => (d ? ((n / d) * 100).toFixed(1) : "0.0");
 const pctStr = (n, d) => pct(n, d) + "%";
-
 const ENTRY_TYPES = ["Maintenance", "Sinking Fund", "Repair & Maintenance", "Other Income", "Other Expense", "Auditor Fees", "Legal Fees", "Utilities", "Custom"];
-
 const S = {
   page: { padding: 0, maxWidth: 1500, margin: "0 auto", color: "#1e293b" },
   heading: { fontSize: "1.5rem", fontWeight: 800, margin: 0, color: "#0f172a" },
@@ -38,7 +32,6 @@ const S = {
   td: { padding: "9px 12px", borderBottom: "1px solid #f1f5f9", fontSize: "0.82rem", verticalAlign: "middle" },
   input: { width: "100%", padding: "0.5rem 0.7rem", borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b", fontSize: "0.85rem", boxSizing: "border-box" },
 };
-
 function collectionColor(pctVal) {
   const v = parseFloat(pctVal);
   if (v >= 90) return "#16a34a";
@@ -46,7 +39,6 @@ function collectionColor(pctVal) {
   if (v >= 40) return "#d97706";
   return "#dc2626";
 }
-
 function collectionBg(pctVal) {
   const v = parseFloat(pctVal);
   if (v >= 90) return "#dcfce7";
@@ -54,7 +46,6 @@ function collectionBg(pctVal) {
   if (v >= 40) return "#fef3c7";
   return "#fee2e2";
 }
-
 function StatusBadge({ row }) {
   if (row.isOpeningMonth) return <span style={S.badge("#7c3aed", "#ede9fe")}>Pre-Start</span>;
   if (!row.generated) return <span style={S.badge("#94a3b8", "#f1f5f9")}>Not Generated</span>;
@@ -62,13 +53,11 @@ function StatusBadge({ row }) {
   if (row.partial) return <span style={S.badge("#d97706", "#fef3c7")}>Partial</span>;
   return <span style={S.badge("#dc2626", "#fee2e2")}>Unpaid</span>;
 }
-
 function OpeningSnapshot({ firstGen, timeline }) {
   const seedPrincipal = firstGen?.openingPrincipal || 0;
   const seedInterest = firstGen?.openingInterest || 0;
   const seedTotal = seedPrincipal + seedInterest;
   const isMidYear = timeline.some((m) => m.isOpeningMonth);
-
   return (
     <div style={{ background: "#faf5ff", border: "1px solid #e9d5ff", borderLeft: "4px solid #7c3aed", borderRadius: 10, padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
       <div style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c3aed", marginBottom: 8 }}>
@@ -98,7 +87,6 @@ function OpeningSnapshot({ firstGen, timeline }) {
     </div>
   );
 }
-
 function ArrearsTrend({ prev, curr }) {
   if (prev === null || prev === undefined) return null;
   const delta = Math.abs(curr - prev);
@@ -109,7 +97,6 @@ function ArrearsTrend({ prev, curr }) {
   if (curr > prev) return <span style={{ color: "#dc2626", fontSize: "0.7rem", fontWeight: 700 }}>↑ Increased{deltaStr}</span>;
   return <span style={{ color: "#94a3b8", fontSize: "0.7rem" }}>→ Same</span>;
 }
-
 function FYClosingRow({ timeline, summary }) {
   const totalBilled = timeline.reduce((s, r) => s + (r.totalBilled || 0), 0);
   const totalCollected = timeline.reduce((s, r) => s + (r.totalPaid || 0), 0);
@@ -125,7 +112,6 @@ function FYClosingRow({ timeline, summary }) {
     : genMonths.length > 0
       ? "✓ FY Closed Successfully — No Outstanding Dues"
       : "FY Summary";
-
   return (
     <tr style={{ background: allClosed ? "#f0fdf4" : "#fffbeb", borderTop: "3px solid " + (allClosed ? "#16a34a" : "#d97706") }}>
       <td colSpan={2} style={{ ...S.td, fontWeight: 800, color: allClosed ? "#16a34a" : "#d97706", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
@@ -142,13 +128,10 @@ function FYClosingRow({ timeline, summary }) {
     </tr>
   );
 }
-
 function MonthTimeline({ timeline, summary }) {
   if (!timeline?.length) return null;
-
   const firstGen = timeline.find((m) => m.generated);
   const pendingByMonth = timeline.map(r => r.totalPending || 0);
-
   return (
     <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", marginBottom: "2rem" }}>
       <div style={{ padding: "0.75rem 1.25rem", borderBottom: "1px solid #e2e8f0", background: "#f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -159,9 +142,7 @@ function MonthTimeline({ timeline, summary }) {
           <span style={{ color: "#7c3aed" }}>Principal + Interest tracked separately</span>
         </div>
       </div>
-
       {firstGen && <OpeningSnapshot firstGen={firstGen} timeline={timeline} />}
-
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
           <thead>
@@ -204,7 +185,6 @@ function MonthTimeline({ timeline, summary }) {
               const dash = <span style={{ color: "#e2e8f0" }}>—</span>;
               const prevPending = i > 0 ? pendingByMonth[i - 1] : null;
               const effectivePct = pct(row.totalPaid + row.totalAdvance, row.totalBilled);
-
               const openingCell = row.isOpeningMonth ? (
                 <div style={{ fontSize: "0.75rem" }}>
                   <div style={{ color: "#7c3aed", fontWeight: 700 }}>{fmt((firstGen?.openingPrincipal || 0) + (firstGen?.openingInterest || 0))}</div>
@@ -221,7 +201,6 @@ function MonthTimeline({ timeline, summary }) {
               ) : row.generated ? (
                 <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>₹0</span>
               ) : dash;
-
               return (
                 <tr key={row.periodId} style={{ background: bg, borderBottom: "1px solid #f1f5f9" }}>
                   {/* Month */}
@@ -234,10 +213,8 @@ function MonthTimeline({ timeline, summary }) {
                       <div style={{ marginTop: 3, fontSize: "0.63rem", color: "#7c3aed", background: "#ede9fe", padding: "1px 6px", borderRadius: 4, fontWeight: 700, display: "inline-block" }}>PRE-START</div>
                     )}
                   </td>
-
                   {/* Status */}
                   <td style={S.td}><StatusBadge row={row} /></td>
-
                   {/* Members Cleared */}
                   <td style={{ ...S.td, textAlign: "center" }}>
                     {row.generated ? (
@@ -247,18 +224,14 @@ function MonthTimeline({ timeline, summary }) {
                       </div>
                     ) : dash}
                   </td>
-
                   {/* Opening Balance */}
                   <td style={S.td}>{openingCell}</td>
-
                   {/* Billed */}
                   <td style={{ ...S.td, color: "#1d4ed8", fontWeight: 600 }}>{row.generated ? fmt(row.totalBilled) : dash}</td>
-
                   {/* Collected */}
                   <td style={{ ...S.td, color: "#16a34a", fontWeight: 600 }}>
                     {row.generated ? fmt(row.totalPaid) : dash}
                   </td>
-
                   {/* Advance Used */}
                   <td style={{ ...S.td, color: "#0891b2" }}>
                     {row.generated ? (
@@ -267,7 +240,6 @@ function MonthTimeline({ timeline, summary }) {
                       ) : <span style={{ color: "#e2e8f0" }}>—</span>
                     ) : dash}
                   </td>
-
                   {/* Pending */}
                   <td style={{ ...S.td }}>
                     {row.generated ? (
@@ -283,7 +255,6 @@ function MonthTimeline({ timeline, summary }) {
                       )
                     ) : dash}
                   </td>
-
                   {/* Interest Generated */}
                   <td style={{ ...S.td, color: "#7c3aed" }}>
                     {row.generated ? (
@@ -292,13 +263,10 @@ function MonthTimeline({ timeline, summary }) {
                         : <span style={{ color: "#e2e8f0" }}>—</span>
                     ) : dash}
                   </td>
-
                   {/* Sinking Fund */}
                   <td style={{ ...S.td, color: "#0891b2" }}>{row.generated ? fmt(row.totalSinking) : dash}</td>
-
                   {/* Repair Fund */}
                   <td style={{ ...S.td, color: "#ea580c" }}>{row.generated ? fmt(row.totalRepair) : dash}</td>
-
                   {/* Collection % */}
                   <td style={S.td}>
                     {row.generated && row.totalBilled > 0 ? (
@@ -321,7 +289,6 @@ function MonthTimeline({ timeline, summary }) {
           </tfoot>
         </table>
       </div>
-
       {/* Annual Totals Footer */}
       <div style={{ background: "#f8fafc", borderTop: "2px solid #e2e8f0", padding: "1rem 1.25rem" }}>
         <div style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: "0.75rem" }}>Annual Totals</div>
@@ -350,11 +317,9 @@ function MonthTimeline({ timeline, summary }) {
     </div>
   );
 }
-
 function ClosingPanel({ closing, summary, fy, fyClosingOutstanding = 0 }) {
   if (!closing) return null;
   const { scenario, firstGenerated, lastGenerated, lastFullyPaid, nextToGenerate, marchStatus } = closing;
-
   const scenarioConfig = {
     NO_BILLS: { color: "#64748b", bg: "#f8fafc", border: "#e2e8f0", icon: "📭", label: "No Bills Generated" },
     MID_YEAR: { color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", icon: "📅", label: "Mid-Year — FY In Progress" },
@@ -362,7 +327,6 @@ function ClosingPanel({ closing, summary, fy, fyClosingOutstanding = 0 }) {
     MARCH_PAID: { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", icon: "✅", label: "Financial Year Closed" },
   };
   const sc = scenarioConfig[scenario] || scenarioConfig.NO_BILLS;
-
   return (
     <div style={{ background: sc.bg, border: `1px solid ${sc.border}`, borderLeft: `4px solid ${sc.color}`, borderRadius: 10, padding: "1.5rem", marginBottom: "2rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
@@ -371,7 +335,6 @@ function ClosingPanel({ closing, summary, fy, fyClosingOutstanding = 0 }) {
             {sc.icon} FY Closing Status
           </div>
           <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", marginBottom: 8 }}>{sc.label}</div>
-
           {scenario === "NO_BILLS" && (
             <p style={{ color: "#64748b", fontSize: "0.85rem", margin: 0 }}>No bills generated for FY {fy}–{fy + 1} yet. Generate April {fy} bills to begin.</p>
           )}
@@ -427,20 +390,17 @@ function ClosingPanel({ closing, summary, fy, fyClosingOutstanding = 0 }) {
     </div>
   );
 }
-
 export default function BalanceSheetPage() {
   const qc = useQueryClient();
   const [fy, setFy] = useState(currentFY());
   const [newEntry, setNewEntry] = useState({ name: "", type: "Other Expense", income: "", expenditure: "" });
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["balance-sheet", fy],
     queryFn: () => fetchBalanceSheet(fy),
     staleTime: 2 * 60 * 1000,
   });
-
   const { data: entriesData, isLoading: entriesLoading } = useQuery({
     queryKey: ["society-entries", fy],
     queryFn: async () => {
@@ -450,30 +410,23 @@ export default function BalanceSheetPage() {
     },
     staleTime: 60_000,
   });
-
   const entries = entriesData?.entries || [];
-
   const summary = data?.summary || {};
   const closing = data?.closing || null;
   const timeline = data?.timeline || [];
   const availableFYs = data?.availableFYs || [];
-
   const fyYears = useMemo(() => {
     const set = new Set([...availableFYs, currentFY()]);
     return [...set].sort((a, b) => b - a).slice(0, 8);
   }, [availableFYs]);
-
   // FY closing outstanding = last generated month's pending (rolling state, not additive sum)
   const genMonths = timeline.filter(r => r.generated);
   const lastGenMonth = genMonths[genMonths.length - 1];
   const fyClosingOutstanding = lastGenMonth?.totalPending ?? 0;
-
   const customIncome = entries.reduce((s, e) => s + (e.entryKind === "income" ? (e.amount || 0) : 0), 0);
   const customExpenditure = entries.reduce((s, e) => s + (e.entryKind === "expenditure" ? (e.amount || 0) : 0), 0);
-
   const liabilityEntries = entries.filter((e) => e.entryKind === "income");
   const assetEntries = entries.filter((e) => e.entryKind === "expenditure");
-
   const handleAddEntry = async () => {
     if (!newEntry.name.trim()) return;
     if (!newEntry.income && !newEntry.expenditure) return;
@@ -495,13 +448,11 @@ export default function BalanceSheetPage() {
       setSaving(false);
     }
   };
-
   const removeEntry = async (id) => {
     if (!confirm("Delete this entry?")) return;
     await fetch(`/api/society-entries?id=${id}`, { method: "DELETE", credentials: "include" });
     qc.invalidateQueries(["society-entries", fy]);
   };
-
   return (
     <div style={S.page}>
       {/* Header */}
@@ -517,15 +468,12 @@ export default function BalanceSheetPage() {
           </select>
         </div>
       </div>
-
       {isLoading && <div style={{ padding: "4rem", textAlign: "center", color: "#94a3b8" }}>Loading...</div>}
       {error && <div style={{ padding: "2rem", color: "#ef4444", textAlign: "center" }}>{error.message}</div>}
-
       {!isLoading && !error && (
         <>
           <div style={S.sectionTitle}>FY Closing Status</div>
           <ClosingPanel closing={closing} summary={summary} fy={fy} fyClosingOutstanding={fyClosingOutstanding} />
-
           <div style={S.sectionTitle}>Financial Summary</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "1rem", marginBottom: "1rem" }}>
             <div style={S.card("#3b82f6")}>
@@ -581,9 +529,7 @@ export default function BalanceSheetPage() {
               <div style={S.cardSub}>Cash collected + accrued interest</div>
             </div>
           </div>
-
           <MonthTimeline timeline={timeline} summary={summary} />
-
           <div style={S.sectionTitle}>Revenue & Outstanding Breakdown</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginBottom: "1.5rem" }}>
             <div style={S.panel("#bbf7d0", "#f0fdf4")}>
@@ -613,7 +559,6 @@ export default function BalanceSheetPage() {
                 </div>
               ))}
             </div>
-
             <div style={S.panel("#fecaca", "#fff5f5")}>
               <div style={{ marginBottom: "1rem" }}>
                 <h3 style={{ ...S.panelHead("#dc2626"), marginBottom: 2 }}>Outstanding & Receivables Breakdown</h3>
@@ -639,7 +584,6 @@ export default function BalanceSheetPage() {
               ))}
             </div>
           </div>
-
           <div style={{
             background: "#f0fdf4",
             border: "1px solid #bbf7d0",
@@ -661,7 +605,6 @@ export default function BalanceSheetPage() {
               {fmt((summary.totalCollected || 0) + (summary.totalInterest || 0))}
             </div>
           </div>
-
           {entries.length > 0 && (
             <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, marginBottom: "1.5rem", overflow: "hidden" }}>
               <div style={{ padding: "0.75rem 1.25rem", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
@@ -697,14 +640,12 @@ export default function BalanceSheetPage() {
               </table>
             </div>
           )}
-
           <button
             onClick={() => setAddOpen(!addOpen)}
             style={{ padding: "0.5rem 1.25rem", borderRadius: 6, border: `1px solid ${addOpen ? "#ef4444" : "#3b82f6"}`, background: "transparent", color: addOpen ? "#ef4444" : "#3b82f6", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", marginBottom: "1rem" }}
           >
             {addOpen ? "✕ Cancel" : "+ Add Custom Entry"}
           </button>
-
           {addOpen && (
             <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "1.5rem" }}>
               <div style={{ ...S.sectionTitle, marginBottom: "1rem" }}>New Custom Entry</div>

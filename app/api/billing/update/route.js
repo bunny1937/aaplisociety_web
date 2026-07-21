@@ -4,31 +4,24 @@ import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
 import AuditLog from "@/models/AuditLog";
 import { requireRoles, BILLING_WRITE_ROLES } from "@/lib/authz";
-
 import { getFinancialYear } from "@/lib/date-utils";
-
 export async function PUT(request) {
   try {
     await connectDB();
     const auth = requireRoles(request, BILLING_WRITE_ROLES);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { billId, updates } = await request.json();
-
     if (!billId) {
       return NextResponse.json({ error: "Bill ID required" }, { status: 400 });
     }
-
     const existingBill = await Bill.findOne({
       _id: billId,
       societyId: decoded.societyId,
     });
-
     if (!existingBill) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
-
     if (existingBill.isLocked) {
       return NextResponse.json(
         {
@@ -37,56 +30,45 @@ export async function PUT(request) {
         { status: 403 }
       );
     }
-
     const allowedUpdates = ["charges", "notes", "dueDate"];
     const updateData = {};
-
     Object.keys(updates).forEach((key) => {
       if (allowedUpdates.includes(key)) {
         updateData[key] = updates[key];
       }
     });
-
     if (updates.charges) {
       const chargesMap = new Map(Object.entries(updates.charges));
       updateData.charges = chargesMap;
-
       let dynamicTotal = 0;
       for (const amount of chargesMap.values()) {
         dynamicTotal += parseFloat(amount) || 0;
       }
-
       const subtotal =
         existingBill.breakdown.maintenance +
         existingBill.breakdown.sinkingFund +
         existingBill.breakdown.repairFund +
         existingBill.breakdown.fixedCharges +
         dynamicTotal;
-
       const serviceTax =
         (subtotal * (existingBill.breakdown.serviceTaxRate || 0)) / 100;
-
       const newTotal =
         subtotal +
         serviceTax +
         existingBill.breakdown.previousArrears +
         existingBill.breakdown.interestOnArrears;
-
       updateData["breakdown.dynamicCharges"] = dynamicTotal;
       updateData.totalAmount = Math.round(newTotal * 100) / 100;
       updateData.balanceAmount =
         updateData.totalAmount - existingBill.amountPaid;
     }
-
     updateData.lastModifiedAt = new Date();
     updateData.lastModifiedBy = decoded.userId;
-
     const updatedBill = await Bill.findByIdAndUpdate(
       billId,
       { $set: updateData },
       { new: true, runValidators: true }
     );
-
     if (updates.charges) {
       const lastTransaction = await Transaction.findOne({
         referenceId: billId,
@@ -94,15 +76,12 @@ export async function PUT(request) {
         type: "Debit",
         category: "Maintenance",
       }).sort({ date: -1 });
-
       if (lastTransaction) {
         const amountDifference =
           updatedBill.totalAmount - existingBill.totalAmount;
-
         if (amountDifference !== 0) {
           const previousBalance = lastTransaction.balanceAfterTransaction;
           const newBalance = previousBalance + amountDifference;
-
           await Transaction.create({
             transactionId: Transaction.generateTransactionId(),
             date: new Date(),
@@ -125,7 +104,6 @@ export async function PUT(request) {
         }
       }
     }
-
     await AuditLog.create({
       userId: decoded.userId,
       societyId: decoded.societyId,
@@ -134,7 +112,6 @@ export async function PUT(request) {
       newData: updatedBill,
       timestamp: new Date(),
     });
-
     return NextResponse.json({
       success: true,
       message: "Bill updated successfully",
@@ -151,31 +128,25 @@ export async function PUT(request) {
     );
   }
 }
-
 export async function DELETE(request) {
   try {
     await connectDB();
-
     const auth = requireRoles(request, ["Admin"]);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { searchParams } = new URL(request.url);
     const billPeriodId = searchParams.get("billPeriodId");
-
     if (!billPeriodId) {
       return NextResponse.json(
         { error: "Bill period ID required" },
         { status: 400 }
       );
     }
-
     const billsToDelete = await Bill.find({
       societyId: decoded.societyId,
       billPeriodId,
       status: { $in: ["Unpaid", "Overdue"] },
     });
-
     if (billsToDelete.length === 0) {
       return NextResponse.json(
         {
@@ -184,13 +155,11 @@ export async function DELETE(request) {
         { status: 400 }
       );
     }
-
     const paidBills = await Bill.countDocuments({
       societyId: decoded.societyId,
       billPeriodId,
       status: { $in: ["Paid", "Partial"] },
     });
-
     if (paidBills > 0) {
       return NextResponse.json(
         {
@@ -199,9 +168,7 @@ export async function DELETE(request) {
         { status: 400 }
       );
     }
-
     const billIds = billsToDelete.map((b) => b._id);
-
     await Transaction.updateMany(
       {
         societyId: decoded.societyId,
@@ -212,11 +179,9 @@ export async function DELETE(request) {
         $set: { isReversed: true },
       }
     );
-
     const deleteResult = await Bill.deleteMany({
       _id: { $in: billIds },
     });
-
     await AuditLog.create({
       userId: decoded.userId,
       societyId: decoded.societyId,
@@ -227,7 +192,6 @@ export async function DELETE(request) {
       },
       timestamp: new Date(),
     });
-
     return NextResponse.json({
       success: true,
       message: `Successfully deleted ${deleteResult.deletedCount} bills`,

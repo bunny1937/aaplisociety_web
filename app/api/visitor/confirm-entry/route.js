@@ -8,24 +8,20 @@ import Member from "@/models/Member";
 import { requireAuth } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { sendInApp } from "@/lib/visitor-channels";
-
 export async function PATCH(request) {
   const auth = requireAuth(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const body = await request.json();
     const visitorId = String(body.visitorId || "").trim();
     const decision = String(body.decision || "").trim(); // acknowledge | flag
-
     if (!visitorId || !["acknowledge", "flag"].includes(decision)) {
       return NextResponse.json(
         { error: "visitorId and a valid decision are required" },
         { status: 400 },
       );
     }
-
     // Only the resident of that flat can confirm their own visitor.
     const visitor = await Visitor.findOne({
       _id: visitorId,
@@ -38,7 +34,6 @@ export async function PATCH(request) {
     if (visitor.entryMethod !== "OfflineEntry") {
       return NextResponse.json({ error: "Not an offline entry" }, { status: 400 });
     }
-
     const status = decision === "acknowledge" ? "Acknowledged" : "Flagged";
     visitor.offlineMeta = visitor.offlineMeta || {};
     visitor.offlineMeta.confirmation = {
@@ -47,7 +42,6 @@ export async function PATCH(request) {
       by: auth.user.userId,
     };
     await visitor.save();
-
     // Flag => HIGH alert to the gate/security so they can verify immediately.
     if (decision === "flag") {
       try {
@@ -80,7 +74,6 @@ export async function PATCH(request) {
         console.error("flag alert error", e && e.message);
       }
     }
-
     await logAudit(
       auth.user.userId,
       auth.user.societyId,
@@ -88,7 +81,6 @@ export async function PATCH(request) {
       null,
       { id: String(visitor._id), decision: status },
     );
-
     return NextResponse.json({
       success: true,
       confirmation: visitor.offlineMeta.confirmation,

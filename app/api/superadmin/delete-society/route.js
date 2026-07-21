@@ -8,23 +8,18 @@ import Bill from "@/models/Bill";
 import Receipt from "@/models/Receipt";
 import Transaction from "@/models/Transaction";
 import BillingHead from "@/models/BillingHead";
-
 // POST /api/superadmin/delete-society
 // Body: { societyId }
 // Hard-deletes society + all associated data
 export async function POST(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
-
   try {
     await connectDB();
-
     const { societyId } = await request.json();
     if (!societyId) return NextResponse.json({ error: "societyId required" }, { status: 400 });
-
     const society = await Society.findById(societyId).lean();
     if (!society) return NextResponse.json({ error: "Society not found" }, { status: 404 });
-
     const [bills, receipts, transactions, members, billingHeads, users] = await Promise.all([
       Bill.deleteMany({ societyId }),
       Receipt.deleteMany({ societyId }),
@@ -33,9 +28,7 @@ export async function POST(request) {
       BillingHead.deleteMany({ societyId }),
       User.deleteMany({ societyId }),
     ]);
-
     await Society.findByIdAndDelete(societyId);
-
     return NextResponse.json({
       success: true,
       societyName: society.name,

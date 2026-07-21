@@ -1,15 +1,12 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
 export default function SelectSocietyPage() {
   const router = useRouter();
   const [profiles, setProfiles] = useState([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   useEffect(() => {
     const raw = sessionStorage.getItem("pendingProfiles");
     const storedName = sessionStorage.getItem("pendingName");
@@ -20,7 +17,6 @@ export default function SelectSocietyPage() {
     setProfiles(JSON.parse(raw));
     setName(storedName || "");
   }, []);
-
   const handleSelect = async (profileId) => {
     setLoading(true);
     setError("");
@@ -34,13 +30,11 @@ export default function SelectSocietyPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to select society");
-
       // Clear pending state
       sessionStorage.removeItem("pendingProfiles");
       sessionStorage.removeItem("pendingUserId");
       sessionStorage.removeItem("profileSelectToken");
       sessionStorage.removeItem("pendingName");
-
       router.replace("/member/dashboard");
     } catch (err) {
       setError(err.message);
@@ -48,7 +42,6 @@ export default function SelectSocietyPage() {
       setLoading(false);
     }
   };
-
   return (
     <div
       style={{
@@ -72,7 +65,6 @@ export default function SelectSocietyPage() {
         <p style={{ color: "#6b7280", marginBottom: 24 }}>
           Welcome back, {name}. Select which society to access.
         </p>
-
         {error && (
           <div
             style={{
@@ -87,7 +79,6 @@ export default function SelectSocietyPage() {
             {error}
           </div>
         )}
-
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {profiles.map((p) => (
             <button

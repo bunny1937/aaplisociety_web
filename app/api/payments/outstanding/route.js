@@ -2,7 +2,6 @@
 // CHANGE 10 — Full rewrite
 // FROM: uses ledger balance as source of truth, calculates interest live
 // TO:   uses unpaid bill balances (principalBalance + interestBalance), detects payment block
-
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
@@ -11,31 +10,25 @@ import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import cache from "@/lib/cache";
 import Bill from "@/models/Bill";
 import { getBillPayFinalDate } from "../../../../utils/interestUtils";
-
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const searchParams = new URL(request.url).searchParams;
     const memberId = searchParams.get("memberId");
-
     if (!memberId) {
       return NextResponse.json(
         { error: "Member ID required" },
         { status: 400 },
       );
     }
-
     // Fetch member (for advanceCredit)
     const member = await cache.getOrSet(
       `member:single:${memberId}`,
@@ -43,24 +36,20 @@ export async function GET(request) {
         Member.findOne({ _id: memberId, societyId: decoded.societyId }).lean(),
       300,
     );
-
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
-
     // Fetch society config
     const society = await cache.getOrSet(
       `society:config:${decoded.societyId}`,
       () => Society.findById(decoded.societyId).lean(),
       900,
     );
-
     const config = society?.config || {};
     const billPayFinalDay = config.billPayFinalDay || 0;
     const interestRate = config.interestRate || 0;
     const memberPaymentBreakdownVisible =
       config.memberPaymentBreakdownVisible !== false;
-
     // ✅ SOURCE OF TRUTH: unpaid bills (not ledger balance)
     const unpaidBills = await Bill.find({
       memberId,
@@ -70,7 +59,6 @@ export async function GET(request) {
     })
       .sort({ billYear: 1, billMonth: 1 })
       .lean();
-
     // No outstanding bills — check if member has opening balances not yet billed
     if (unpaidBills.length === 0) {
       const openingPrin = member.openingPrincipal || 0;
@@ -95,7 +83,6 @@ export async function GET(request) {
             : "No outstanding balance",
       });
     }
-
     // ✅ Sum from bill components (set at generation + updated at payment)
     const totalPrincipalOutstanding = unpaidBills.reduce(
       (s, b) => s + (b.principalBalance || 0),
@@ -108,12 +95,10 @@ export async function GET(request) {
     const totalOutstanding = parseFloat(
       (totalPrincipalOutstanding + totalInterestOutstanding).toFixed(2),
     );
-
     // ✅ Check billPayFinalDate against OLDEST unpaid bill
     let isPaymentBlocked = false;
     let blockMessage = null;
     let billPayFinalDate = null;
-
     if (billPayFinalDay > 0) {
       const oldest = unpaidBills[0];
       // billMonth is stored 0-indexed (May=4); getBillPayFinalDate expects 1-indexed
@@ -122,7 +107,6 @@ export async function GET(request) {
         oldest.billMonth + 1,
         billPayFinalDay,
       );
-
       if (billPayFinalDate) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -132,7 +116,6 @@ export async function GET(request) {
         }
       }
     }
-
     // ✅ Per-bill breakdown for transparent UI
     const billBreakdown = unpaidBills.map((b) => ({
       billPeriodId: b.billPeriodId,
@@ -148,7 +131,6 @@ export async function GET(request) {
       currInt: b.currInt || 0,
       monthInterest: b.monthInterest || 0,
     }));
-
     return NextResponse.json({
       principalOutstanding: parseFloat(totalPrincipalOutstanding.toFixed(2)),
       interestOutstanding: parseFloat(totalInterestOutstanding.toFixed(2)),
@@ -162,10 +144,8 @@ export async function GET(request) {
       billPayFinalDate,
       unpaidBillCount: unpaidBills.length,
       memberAdvanceCredit: member.advanceCredit || 0,
-
       // ✅ Per-bill breakdown (only if society allows transparency)
       ...(memberPaymentBreakdownVisible ? { billBreakdown } : {}),
-
       // Legacy fields — keeps existing UI callers working
       principalAmount: parseFloat(totalPrincipalOutstanding.toFixed(2)),
       interestAmount: parseFloat(totalInterestOutstanding.toFixed(2)),
@@ -173,7 +153,6 @@ export async function GET(request) {
       dueDate: unpaidBills[0]?.dueDate || null,
       graceEndDate: null,
       interestCalculationMethod: "MONTHLY",
-
       message: isPaymentBlocked
         ? blockMessage
         : totalOutstanding > 0

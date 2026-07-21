@@ -1,5 +1,4 @@
 "use client";
-
 export default function MakePaymentPage() {
   return (
     <div style={{ padding: "3rem", textAlign: "center" }}>

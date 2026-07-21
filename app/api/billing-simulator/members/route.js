@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-
 /**
  * GET /api/billing-simulator/members
  * Returns members for the society with billing-relevant fields only.
@@ -11,21 +10,17 @@ import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const { societyId } = decoded;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim();
-
     const query = { societyId };
     if (search) {
       query.$or = [
@@ -34,14 +29,12 @@ export async function GET(request) {
         { wing: { $regex: search, $options: "i" } },
       ];
     }
-
     const members = await Member.find(query)
       .select(
         "_id flatNo wing ownerName openingBalance openingPrincipal openingInterest advanceCredit carpetAreaSqft parkingSlots contactNumber",
       )
       .sort({ wing: 1, flatNo: 1 })
       .lean();
-
     const formatted = members.map((m) => ({
       id: m._id.toString(),
       flat: m.wing ? `${m.wing}-${m.flatNo}` : m.flatNo,
@@ -56,7 +49,6 @@ export async function GET(request) {
       parkingSlots: m.parkingSlots || 0,
       contactNumber: m.contactNumber,
     }));
-
     return NextResponse.json({ success: true, members: formatted });
   } catch (error) {
     console.error("billing-simulator/members error:", error);

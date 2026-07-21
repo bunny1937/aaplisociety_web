@@ -3,7 +3,6 @@
  * Phase 1: validate everything — return errors without touching DB.
  * Phase 2: create society → admin user → members.
  */
-
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Society from "@/models/Society";
@@ -23,9 +22,7 @@ import { generateUniqueSocietyCode } from "@/lib/society-code";
 import { generatePassword } from "@/lib/password-generator";
 import { sendEmail, onboardingEmailHtml } from "@/lib/brevo-email";
 import { signToken } from "@/lib/jwt";
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 function generateSocietyId(name) {
   const parts = name.trim().split(" ");
   const first = parts[0]?.slice(0, 4).toLowerCase() || "soc";
@@ -34,7 +31,6 @@ function generateSocietyId(name) {
   const rand = String(Math.floor(10 + Math.random() * 90));
   return `${first}_${last}_${year}_${rand}`;
 }
-
 function rowToSocietyPayload(row) {
   const charges = [
     {
@@ -108,7 +104,6 @@ function rowToSocietyPayload(row) {
       isActive: parseFloat(row["Covered Parking FW (Per Vehicle)"]) > 0,
     },
   ];
-
   return {
     societyName: row["Society Name"]?.toString().trim(),
     registrationNo: row["Registration No"]?.toString().trim() || "",
@@ -128,23 +123,18 @@ function rowToSocietyPayload(row) {
     },
   };
 }
-
 function parseMemberRows(basicInfoRows, parkingByFlat) {
   const members = [];
   const errors = [];
   const seenFlats = new Set();
-
   for (let i = 0; i < basicInfoRows.length; i++) {
     const row = basicInfoRows[i];
-
     // The template separates real data from the trailing instructions/notes
     // block with one fully blank row. Stop here — everything below is notes,
     // not member data (e.g. "* = Required fields", "RULE: ...").
     if (Object.values(row).every((v) => v === "" || v == null)) break;
-
     const flatNo = String(row["flatNo*"] || row["flatNo"] || "").trim();
     const wing = String(row["wing"] || "").trim();
-
     // Skip instruction / header echo rows (defense in depth, in case the
     // blank separator row above is missing)
     if (flatNo.toUpperCase().startsWith("INSTRUCTION") || flatNo === "flatNo*")
@@ -156,9 +146,7 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
       });
       continue;
     }
-
     const label = `Row ${i + 2} (${wing}-${flatNo})`;
-
     // Required field checks
     const rowErrors = [];
     if (!String(row["ownerName*"] || row["ownerName"] || "").trim())
@@ -170,28 +158,23 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
     );
     if (!carpetArea || carpetArea <= 0)
       rowErrors.push("carpetAreaSqft must be > 0");
-
     const emailRaw = String(row["emailPrimary*"] || row["emailPrimary"] || "")
       .trim()
       .toLowerCase();
     if (emailRaw && !EMAIL_RE.test(emailRaw))
       rowErrors.push(`emailPrimary "${emailRaw}" is not a valid email`);
-
     const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
     if (seenFlats.has(flatKey)) {
       rowErrors.push(`Duplicate flat ${wing}-${flatNo} in member sheet`);
     } else {
       seenFlats.add(flatKey);
     }
-
     if (rowErrors.length) {
       errors.push({ label, errors: rowErrors });
       continue;
     }
-
     const openingPrincipal = parseFloat(row["openingPrincipal"] || 0) || 0;
     const openingInterest = parseFloat(row["openingInterest"] || 0) || 0;
-
     const slots = (parkingByFlat[flatNo] || [])
       .map((p) => ({
         slotNumber: String(p["slotNumber"] || "").trim(),
@@ -200,7 +183,6 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
         monthlyBilling: String(p["type"] || "").trim() !== "Stilt",
       }))
       .filter((s) => s.slotNumber);
-
     members.push({
       flatNo,
       wing,
@@ -220,24 +202,18 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
       advanceCredit: 0,
     });
   }
-
   return { members, errors };
 }
-
 export async function POST(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
-
   await connectDB();
-
   const formData = await request.formData();
   const file = formData.get("file");
   if (!file)
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-
   const bytes = await file.arrayBuffer();
   const wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
-
   if (wb.SheetNames.length < 1) {
     return NextResponse.json(
       {
@@ -247,9 +223,7 @@ export async function POST(request) {
       { status: 400 },
     );
   }
-
   // ── PHASE 1: PARSE ────────────────────────────────────────────────
-
   // Society sheet
   const societySheet = wb.Sheets[wb.SheetNames[0]];
   const societyRows = XLSX.utils.sheet_to_json(societySheet, { defval: "" });
@@ -265,9 +239,7 @@ export async function POST(request) {
       { status: 422 },
     );
   }
-
   const societyPayload = rowToSocietyPayload(societyRows[0]);
-
   // Member sheet (index 1 = "1. Basic Info (Required)")
   const basicInfoSheetName = wb.SheetNames[1];
   const basicInfoRows = basicInfoSheetName
@@ -276,7 +248,6 @@ export async function POST(request) {
         blankrows: true,
       })
     : [];
-
   // Parking sheet (index 3 = "3. Parking Slots")
   const parkingSheetName = wb.SheetNames[3];
   const parkingByFlat = {};
@@ -291,11 +262,8 @@ export async function POST(request) {
       parkingByFlat[fn].push(p);
     }
   }
-
   // ── PHASE 2: VALIDATE (nothing written to DB yet) ─────────────────
-
   const societyErrors = [];
-
   if (!societyPayload.societyName)
     societyErrors.push("Society Name is required");
   if (!societyPayload.fullName)
@@ -303,7 +271,6 @@ export async function POST(request) {
   if (!societyPayload.email) societyErrors.push("Admin Email is required");
   else if (!EMAIL_RE.test(societyPayload.email))
     societyErrors.push(`Admin Email "${societyPayload.email}" is not valid`);
-
   // DB uniqueness checks (read-only, no writes)
   if (societyPayload.societyName) {
     const nameExists = await Society.findOne({
@@ -322,7 +289,6 @@ export async function POST(request) {
         `Admin email "${societyPayload.email}" is already registered — choose a different email`,
       );
   }
-
   // Billing heads warning
   const activeCharges = societyPayload.config.charges.filter(
     (c) => c.value > 0,
@@ -333,7 +299,6 @@ export async function POST(request) {
       "No billing head rates filled in Society sheet — all charges are ₹0. You can update them in Society Config after import, but bills generated will be ₹0 until then.",
     );
   }
-
   if (societyErrors.length) {
     return NextResponse.json(
       {
@@ -345,13 +310,11 @@ export async function POST(request) {
       { status: 422 },
     );
   }
-
   // Member validation
   const { members: validMembers, errors: memberErrors } = parseMemberRows(
     basicInfoRows,
     parkingByFlat,
   );
-
   if (memberErrors.length) {
     return NextResponse.json(
       {
@@ -366,7 +329,6 @@ export async function POST(request) {
       { status: 422 },
     );
   }
-
   if (validMembers.length === 0) {
     const hint =
       basicInfoRows.length > 0
@@ -382,21 +344,16 @@ export async function POST(request) {
       { status: 422 },
     );
   }
-
   // ── PHASE 3: CREATE ───────────────────────────────────────────────
-
   let societyId,
     attempts = 0;
   do {
     societyId = generateSocietyId(societyPayload.societyName);
     if (!(await Society.findOne({ societyId }))) break;
   } while (++attempts < 10);
-
   const societyCode = await generateUniqueSocietyCode();
-
   const plainPassword = generatePassword();
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
   let society;
   try {
     society = await Society.create({
@@ -421,7 +378,6 @@ export async function POST(request) {
       { status: 500 },
     );
   }
-
   try {
     await User.create({
       name: societyPayload.fullName,
@@ -439,31 +395,26 @@ export async function POST(request) {
       { status: 500 },
     );
   }
-
   let membersCreated = 0;
   const memberCreateErrors = [];
   const memberCredentials = [];
   const createdMemberUserIds = [];
   const appendedProfiles = [];
   const usernameBloom = await buildUsernameBloomFilter();
-
   for (const memberData of validMembers) {
     try {
       const member = await Member.create({
         ...memberData,
         societyId: society._id,
       });
-
       if (memberData.emailPrimary) {
         const memberPwd = generatePassword();
         const memberHash = await bcrypt.hash(memberPwd, 10);
         const existingUser = await User.findOne({
           email: memberData.emailPrimary,
         });
-
         if (existingUser) {
           const profileId = new mongoose.Types.ObjectId();
-
           existingUser.profiles = existingUser.profiles || [];
           existingUser.profiles.push({
             profileId,
@@ -476,12 +427,10 @@ export async function POST(request) {
             joinedAt: new Date(),
           });
           await existingUser.save();
-
           appendedProfiles.push({
             userId: existingUser._id,
             profileId,
           });
-
           memberCredentials.push({
             flatNo: memberData.flatNo,
             wing: memberData.wing,
@@ -515,9 +464,7 @@ export async function POST(request) {
             ],
             isActive: true,
           });
-
           createdMemberUserIds.push(newUser._id);
-
           memberCredentials.push({
             userId: newUser._id,
             flatNo: memberData.flatNo,
@@ -537,29 +484,24 @@ export async function POST(request) {
       );
     }
   }
-
   // If any member failed to create → rollback and return error
   if (memberCreateErrors.length > 0) {
     try {
       await Member.deleteMany({ societyId: society._id });
-
       if (createdMemberUserIds.length > 0) {
         await User.deleteMany({ _id: { $in: createdMemberUserIds } });
       }
-
       for (const { userId, profileId } of appendedProfiles) {
         await User.updateOne(
           { _id: userId },
           { $pull: { profiles: { profileId } } },
         );
       }
-
       await User.deleteOne({ email: societyPayload.email });
       await Society.findByIdAndDelete(society._id);
     } catch (cleanupErr) {
       console.error("Rollback error:", cleanupErr.message);
     }
-
     return NextResponse.json(
       {
         validationFailed: true,
@@ -573,7 +515,6 @@ export async function POST(request) {
       { status: 500 },
     );
   }
-
   // ── PHASE 4: SYNC BILLING HEADS from config.charges ─────────────
   let billingHeads = [];
   let billingHeadError = null;
@@ -589,7 +530,6 @@ export async function POST(request) {
         order: i + 1,
         societyId: society._id,
       }));
-
     if (headsToCreate.length > 0) {
       billingHeads = await BillingHead.insertMany(headsToCreate);
     } else {
@@ -601,7 +541,6 @@ export async function POST(request) {
     billingHeadError = err.message;
     warnings.push(`Billing heads sync failed: ${err.message}`);
   }
-
   // ── PHASE 5: GENERATE CURRENT MONTH BILLS ────────────────────────
   const now = new Date();
   const billYear = now.getFullYear();
@@ -612,27 +551,22 @@ export async function POST(request) {
     billMonth >= 4
       ? `${billYear}-${billYear + 1}`
       : `${billYear - 1}-${billYear}`;
-
   let billsGenerated = 0;
   const billErrors = [];
-
   if (billingHeads.length > 0 && membersCreated > 0) {
     const allMembers = await Member.find({
       societyId: society._id,
       isDeleted: { $ne: true },
     }).lean();
-
     for (const member of allMembers) {
       try {
         const { breakdown, subtotal } = calculateMemberCharges(
           member,
           billingHeads,
         );
-
         // Opening balances as seeds (no prior bills, so openingPrincipal/openingInterest come from member)
         const prevRemPrincipal = member.openingPrincipal || 0;
         const prevRemInt = member.openingInterest || 0;
-
         const interestRate = societyPayload.config.interestRate || 21;
         let currInt = 0,
           monthInterest = 0;
@@ -644,7 +578,6 @@ export async function POST(request) {
             interestRounding: "TWO_DECIMAL",
           }));
         }
-
         const _openingPrincipal = parseFloat(prevRemPrincipal.toFixed(2));
         const _openingInterest = parseFloat(prevRemInt.toFixed(2));
         const _currentCharges = parseFloat(subtotal.toFixed(2));
@@ -667,16 +600,13 @@ export async function POST(request) {
         const _balance = parseFloat(
           Math.max(0, _totalBillDue - _advApplied).toFixed(2),
         );
-
         if (_advApplied > 0) {
           await Member.findByIdAndUpdate(member._id, {
             $inc: { advanceCredit: -_advApplied },
           });
         }
-
         const transactionId = Transaction.generateTransactionId();
         const newBalance = (member.openingBalance || 0) + subtotal;
-
         await Transaction.create({
           transactionId,
           societyId: society._id,
@@ -692,7 +622,6 @@ export async function POST(request) {
           billPeriodId: billPeriod,
           financialYear,
         });
-
         await Bill.findOneAndUpdate(
           {
             memberId: member._id,
@@ -754,11 +683,9 @@ export async function POST(request) {
           },
           { upsert: true, new: true },
         );
-
         // Do NOT zero openingPrincipal/openingInterest here.
         // They are the member's original seed values — zeroing them means if
         // the generated bill is later deleted, the system loses the opening balance forever.
-
         billsGenerated++;
       } catch (err) {
         console.error(
@@ -774,7 +701,6 @@ export async function POST(request) {
   } else if (billingHeads.length === 0) {
     warnings.push("No bills generated — billing heads could not be created.");
   }
-
   // ── ROLLBACK if bills failed for any member that was expected ────────
   if (billErrors.length > 0) {
     // At least one bill failed — roll back everything
@@ -800,7 +726,6 @@ export async function POST(request) {
       { status: 500 },
     );
   }
-
   // Send onboarding emails only now that every rollback checkpoint above has
   // passed — sending earlier risked emailing a member whose account then got
   // deleted by a later rollback (e.g. a billing-setup failure). Best-effort:
@@ -826,7 +751,6 @@ export async function POST(request) {
       onboardingEmailErrors.push(`${cred.wing}-${cred.flatNo}: ${err.message}`);
     }
   }
-
   return NextResponse.json({
     success: true,
     society: {

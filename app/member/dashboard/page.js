@@ -2,29 +2,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import Link from "next/link";
-
 export default function MemberDashboardPage() {
   const { data: billsData, isLoading: billsLoading } = useQuery({
     queryKey: ["member-dashboard-bills"],
     queryFn: () => apiClient.get("/api/member/bills?limit=5&status=all"),
   });
-
   const { data: ledgerData, isLoading: ledgerLoading } = useQuery({
     queryKey: ["member-dashboard-ledger"],
     queryFn: () => apiClient.get("/api/member/ledger?limit=5"),
   });
-
   const summary = billsData?.summary || {};
   const recentBills = billsData?.bills || [];
   const recentTxns = ledgerData?.transactions || [];
-
   const statusColors = {
     Paid: { bg: "#D1FAE5", color: "#065F46" },
     Unpaid: { bg: "#FEE2E2", color: "#991B1B" },
     Partial: { bg: "#FEF3C7", color: "#92400E" },
     Overdue: { bg: "#FFE4E6", color: "#9F1239" },
   };
-
   return (
     <div style={{ padding: "0 0 2rem 0" }}>
       {/* Header */}
@@ -36,7 +31,6 @@ export default function MemberDashboardPage() {
           Welcome back! Here's your account overview.
         </p>
       </div>
-
       {/* Stats Row */}
       <div
         style={{
@@ -93,7 +87,6 @@ export default function MemberDashboardPage() {
           </div>
         ))}
       </div>
-
       {/* Quick Links */}
       <div
         style={{
@@ -134,7 +127,6 @@ export default function MemberDashboardPage() {
           </Link>
         ))}
       </div>
-
       {/* Two column: recent bills + recent transactions */}
       <div
         style={{
@@ -219,7 +211,6 @@ export default function MemberDashboardPage() {
             )}
           </div>
         </div>
-
         {/* Recent Transactions */}
         <div
           style={{

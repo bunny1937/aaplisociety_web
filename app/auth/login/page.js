@@ -1,10 +1,8 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import styles from "@/styles/Auth.module.css";
-
 export default function LoginPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({ username: "", password: "" });
@@ -13,25 +11,24 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [onboardedMessage, setOnboardedMessage] = useState("");
+  const [hydrated, setHydrated] = useState(false);
 
   // Avoids useSearchParams (which would require wrapping this page in a
   // Suspense boundary) for a one-off, low-stakes success banner.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("onboarded") === "1") {
-      setOnboardedMessage("Account set up — sign in with your new username and password.");
-    }
-  }, []);
-
+  setHydrated(true);
+  if (new URLSearchParams(window.location.search).get("onboarded") === "1") {
+    setOnboardedMessage("Account set up — sign in with your new username and password.");
+  }
+}, []);
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
     setApiError("");
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const newErrors = {};
     if (!formData.username.trim())
       newErrors.username = "Username or email is required";
@@ -40,10 +37,8 @@ export default function LoginPage() {
       setErrors(newErrors);
       return;
     }
-
     setIsLoading(true);
     setApiError("");
-
     try {
       const resolveRoleRes = await fetch("/api/auth/resolve-role", {
         method: "POST",
@@ -53,26 +48,22 @@ export default function LoginPage() {
           username: formData.username,
         }),
       });
-
       const resolveRoleData = await resolveRoleRes.json().catch(() => ({}));
       console.log(
         "RESOLVE ROLE RESPONSE:",
         resolveRoleRes.status,
         resolveRoleData,
       );
-
       if (!resolveRoleRes.ok) {
         throw new Error(
           resolveRoleData.error ||
             `Unable to resolve role (${resolveRoleRes.status})`,
         );
       }
-
       const loginEndpoint =
         resolveRoleData.role === "Security"
           ? "/api/security/auth/login"
           : "/api/auth/login";
-
       const res = await fetch(loginEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,14 +73,11 @@ export default function LoginPage() {
           password: formData.password,
         }),
       });
-
       const data = await res.json().catch(() => ({}));
       console.log("LOGIN RESPONSE:", res.status, data);
-
       if (!res.ok) {
         throw new Error(data.error || `Login failed (${res.status})`);
       }
-
       if (
         resolveRoleData.role === "Security" ||
         data.user?.role === "Security"
@@ -97,7 +85,6 @@ export default function LoginPage() {
         router.replace("/security/dashboard");
         return;
       }
-
       if (data.requiresProfileSelect) {
         sessionStorage.setItem("pendingUserId", data.userId || "");
         sessionStorage.setItem(
@@ -112,7 +99,6 @@ export default function LoginPage() {
         router.replace("/auth/select-society");
         return;
       }
-
       const role = data.user?.role;
       if (role === "SuperAdmin") {
         router.replace("/superadmin/dashboard");
@@ -134,7 +120,6 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
-
   return (
     <div className={styles.authContainer}>
       <div className={styles.authCard}>
@@ -143,9 +128,8 @@ export default function LoginPage() {
           <h1 className={styles.authTitle}>Welcome Back</h1>
           <p className={styles.authSubtitle}>Sign in to NexGen Society ERP</p>
         </div>
-
-        <form onSubmit={handleSubmit} autoComplete="off">
-          {onboardedMessage && (
+<form onSubmit={handleSubmit} method="post" autoComplete="off">
+            {onboardedMessage && (
             <div
               style={{
                 padding: "12px",
@@ -175,7 +159,6 @@ export default function LoginPage() {
               {apiError}
             </div>
           )}
-
           <div className={styles.formGroup}>
             <label className="label" htmlFor="username">
               Username / Email
@@ -193,7 +176,6 @@ export default function LoginPage() {
             />
             {errors.username && <p className="error-text">{errors.username}</p>}
           </div>
-
           <div className={styles.formGroup}>
             <label className="label" htmlFor="password">
               Password
@@ -222,14 +204,13 @@ export default function LoginPage() {
             </div>
             {errors.password && <p className="error-text">{errors.password}</p>}
           </div>
-
           <div className={styles.formActions}>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={isLoading}
-              style={{ width: "100%", justifyContent: "center" }}
-            >
+           <button
+  type="submit"
+  className="btn btn-primary"
+  disabled={isLoading || !hydrated}
+  style={{ width: "100%", justifyContent: "center" }}
+>
               {isLoading ? (
                 <>
                   <span className="loading-spinner loading-spinner-sm loading-spinner-white" />

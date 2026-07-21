@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import styles from "@/styles/AdminComplaints.module.css";
-
 const STATUS_TABS = ["PENDING", "APPROVED", "REJECTED", "CLOSED", "all"];
 const CATEGORIES = [
   "all",
@@ -16,7 +15,6 @@ const CATEGORIES = [
   "pets",
   "other",
 ];
-
 export default function AdminComplaintsPage() {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,12 +25,10 @@ export default function AdminComplaintsPage() {
   const [rejectModal, setRejectModal] = useState(null); // { id, reason }
   const [toast, setToast] = useState(null);
   const [actionLoading, setActionLoading] = useState({});
-
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
-
   const fetchComplaints = async () => {
     setLoading(true);
     try {
@@ -54,11 +50,9 @@ export default function AdminComplaintsPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchComplaints();
   }, [statusTab, category, page]);
-
   const handleApprove = async (id) => {
     setActionLoading({ ...actionLoading, [id]: true });
     try {
@@ -76,7 +70,6 @@ export default function AdminComplaintsPage() {
       setActionLoading({ ...actionLoading, [id]: false });
     }
   };
-
   const handleReject = async () => {
     if (!rejectModal) return;
     const { id, reason } = rejectModal;
@@ -105,7 +98,6 @@ export default function AdminComplaintsPage() {
       setActionLoading({ ...actionLoading, [id]: false });
     }
   };
-
   const STATUS_COLOR = {
     PENDING: "#f59e0b",
     APPROVED: "#10b981",
@@ -113,7 +105,6 @@ export default function AdminComplaintsPage() {
     CLOSED: "#6b7280",
     EXPIRED: "#6b7280",
   };
-
   return (
     <div className={styles.page}>
       {toast && (
@@ -121,12 +112,10 @@ export default function AdminComplaintsPage() {
           {toast.msg}
         </div>
       )}
-
       <div className={styles.pageHeader}>
         <h1>Complaints Moderation</h1>
         <p>Review, approve, or reject community complaints</p>
       </div>
-
       {/* Status tabs */}
       <div className={styles.tabs}>
         {STATUS_TABS.map((s) => (
@@ -142,7 +131,6 @@ export default function AdminComplaintsPage() {
           </button>
         ))}
       </div>
-
       {/* Category filter */}
       <div className={styles.catFilter}>
         {CATEGORIES.map((c) => (
@@ -158,7 +146,6 @@ export default function AdminComplaintsPage() {
           </button>
         ))}
       </div>
-
       {loading ? (
         <div className={styles.loading}>
           {[1, 2, 3].map((i) => (
@@ -189,7 +176,6 @@ export default function AdminComplaintsPage() {
                   </span>
                 </div>
               </div>
-
               {/* Admin sees real identity */}
               {c.member && (
                 <div className={styles.memberInfo}>
@@ -197,10 +183,8 @@ export default function AdminComplaintsPage() {
                   {c.member.contactNumber}
                 </div>
               )}
-
               <h3 className={styles.cardTitle}>{c.title}</h3>
               <p className={styles.cardDesc}>{c.description}</p>
-
               {c.status === "PENDING" && (
                 <div className={styles.actions}>
                   <button
@@ -218,7 +202,6 @@ export default function AdminComplaintsPage() {
                   </button>
                 </div>
               )}
-
               {c.adminRejectionReason && (
                 <div className={styles.rejectionNote}>
                   <strong>Rejection reason:</strong> {c.adminRejectionReason}
@@ -228,7 +211,6 @@ export default function AdminComplaintsPage() {
           ))}
         </div>
       )}
-
       {pagination.pages > 1 && (
         <div className={styles.pagination}>
           <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
@@ -245,7 +227,6 @@ export default function AdminComplaintsPage() {
           </button>
         </div>
       )}
-
       {/* Reject Modal */}
       {rejectModal && (
         <div

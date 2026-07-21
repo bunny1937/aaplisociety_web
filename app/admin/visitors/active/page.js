@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -16,7 +15,6 @@ import {
   timeAgo,
   fmtTime,
 } from "@/components/visitor/ui";
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -30,7 +28,6 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const S = {
   colWrap: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 },
   colTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 700, color: tokens.text, marginBottom: 12 },
@@ -44,7 +41,6 @@ const S = {
   center: { display: "flex", justifyContent: "center", padding: 40 },
   liveDot: { display: "inline-block", width: 8, height: 8, borderRadius: 999, background: tokens.success, marginRight: 6 },
 };
-
 function Column({ title, icon, rows, action }) {
   return (
     <Card>
@@ -78,13 +74,11 @@ function Column({ title, icon, rows, action }) {
     </Card>
   );
 }
-
 export default function AdminActiveVisitors() {
   const [data, setData] = useState({ Pending: [], Approved: [], Entered: [] });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(null);
-
   const load = useCallback(async () => {
     try {
       const [p, a, e] = await Promise.all([
@@ -103,13 +97,11 @@ export default function AdminActiveVisitors() {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     load();
     const t = setInterval(load, 10000);
     return () => clearInterval(t);
   }, [load]);
-
   const markExit = async (id) => {
     setBusy(id);
     try {
@@ -122,7 +114,6 @@ export default function AdminActiveVisitors() {
       setBusy(null);
     }
   };
-
   return (
     <div>
       <PageHeader

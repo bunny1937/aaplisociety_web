@@ -1,7 +1,5 @@
 "use client";
-
 import DashboardLayout from "@/lib/notify";
-
 const navigation = [
   {
     title: "Gate",
@@ -13,7 +11,6 @@ const navigation = [
     ],
   },
 ];
-
 export default function SecurityLayout({ children }) {
   return (
     <DashboardLayout

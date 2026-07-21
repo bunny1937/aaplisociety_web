@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -16,10 +15,8 @@ import {
   fmtTime,
 } from "@/components/visitor/ui";
 import CallButton from "@/components/visitor/CallButton";
-
 // Auto-refresh so a resident sees a guard-logged visitor without reloading.
 const POLL_MS = 10000;
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -33,7 +30,6 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const S = {
   loadingWrap: { display: "flex", justifyContent: "center", padding: 60 },
   sectionTitle: {
@@ -85,16 +81,13 @@ const S = {
   logName: { fontWeight: 600, color: tokens.text, fontSize: 14 },
   logMeta: { fontSize: 12, color: tokens.sub, marginTop: 2 },
 };
-
 export default function MemberVisitorsPage() {
   const [pending, setPending] = useState([]);
   const [today, setToday] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState(null);
-
   const notify = (message, type = "info") => setToast({ message, type });
-
   const load = useCallback(async (silent) => {
     if (!silent) setLoading(true);
     try {
@@ -114,13 +107,11 @@ export default function MemberVisitorsPage() {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     load();
     const timer = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(timer);
   }, [load]);
-
   // One tap. The backend records the decision and notifies the guard instantly.
   const decide = async (id, action) => {
     setBusyId(id + action);
@@ -142,7 +133,6 @@ export default function MemberVisitorsPage() {
       setBusyId(null);
     }
   };
-
   // Offline entries the guard already let in — resident confirms after the fact.
   const confirmEntry = async (id, decision) => {
     setBusyId(id + decision);
@@ -164,7 +154,6 @@ export default function MemberVisitorsPage() {
       setBusyId(null);
     }
   };
-
   const needConfirm = today.filter(
     (v) =>
       v.entryMethod === "OfflineEntry" &&
@@ -172,7 +161,6 @@ export default function MemberVisitorsPage() {
         !v.offlineMeta.confirmation ||
         v.offlineMeta.confirmation.status === "Pending"),
   );
-
   return (
     <div>
       <PageHeader
@@ -184,7 +172,6 @@ export default function MemberVisitorsPage() {
           </Button>
         }
       />
-
       {loading ? (
         <div style={S.loadingWrap}>
           <Spinner size={30} />
@@ -248,7 +235,6 @@ export default function MemberVisitorsPage() {
               })}
             </div>
           )}
-
           {/* Waiting for YOUR approval */}
           {pending.length > 0 && (
             <div style={S.pendingWrap}>
@@ -276,7 +262,6 @@ export default function MemberVisitorsPage() {
                         ) : null}
                       </div>
                     </div>
-
                     <p style={S.question}>
                       Do you want to allow this visitor in?
                     </p>
@@ -318,7 +303,6 @@ export default function MemberVisitorsPage() {
               })}
             </div>
           )}
-
           {/* Today's activity log */}
           <Card>
             <h3 style={S.sectionTitle}>Today’s visitors ({today.length})</h3>
@@ -352,7 +336,6 @@ export default function MemberVisitorsPage() {
           </Card>
         </>
       )}
-
       <Toast {...(toast || {})} onClose={() => setToast(null)} />
     </div>
   );

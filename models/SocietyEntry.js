@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const SocietyEntrySchema = new mongoose.Schema(
   {
     societyId: { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
@@ -18,7 +17,5 @@ const SocietyEntrySchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 SocietyEntrySchema.index({ societyId: 1, fy: 1 });
-
 export default mongoose.models.SocietyEntry || mongoose.model("SocietyEntry", SocietyEntrySchema);

@@ -1,8 +1,6 @@
 "use client";
-
 import { useRef, useState } from "react";
 import { Upload, FileSpreadsheet, X } from "lucide-react";
-
 export default function DropZone({
   accept = ".xlsx,.xls",
   onFile,
@@ -15,7 +13,6 @@ export default function DropZone({
 }) {
   const inputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
-
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -23,18 +20,15 @@ export default function DropZone({
     const dropped = e.dataTransfer.files?.[0];
     if (dropped) onFile(dropped);
   };
-
   const handleDragOver = (e) => {
     e.preventDefault();
     setDragOver(true);
   };
-
   const handleDragLeave = (e) => {
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setDragOver(false);
     }
   };
-
   const handleInputChange = (e) => {
     const f = e.target.files?.[0];
     if (f) {
@@ -42,7 +36,6 @@ export default function DropZone({
       e.target.value = "";
     }
   };
-
   const baseStyle = {
     border: `2px dashed ${
       dragOver ? "#6b8eef" : file ? "#10b981" : "#cbd5e1"
@@ -63,7 +56,6 @@ export default function DropZone({
     transform: dragOver ? "scale(1.01)" : "scale(1)",
     ...style,
   };
-
   return (
     <div
       style={baseStyle}
@@ -79,7 +71,6 @@ export default function DropZone({
         style={{ display: "none" }}
         onChange={handleInputChange}
       />
-
       {file ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
           <div style={{

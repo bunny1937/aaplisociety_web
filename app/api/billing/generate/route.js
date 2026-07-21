@@ -11,28 +11,23 @@ import { safeConfigDate } from "../../../../utils/dateUtils";
 import cache from "@/lib/cache";
 import BillingHead from "@/models/BillingHead";
 import { calculateMemberCharges } from "../../../../lib/calculate-member-bill";
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     if (["Accountant", "Member"].includes(decoded.role)) {
       return NextResponse.json(
         { error: "Insufficient permissions" },
         { status: 403 },
       );
     }
-
     const { year, month, bills, dueDate, societyId, memberIds, _forceUnpaid } =
       await request.json();
     // Allow two modes:
@@ -50,7 +45,6 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-
     // If bills not provided, build them from members + config
     let finalBills = bills;
     if (!finalBills || finalBills.length === 0) {
@@ -62,7 +56,6 @@ export async function POST(request) {
           { status: 404 },
         );
       }
-
       // If memberIds array is provided in request, scope to those members only
       const memberQuery = {
         societyId: autoSociety._id,
@@ -71,7 +64,6 @@ export async function POST(request) {
       if (memberIds && Array.isArray(memberIds) && memberIds.length > 0) {
         memberQuery._id = { $in: memberIds };
       }
-
       const [members, heads] = await Promise.all([
         Member.find(memberQuery).lean(),
         BillingHead.find({
@@ -82,7 +74,6 @@ export async function POST(request) {
           .sort({ order: 1 })
           .lean(),
       ]);
-
       finalBills = members.map((member) => {
         const { breakdown, subtotal } = calculateMemberCharges(member, heads);
         return {
@@ -92,17 +83,14 @@ export async function POST(request) {
         };
       });
     }
-
     if (!finalBills || finalBills.length === 0) {
       return NextResponse.json(
         { error: "No members/bills found to generate" },
         { status: 400 },
       );
     }
-
     const billPeriod = `${year}-${String(month).padStart(2, "0")}`;
     const startDate = new Date(year, month - 1, 1);
-
     // Check if bills already exist for ANY of the requested members
     const requestedMemberIds = finalBills.map((b) => String(b.memberId));
     const existingBills = await Bill.countDocuments({
@@ -111,32 +99,26 @@ export async function POST(request) {
       memberId: { $in: requestedMemberIds },
       isDeleted: { $ne: true },
     });
-
     if (existingBills > 0) {
       return NextResponse.json(
         { error: `Bills already exist for ${billPeriod}` },
         { status: 400 },
       );
     }
-
     // Get society and template
     const society = await Society.findById(decoded.societyId).lean();
     const billTemplate = society?.billTemplate;
-
     // if (!billTemplate) {
     //   return NextResponse.json(
     //     { error: "No bill template found. Please create one first." },
     //     { status: 400 },
     //   );
     // }
-
     // Calculate financial year
     const financialYear =
       month >= 4 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
-
     const createdBills = [];
     const errors = [];
-
     for (const billData of finalBills) {
       try {
         // Fetch member
@@ -152,7 +134,6 @@ export async function POST(request) {
           });
           continue;
         }
-
         // Get recent transactions for page 2
         const previousTransactions = await Transaction.find({
           societyId: decoded.societyId,
@@ -162,12 +143,10 @@ export async function POST(request) {
           .sort({ createdAt: -1 })
           .limit(1)
           .lean();
-
         const ledgerBalance =
           previousTransactions.length > 0
             ? previousTransactions[0].balanceAfterTransaction
             : member.openingBalance || 0;
-
         // Get recent transactions for page 2
         const recentTransactions = await Transaction.find({
           societyId: decoded.societyId,
@@ -176,7 +155,6 @@ export async function POST(request) {
           .sort({ date: -1 })
           .limit(10)
           .lean();
-
         // Get unpaid bills for page 2
         const [unpaidBills, anyPriorBill] = await Promise.all([
           Bill.find({
@@ -195,7 +173,6 @@ export async function POST(request) {
             .select("_id")
             .lean(),
         ]);
-
         // previousBalance: use unpaid bill balances as source of truth (same as get-previous-balances).
         // Ledger balances are unreliable when advance credit pays a bill without a credit transaction.
         const unpaidBillsBalance = unpaidBills.reduce((s, b) => s + (b.balanceAmount || 0), 0);
@@ -204,7 +181,6 @@ export async function POST(request) {
           : anyPriorBill
             ? 0
             : ledgerBalance;
-
         // If member has prior bills and all paid → outstanding = 0.
         // Only fall back to member opening balances if no bills ever generated (new member).
         const prevRemInt =
@@ -228,7 +204,6 @@ export async function POST(request) {
           { billHtml: 1 },
           { sort: { billYear: -1, billMonth: -1 } },
         ).lean();
-
         // ✅ Render HTML FIRST to get interestAmount back
         const renderResult = renderBillHtml(billTemplate?.html || "", {
           society,
@@ -251,7 +226,6 @@ export async function POST(request) {
             billData.recentTransactions || recentTransactions || [],
           previousBillHtml: prevBill?.billHtml || null,
         });
-
         const {
           html: billHtml,
           currInt,
@@ -259,19 +233,15 @@ export async function POST(request) {
           interestDays,
         } = renderResult;
         const interestAmount = monthInterest;
-
         const newBalance = previousBalance + billData.totalAmount;
-
         // Create transaction
         const transactionId = Transaction.generateTransactionId();
-
         const subtotal = billData.breakdown
           ? Object.values(billData.breakdown).reduce(
               (s, v) => s + (parseFloat(v) || 0),
               0,
             )
           : 0;
-
         const transaction = await Transaction.create({
           transactionId,
           societyId: decoded.societyId,
@@ -288,14 +258,12 @@ export async function POST(request) {
           financialYear,
           billHtml,
         });
-
         // Upsert Bill document
         const _pushDay = society?.config?.billPushDay || 1;
         const _forceUnpaid =
           request.headers.get("x-test-force-unpaid") === "true";
         const _pushDate = safeConfigDate(year, month, _pushDay);
         const _isScheduled = _forceUnpaid ? false : new Date() < _pushDate;
-
         // Compute new immutable bill-state fields
         const _openingPrincipal = parseFloat(prevRemPrincipal.toFixed(2));
         const _openingInterest = parseFloat(prevRemInt.toFixed(2));
@@ -325,7 +293,6 @@ export async function POST(request) {
             $inc: { advanceCredit: -_advApplied },
           });
         }
-
         await Bill.findOneAndUpdate(
           {
             memberId: member._id,
@@ -339,7 +306,6 @@ export async function POST(request) {
               billYear: year,
               memberId: member._id,
               societyId: decoded.societyId,
-
               // ── Immutable bill-state fields ──────────────────────────────
               openingPrincipal: _openingPrincipal,
               openingInterest: _openingInterest,
@@ -348,10 +314,8 @@ export async function POST(request) {
               billPrincipalBalance: _billPrincipalBalance,
               billInterestBalance: _billInterestBalance,
               totalBillDue: _totalBillDue,
-
               // ── Legacy compat fields ─────────────────────────────────────
               previousBalance: previousBalance || 0,
-
               // Sum unpaid bills' balances for carry-forward display
               previousPrincipal: unpaidBills.reduce(
                 (s, b) => s + (b.principalBalance || 0),
@@ -361,11 +325,9 @@ export async function POST(request) {
                 (s, b) => s + (b.interestBalance || 0),
                 0,
               ),
-
               currInt: currInt || 0, // new interest on principal this month
               monthInterest: monthInterest || 0, // total = currInt + carried remInt
               interestAmount: monthInterest || 0,
-
               subtotal,
               charges: new Map(
                 Object.entries(billData.breakdown || {}).map(([k, v]) => [
@@ -379,7 +341,6 @@ export async function POST(request) {
               principalBalance: parseFloat(Math.max(0, _balanceAfterAdvance - _billInterestBalance).toFixed(2)),
               interestBalance: parseFloat(Math.min(_billInterestBalance, _balanceAfterAdvance).toFixed(2)),
               balanceAmount: _balanceAfterAdvance,
-
               dueDate: safeConfigDate(
                 year,
                 month,
@@ -429,7 +390,6 @@ export async function POST(request) {
     );
   }
 }
-
 // ✅ Returns { html, interestAmount, interestDays } instead of just string
 function renderBillHtml(template, data) {
   const society = data.society || {};
@@ -437,24 +397,20 @@ function renderBillHtml(template, data) {
   const member = data.member || {};
   const interestRate = config.interestRate || 18;
   const serviceTaxRate = config.serviceTaxRate || 0;
-
   // ✅ Use Date objects, not formatted strings
   const billDate =
     data.billDate instanceof Date ? data.billDate : new Date(data.billDate);
   const dueDate =
     data.dueDate instanceof Date ? data.dueDate : new Date(data.dueDate);
-
   const formatDate = (d) =>
     new Date(d).toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
       year: "numeric",
     });
-
   const interestRounding = config.interestRounding || "TWO_DECIMAL";
   const principalForInterest = data.prevRemPrincipal || 0;
   const remIntFromPrior = data.prevRemInt || 0;
-
   let currInt = 0;
   let monthInterest = 0;
   if (principalForInterest > 0 || remIntFromPrior > 0) {
@@ -466,7 +422,6 @@ function renderBillHtml(template, data) {
     }));
   }
   const interestAmount = monthInterest;
-
   const breakdown = data.breakdown || {};
   const chargeRows = Object.entries(breakdown)
     .map(
@@ -478,7 +433,6 @@ function renderBillHtml(template, data) {
     </tr>`,
     )
     .join("");
-
   const subtotal = Object.values(breakdown).reduce(
     (s, v) => s + parseFloat(v),
     0,
@@ -491,7 +445,6 @@ function renderBillHtml(template, data) {
     interestAmount +
     currentBillTotal
   ).toFixed(2);
-
   // Unpaid bills table (page 2)
   const unpaidBillsHtml =
     (data.unpaidBills || []).length > 0
@@ -531,7 +484,6 @@ function renderBillHtml(template, data) {
       : `<div style="background:#d1fae5;border-radius:8px;padding:20px;text-align:center;color:#065f46;font-weight:600;margin-bottom:28px;">
           ✅ No outstanding bills. Account is clear!
         </div>`;
-
   // Recent transactions (page 2)
   const recentTxHtml =
     (data.recentTransactions || []).length > 0
@@ -568,19 +520,15 @@ function renderBillHtml(template, data) {
       </table>
     </div>`
       : "";
-
   const html = `
 <div style="max-width:800px;margin:0 auto;font-family:Arial,sans-serif;font-size:14px;color:#1f2937;">
-
   <!-- ═══════════════════ PAGE 1: CURRENT BILL ═══════════════════ -->
   <div style="padding:40px;background:white;page-break-after:always;">
-
     <!-- Society Header -->
     <div style="background:linear-gradient(135deg,#1e40af,#3b82f6);color:white;padding:28px 32px;border-radius:10px;margin-bottom:24px;">
       <h1 style="margin:0 0 6px 0;font-size:24px;font-weight:700;">${society.name || "Society"}</h1>
       <p style="margin:0;font-size:12px;opacity:0.85;">${society.address || ""}</p>
     </div>
-
     <!-- Bill Title Row -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #e5e7eb;">
       <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:1px;color:#1e40af;">MAINTENANCE BILL</h2>
@@ -590,7 +538,6 @@ function renderBillHtml(template, data) {
         <div>Due: <strong style="color:#dc2626;">${formatDate(dueDate)}</strong></div>
       </div>
     </div>
-
     <!-- Member Info Grid -->
     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:18px 22px;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;font-size:13px;">
       <div><span style="color:#6b7280;">Bill Period:</span> <strong>${data.billPeriod}</strong></div>
@@ -600,7 +547,6 @@ function renderBillHtml(template, data) {
       <div><span style="color:#6b7280;">Contact:</span> <strong>${member.contactNumber || "-"}</strong></div>
       <div><span style="color:#6b7280;">Due Date:</span> <strong style="color:#dc2626;">${formatDate(dueDate)}</strong></div>
     </div>
-
     <!-- ⚠️ Previous Outstanding (shown only if exists) -->
     ${
       (data.previousBalance || 0) > 0
@@ -633,7 +579,6 @@ function renderBillHtml(template, data) {
       ✅ No previous outstanding balance. Account is clear!
     </div>`
     }
-
     <!-- Current Month Charges -->
     <h3 style="margin:0 0 14px 0;font-size:15px;color:#374151;font-weight:700;">Current Month Charges — ${data.billPeriod}</h3>
     <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
@@ -657,7 +602,6 @@ function renderBillHtml(template, data) {
         </tr>
       </tbody>
     </table>
-
     <!-- Bill Summary Breakdown -->
     ${
       (data.previousBalance || 0) > 0
@@ -671,7 +615,6 @@ function renderBillHtml(template, data) {
     </div>`
         : ""
     }
-
     <!-- Grand Total Box -->
     <div style="background:linear-gradient(135deg,#1e3a8a,#1e40af);color:white;padding:24px 32px;border-radius:10px;margin-bottom:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -682,7 +625,6 @@ function renderBillHtml(template, data) {
         <div style="font-size:34px;font-weight:700;">₹${totalPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
       </div>
     </div>
-
     <!-- Payment Instructions -->
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:18px 22px;margin-bottom:20px;font-size:12px;color:#6b7280;">
       <strong style="color:#374151;display:block;margin-bottom:10px;">Payment Instructions:</strong>
@@ -693,15 +635,12 @@ function renderBillHtml(template, data) {
         <li>This is a computer-generated bill. No signature required.</li>
       </ol>
     </div>
-
     <div style="text-align:center;font-size:11px;color:#9ca3af;padding-top:14px;border-top:1px solid #e5e7eb;">
       Generated on ${new Date().toLocaleString("en-IN")} &nbsp;|&nbsp; Computer Generated Bill &nbsp;|&nbsp; Page 1 of 2
     </div>
   </div>
-
   <!-- ═══════════════════ PAGE 2: ACCOUNT STATEMENT ═══════════════════ -->
   <div style="padding:40px;background:white;border-top:4px solid #1e40af;margin-top:4px;">
-
     <!-- Page 2 Header -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #e5e7eb;">
       <div>
@@ -714,7 +653,6 @@ function renderBillHtml(template, data) {
         <div>Generated: <strong>${formatDate(new Date())}</strong></div>
       </div>
     </div>
-
     <!-- Account Summary Cards -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;">
       <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:16px;text-align:center;">
@@ -738,7 +676,6 @@ function renderBillHtml(template, data) {
         <div style="font-size:20px;font-weight:700;color:#1e40af;">₹${totalPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
       </div>
     </div>
-
     <!-- Interest Calculation Detail (if applicable) -->
     ${
       (data.previousBalance || 0) > 0
@@ -756,20 +693,15 @@ function renderBillHtml(template, data) {
     </div>`
         : ""
     }
-
     <!-- Outstanding Bills Detail -->
     ${unpaidBillsHtml}
-
     <!-- Recent Payment History -->
     ${recentTxHtml}
-
     <!-- Page 2 Footer -->
     <div style="text-align:center;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;margin-top:28px;">
       ${society.name || ""} &nbsp;|&nbsp; ${society.address || ""} &nbsp;|&nbsp; Page 2 of 2 &nbsp;|&nbsp; Computer Generated Bill
     </div>
   </div>
-
 </div>`;
-
   return { html, currInt, monthInterest, interestDays };
 }

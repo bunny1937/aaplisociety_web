@@ -6,19 +6,15 @@ import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import { requireRoles } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
-
 function isPlausiblePhone(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   return digits.length >= 10 && digits.length <= 13;
 }
-
 export async function GET(request) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
-
     const guards = await User.find({
       role: "Security",
       societyId: auth.user.societyId,
@@ -27,28 +23,23 @@ export async function GET(request) {
       .sort({ createdAt: -1 })
       .select("name username gateLabel phone createdAt isActive")
       .lean();
-
     return NextResponse.json({ success: true, guards });
   } catch (err) {
     console.error("List guards error", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 export async function POST(request) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
-
     const body = await request.json();
     const name = String(body.name || "").trim();
     const username = String(body.username || "").trim().toLowerCase();
     const password = String(body.password || "");
     const gateLabel = String(body.gateLabel || "").trim();
     const phone = String(body.phone || "").trim();
-
     if (!name || !username || !password)
       return NextResponse.json(
         { error: "name, username, password required" },
@@ -80,13 +71,10 @@ export async function POST(request) {
         { error: "Username: 4-30 chars, letters/numbers/underscore only" },
         { status: 400 },
       );
-
     const exists = await User.findOne({ username }).lean();
     if (exists)
       return NextResponse.json({ error: "Username already taken" }, { status: 409 });
-
     const hashed = await bcrypt.hash(password, 10);
-
     const guard = await User.create({
       name,
       username,
@@ -97,7 +85,6 @@ export async function POST(request) {
       phone,
       isActive: true,
     });
-
     await logAudit(auth.user.userId, auth.user.societyId, "SECURITY_GUARD_CREATED", null, {
       id: guard._id.toString(),
       name: guard.name,
@@ -105,7 +92,6 @@ export async function POST(request) {
       gateLabel: guard.gateLabel,
       role: guard.role,
     });
-
     return NextResponse.json({
       success: true,
       guard: {

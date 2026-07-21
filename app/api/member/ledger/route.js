@@ -3,7 +3,6 @@ import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Transaction from "@/models/Transaction";
 import Member from "@/models/Member";
-
 export async function GET(request) {
   try {
     await connectDB();
@@ -13,7 +12,6 @@ export async function GET(request) {
     const decoded = verifyToken(token);
     if (!decoded || !decoded.memberId)
       return NextResponse.json({ error: "Not a member" }, { status: 403 });
-
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = Math.min(
@@ -21,7 +19,6 @@ export async function GET(request) {
       parseInt(searchParams.get("limit") || "50", 10),
     );
     const financialYear = searchParams.get("financialYear");
-
     const query = {
       memberId: decoded.memberId,
       societyId: decoded.societyId,
@@ -29,7 +26,6 @@ export async function GET(request) {
     };
     if (financialYear && financialYear !== "all")
       query.financialYear = financialYear;
-
     const [transactions, total] = await Promise.all([
       Transaction.find(query)
         .sort({ date: -1, createdAt: -1 })
@@ -38,7 +34,6 @@ export async function GET(request) {
         .lean(),
       Transaction.countDocuments(query),
     ]);
-
     const member = await Member.findById(decoded.memberId)
       .select("openingBalance")
       .lean();
@@ -52,7 +47,6 @@ export async function GET(request) {
       transactions.length > 0
         ? transactions[0].balanceAfterTransaction
         : member?.openingBalance || 0;
-
     return NextResponse.json({
       success: true,
       transactions,

@@ -11,11 +11,9 @@ import { allocatePaymentInterestFirst } from "../../../../utils/interestUtils";
 import { validatePaymentRows } from "../../../../utils/excelValidator";
 import { getFinancialYear } from "@/lib/date-utils";
 import * as XLSX from "xlsx";
-
 function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
 }
-
 function parseExcelDate(val) {
   if (!val && val !== 0) return null;
   if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
@@ -35,14 +33,11 @@ function parseExcelDate(val) {
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
-
 // In-memory staging for preview→confirm flow
 const staged = {};
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -55,10 +50,8 @@ export async function POST(request) {
         { status: 403 },
       );
     }
-
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action") || "preview";
-
     // ── PREVIEW ─────────────────────────────────────────────────────────────
     if (action === "preview") {
       const formData = await request.formData();
@@ -68,15 +61,12 @@ export async function POST(request) {
           { error: "No file uploaded" },
           { status: 400 },
         );
-
       const bytes = await file.arrayBuffer();
       const wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-
       if (!rows.length)
         return NextResponse.json({ error: "Empty file" }, { status: 400 });
-
       // Validate required columns — accept merged "Wing-FlatNo" or legacy separate Wing+FlatNo
       const headers = Object.keys(rows[0]);
       const hasMergedCol = headers.includes("Wing-FlatNo");
@@ -95,7 +85,6 @@ export async function POST(request) {
           { status: 400 },
         );
       }
-
       // Normalize Period → Month/Year if needed
       const hasPeriodCol = headers.includes("Period");
       if (hasPeriodCol) {
@@ -107,7 +96,6 @@ export async function POST(request) {
           }
         });
       }
-
       const [members, society] = await Promise.all([
         Member.find({ societyId: decoded.societyId, isDeleted: { $ne: true } })
           .select(
@@ -123,11 +111,9 @@ export async function POST(request) {
           m,
         ]),
       );
-
       const preview = [];
       const errors = [];
       let totalAmount = 0;
-
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const rowNum = i + 2;
@@ -142,24 +128,20 @@ export async function POST(request) {
           wing = String(row.Wing || "").trim();
           flatNo = String(row.FlatNo || "").trim();
         }
-
         // Skip instruction row
         if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
         // Skip rows with no payment
         const _amtRaw = String(row.AmountPaid ?? "").trim();
         if (!_amtRaw) continue;
-
         const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
         const member = wingFlatMap.get(flatKey);
         const memberId = member?._id.toString();
-
         const amountPaid = twoDp(parseFloat(row.AmountPaid) || 0);
         const month = parseInt(row.Month);
         const year = parseInt(row.Year);
         const paymentDate = parseExcelDate(row.PaymentDate) || new Date();
         const paymentMethod = String(row.PaymentMethod || "Cash").trim();
         const remarks = String(row.Remarks || "").trim();
-
         const rowErrors = [];
         if (!member) rowErrors.push(`Flat "${wing}-${flatNo}" not found`);
         if (amountPaid <= 0) rowErrors.push("AmountPaid must be > 0");
@@ -168,7 +150,6 @@ export async function POST(request) {
         if (isNaN(year) || year < 2000) rowErrors.push("Invalid Year");
         if (isNaN(paymentDate?.getTime()))
           rowErrors.push("Invalid PaymentDate");
-
         // Duplicate check
         const dupInBatch = preview.find(
           (p) =>
@@ -178,7 +159,6 @@ export async function POST(request) {
             p.status !== "Failed",
         );
         if (dupInBatch) rowErrors.push("Duplicate row for same flat+period");
-
         if (rowErrors.length) {
           errors.push({ rowNum, errors: rowErrors });
           preview.push({
@@ -197,7 +177,6 @@ export async function POST(request) {
           });
           continue;
         }
-
         totalAmount += amountPaid;
         const billPeriodId = `${year}-${String(month).padStart(2, "0")}`;
         const bill = await Bill.findOne({
@@ -210,7 +189,6 @@ export async function POST(request) {
             "totalBillDue totalAmount billPrincipalBalance billInterestBalance principalBalance interestBalance balanceAmount advanceApplied amountPaid status",
           )
           .lean();
-
         const billDue = twoDp(bill?.totalBillDue || bill?.totalAmount || 0);
         const alreadyPaid = twoDp(bill?.amountPaid || 0);
         // Use live balanceAmount (net of advance) — falls back to gross - paid for new bills
@@ -219,7 +197,6 @@ export async function POST(request) {
             ? Math.max(0, bill.balanceAmount)
             : Math.max(0, billDue - alreadyPaid),
         );
-
         preview.push({
           rowNum,
           memberId,
@@ -242,10 +219,8 @@ export async function POST(request) {
           errors: [],
         });
       }
-
       const batchKey = `${decoded.societyId}-${Date.now()}`;
       staged[batchKey] = { rows: preview, decoded, fileName: file.name };
-
       // Build bill map keyed by wing-flatno for grid validation (overpayment + tamper detection)
       const billMap = new Map();
       for (const p of preview) {
@@ -273,7 +248,6 @@ export async function POST(request) {
         today: new Date(),
       });
       const gridColumns = Object.keys(rows[0] || {});
-
       return NextResponse.json({
         success: true,
         batchKey,
@@ -288,7 +262,6 @@ export async function POST(request) {
         gridSummary,
       });
     }
-
     // ── CONFIRM ──────────────────────────────────────────────────────────────
     if (action === "confirm") {
       const { batchKey, notes } = await request.json();
@@ -298,7 +271,6 @@ export async function POST(request) {
           { error: "Session expired. Re-upload file." },
           { status: 400 },
         );
-
       const { rows, decoded: dec, fileName } = batch;
       const validRows = rows.filter((r) => r.status === "Valid");
       if (!validRows.length)
@@ -306,19 +278,16 @@ export async function POST(request) {
           { error: "No valid rows to process" },
           { status: 400 },
         );
-
       const society = await Society.findById(dec.societyId)
         .select("config")
         .lean();
       const allocationMode =
         society?.config?.adjustmentApplicationMode || "INTEREST_FIRST";
       const financialYearFn = getFinancialYear;
-
       // Group rows by month/year to determine billPeriodId for import record
       const periodId = validRows[0].billPeriodId;
       const importMonth = validRows[0].month;
       const importYear = validRows[0].year;
-
       const importResults = [];
       let totalInterestCleared = 0;
       let totalPrincipalCleared = 0;
@@ -326,12 +295,10 @@ export async function POST(request) {
       let totalAmountProcessed = 0;
       let successCount = 0;
       let failCount = 0;
-
       for (const row of validRows) {
         try {
           const member = await Member.findById(row.memberId).lean();
           if (!member) throw new Error("Member not found");
-
           const unpaidBills = await Bill.find({
             memberId: row.memberId,
             societyId: dec.societyId,
@@ -342,7 +309,6 @@ export async function POST(request) {
             isLocked: { $ne: true },
             isDeleted: { $ne: true },
           }).sort({ billYear: 1, billMonth: 1 });
-
           const billsForAlloc = unpaidBills.map((b) => {
             const intBal = twoDp(b.interestBalance || 0);
             const prinBal = twoDp(b.principalBalance || 0);
@@ -360,7 +326,6 @@ export async function POST(request) {
               totalAmount: twoDp(b.totalBillDue || b.totalAmount || 0),
             };
           });
-
           const {
             billUpdates,
             totalInterestCleared: intClr,
@@ -371,7 +336,6 @@ export async function POST(request) {
             billsForAlloc,
             allocationMode,
           );
-
           // Persist bill updates
           let primaryBillId = null;
           const preMutationBalance = new Map(); // billId → balanceAmount before payment
@@ -382,7 +346,6 @@ export async function POST(request) {
             if (!bill) continue;
             if (!primaryBillId) primaryBillId = bill._id;
             preMutationBalance.set(String(bill._id), twoDp(bill.balanceAmount));
-
             const eps = 0.005;
             const newClosingPrincipal =
               twoDp(upd.newPrincipalBalance) < eps
@@ -396,7 +359,6 @@ export async function POST(request) {
               twoDp(upd.newBalanceAmount) < eps
                 ? 0
                 : twoDp(upd.newBalanceAmount);
-
             // TO:
             bill.interestBalance = newClosingInterest;
             bill.principalBalance = twoDp(
@@ -413,7 +375,6 @@ export async function POST(request) {
             bill.lastModifiedAt = new Date();
             bill.lastModifiedBy = dec.userId;
             await bill.save();
-
             // Zero out historical BulkImport bills absorbed into openingPrincipal.
             // Only target importedFrom=BulkImport — live Partial bills are real receivables.
             if (upd.newStatus === "Paid" && (bill.openingPrincipal > 0 || bill.openingInterest > 0)) {
@@ -442,14 +403,12 @@ export async function POST(request) {
               );
             }
           }
-
           // Advance credit
           if (advanceCredit > 0) {
             await Member.findByIdAndUpdate(row.memberId, {
               $inc: { advanceCredit },
             });
           }
-
           // Ledger transaction
           const lastTxn = await Transaction.findOne({
             memberId: row.memberId,
@@ -462,7 +421,6 @@ export async function POST(request) {
             lastTxn?.balanceAfterTransaction ?? member.openingBalance ?? 0,
           );
           const newBal = twoDp(prevBal - row.amountPaid);
-
           const txnId = Transaction.generateTransactionId();
           await Transaction.create({
             transactionId: txnId,
@@ -490,7 +448,6 @@ export async function POST(request) {
               advanceCredit: twoDp(advanceCredit),
             },
           });
-
           // Create receipt for each bill touched in this payment — amount = what was applied to that bill
           const receiptNos = [];
           for (const upd of billUpdates) {
@@ -535,13 +492,11 @@ export async function POST(request) {
             });
             receiptNos.push(receiptNo);
           }
-
           totalInterestCleared += intClr;
           totalPrincipalCleared += prinClr;
           totalAdvanceCredit += advanceCredit;
           totalAmountProcessed += row.amountPaid;
           successCount++;
-
           importResults.push({
             memberId: row.memberId,
             flat: row.flat,
@@ -566,7 +521,6 @@ export async function POST(request) {
           });
         }
       }
-
       // Create PaymentImport record
       const importRecord = await PaymentImport.create({
         societyId: dec.societyId,
@@ -598,9 +552,7 @@ export async function POST(request) {
         notes,
         status: "Completed",
       });
-
       delete staged[batchKey];
-
       return NextResponse.json({
         success: true,
         importId: importRecord._id,
@@ -615,7 +567,6 @@ export async function POST(request) {
         results: importResults,
       });
     }
-
     return NextResponse.json(
       { error: "Invalid action. Use ?action=preview or ?action=confirm" },
       { status: 400 },

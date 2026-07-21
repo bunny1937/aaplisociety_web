@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import styles from "@/styles/Complaints.module.css";
 import Link from "next/link";
-
 const CATEGORIES = [
   "all",
   "noise",
@@ -28,14 +27,12 @@ const CATEGORY_ICONS = {
   pets: "🐾",
   other: "📋",
 };
-
 export default function PublicComplaintsPage() {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("all");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({});
-
   const fetchComplaints = async () => {
     setLoading(true);
     try {
@@ -53,11 +50,9 @@ export default function PublicComplaintsPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchComplaints();
   }, [category, page]);
-
   const timeAgo = (date) => {
     const diff = (Date.now() - new Date(date)) / 1000;
     if (diff < 60) return "just now";
@@ -65,7 +60,6 @@ export default function PublicComplaintsPage() {
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return `${Math.floor(diff / 86400)}d ago`;
   };
-
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
@@ -79,7 +73,6 @@ export default function PublicComplaintsPage() {
           + New Complaint
         </Link>
       </div>
-
       <div className={styles.filters}>
         {CATEGORIES.map((c) => (
           <button
@@ -95,7 +88,6 @@ export default function PublicComplaintsPage() {
           </button>
         ))}
       </div>
-
       {loading ? (
         <div className={styles.loading}>
           {[1, 2, 3].map((i) => (
@@ -126,7 +118,6 @@ export default function PublicComplaintsPage() {
           ))}
         </div>
       )}
-
       {pagination.pages > 1 && (
         <div className={styles.pagination}>
           <button disabled={page <= 1} onClick={() => setPage(page - 1)}>

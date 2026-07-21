@@ -3,11 +3,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Dashboard.module.css";
-
 export default function MyBillsPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
-
   const { data, isLoading } = useQuery({
     queryKey: ["my-bills", filterStatus, page],
     queryFn: () =>
@@ -15,11 +13,9 @@ export default function MyBillsPage() {
         `/api/member/bills?status=${filterStatus}&page=${page}&limit=20`,
       ),
   });
-
   const bills = data?.bills || [];
   const summary = data?.summary || {};
   const pagination = data?.pagination || {};
-
   const downloadBill = async (bill) => {
     try {
       const res = await fetch(`/api/bills/download?id=${bill._id}`, {
@@ -43,14 +39,12 @@ export default function MyBillsPage() {
       alert("Download failed: " + e.message);
     }
   };
-
   const statusColors = {
     Paid: { bg: "#D1FAE5", color: "#065F46" },
     Unpaid: { bg: "#FEE2E2", color: "#991B1B" },
     Partial: { bg: "#FEF3C7", color: "#92400E" },
     Overdue: { bg: "#FEE2E2", color: "#7F1D1D" },
   };
-
   return (
     <div>
       <div className={styles.pageHeader}>
@@ -61,7 +55,6 @@ export default function MyBillsPage() {
           </p>
         </div>
       </div>
-
       {/* Summary */}
       <div className={styles.statsGrid} style={{ marginBottom: "1.5rem" }}>
         <div
@@ -90,7 +83,6 @@ export default function MyBillsPage() {
           </h2>
         </div>
       </div>
-
       {/* Filters + Select All */}
       <div className={styles.contentCard} style={{ marginBottom: "1.5rem" }}>
         <div
@@ -120,7 +112,6 @@ export default function MyBillsPage() {
           <div style={{ marginLeft: "auto" }}></div>
         </div>
       </div>
-
       {/* Bills List */}
       {isLoading ? (
         <div style={{ padding: "3rem", textAlign: "center" }}>
@@ -258,7 +249,6 @@ export default function MyBillsPage() {
           })}
         </div>
       )}
-
       {/* Pagination */}
       {pagination.pages > 1 && (
         <div
@@ -294,7 +284,6 @@ export default function MyBillsPage() {
           </button>
         </div>
       )}
-
       {/* Payment Confirm Modal */}
     </div>
   );

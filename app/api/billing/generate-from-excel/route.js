@@ -6,7 +6,6 @@ import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import renderBillHtml from "@/lib/bill-renderer";
 import cache from "@/lib/cache";
-
 export async function POST(request) {
   try {
     await connectDB();
@@ -16,7 +15,6 @@ export async function POST(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const { bills, billMonth, billYear, dueDate } = await request.json();
     if (!bills?.length || billMonth === undefined || !billYear || !dueDate) {
       return NextResponse.json(
@@ -24,7 +22,6 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-
     const billPeriodId = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
     const existing = await Bill.findOne({
       societyId: decoded.societyId,
@@ -35,10 +32,8 @@ export async function POST(request) {
         { error: `Bills for ${billPeriodId} already exist` },
         { status: 409 },
       );
-
     const society = await Society.findById(decoded.societyId).lean();
     const billTemplate = society?.billTemplate;
-
     const created = [];
     for (const bill of bills) {
       const member = await Member.findById(bill.memberId)
@@ -47,7 +42,6 @@ export async function POST(request) {
         )
         .lean();
       if (!member) continue;
-
       // Fetch live unpaid bills — NEVER trust Excel previousBalance (member may have paid since template was downloaded)
       const [, dbUnpaidBills] = await Promise.all([
         Promise.resolve(null),
@@ -64,7 +58,6 @@ export async function POST(request) {
           .sort({ billYear: 1, billMonth: 1 })
           .lean(),
       ]);
-
       // Recompute live balance from immutable fields — balanceAmount may be stale
       const livePrevBalance = dbUnpaidBills.reduce(
         (sum, b) =>
@@ -72,7 +65,6 @@ export async function POST(request) {
           Math.max(0, (b.principalBalance || 0) + (b.interestBalance || 0)),
         0,
       );
-
       const anyPriorBill = await Bill.findOne({
         memberId: bill.memberId,
         societyId: decoded.societyId,
@@ -81,7 +73,6 @@ export async function POST(request) {
       })
         .select("_id")
         .lean();
-
       // Use totalBillDue - amountPaid as the live remaining principal per bill
       // principalBalance alone is not enough if it was never split properly
       const prevRemPrincipal =
@@ -108,7 +99,6 @@ export async function POST(request) {
           : anyPriorBill
             ? 0
             : member?.openingInterest || 0;
-
       const _prevBalance =
         dbUnpaidBills.length > 0
           ? livePrevBalance
@@ -119,7 +109,6 @@ export async function POST(request) {
                   (member.openingPrincipal || 0) + (member.openingInterest || 0)
                 ).toFixed(2),
               );
-
       let billHtml = null;
       let interestAmount = bill.interestAmount ?? 0;
       try {
@@ -149,7 +138,6 @@ export async function POST(request) {
       } catch (e) {
         /* continue without HTML — keep Excel interestAmount as fallback */
       }
-
       const _isScheduled = false;
       const _currentCharges = parseFloat(
         (bill.subtotal || bill.grandTotal || 0).toFixed(2),
@@ -173,7 +161,6 @@ export async function POST(request) {
       const _balanceAmount = parseFloat(
         Math.max(0, _totalBillDue - _advanceApplied).toFixed(2),
       );
-
       const doc = await Bill.create({
         billPeriodId,
         billMonth,
@@ -210,11 +197,9 @@ export async function POST(request) {
       });
       created.push(doc);
     }
-
     await cache.del(`billing:generated:${decoded.societyId}`);
     await cache.del(`payments:outstanding:${decoded.societyId}`);
     await cache.del("admin:stats:global");
-
     return NextResponse.json({ success: true, count: created.length });
   } catch (err) {
     console.error("generate-from-excel error", err);

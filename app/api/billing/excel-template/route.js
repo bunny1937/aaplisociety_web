@@ -9,7 +9,6 @@ import Bill from "@/models/Bill";
 import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
 import { safeConfigDate } from "../../../../utils/dateUtils";
 import { computePreviousBalances } from "../../../../utils/billingEngine";
-
 export async function GET(request) {
   try {
     await connectDB();
@@ -19,13 +18,11 @@ export async function GET(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const { searchParams } = new URL(request.url);
     const month = parseInt(
       searchParams.get("month") || new Date().getMonth() + 1,
     );
     const year = parseInt(searchParams.get("year") || new Date().getFullYear());
-
     const memberIdFilter = searchParams.get("memberIds");
     const memberIdSet = memberIdFilter
       ? memberIdFilter
@@ -33,13 +30,11 @@ export async function GET(request) {
           .map((s) => s.trim())
           .filter(Boolean)
       : null;
-
     const memberQuery = {
       societyId: decoded.societyId,
       isDeleted: { $ne: true },
     };
     if (memberIdSet?.length) memberQuery._id = { $in: memberIdSet };
-
     const [members, heads, society] = await Promise.all([
       Member.find(memberQuery)
         .select(
@@ -56,26 +51,21 @@ export async function GET(request) {
         .lean(),
       Society.findById(decoded.societyId).lean(),
     ]);
-
     const _dueDayNum = society?.config?.interestAfterDays || 15;
     const dueDate = `${year}-${String(month).padStart(2, "0")}-${String(_dueDayNum).padStart(2, "0")}`;
-
     const parkingHeads = heads.filter((h) =>
       h.headName?.toLowerCase().includes("parking"),
     );
-
     const rows = await Promise.all(
       members.map(async (m) => {
         const area = Number(m.carpetAreaSqft || 0);
         let subtotal = 0;
-
         const periodId = `${year}-${String(month).padStart(2, "0")}`;
         const row = {
           "Wing-FlatNo": `${m.wing || ""}-${m.flatNo || ""}`,
           Period: periodId,
           CurrentCharges: 0, // placeholder — filled after subtotal is computed
         };
-
         // Non-parking heads — apply by calculationType
         for (const head of heads) {
           if (parkingHeads.includes(head)) {
@@ -107,11 +97,9 @@ export async function GET(request) {
           } else if (head.calculationType === "Percentage") {
             amount = (subtotal * head.defaultAmount) / 100;
           }
-
           row[head.headName] = parseFloat(amount.toFixed(2));
           subtotal += amount;
         }
-
         // Parking — only charge slots this member actually has (skip Stilt)
         for (const slot of m.parkingSlots || []) {
           if (slot.type === "Stilt" || slot.monthlyBilling === false) continue;
@@ -125,12 +113,9 @@ export async function GET(request) {
             (row[matchHead.headName] || 0) + matchHead.defaultAmount;
           subtotal += matchHead.defaultAmount;
         }
-
         row["CurrentCharges"] = parseFloat(subtotal.toFixed(2)); // overwritten below if bill already exists
-
         const interestRate = parseFloat(society?.config?.interestRate || 0);
         const currentPeriodId = `${year}-${String(month).padStart(2, "0")}`;
-
         // Fetch unpaid PRIOR bills only (exclude current period — it may already exist)
         const [unpaidBills, anyPriorBill] = await Promise.all([
           Bill.find({
@@ -153,13 +138,11 @@ export async function GET(request) {
             .select("_id")
             .lean(),
         ]);
-
         // Opening balances (used only when member has no prior bills ever — new member)
         const openingPrincipal = parseFloat(
           (m.openingPrincipal || 0).toFixed(2),
         );
         const openingInterest = parseFloat((m.openingInterest || 0).toFixed(2));
-
         // Compute previous outstanding using centralized engine
         const { principalOutstanding: prevRemPrincipal, interestOutstanding: prevRemInt } =
           computePreviousBalances(
@@ -167,7 +150,6 @@ export async function GET(request) {
             anyPriorBill,
             { openingPrincipal, openingInterest },
           );
-
         // If bill already generated — use stored values exactly, never recalculate
         const existingBill = await Bill.findOne({
           memberId: m._id,
@@ -179,7 +161,6 @@ export async function GET(request) {
             "openingPrincipal openingInterest currentCharges currentBillTotal subtotal currentInterest billPrincipalBalance billInterestBalance totalBillDue totalAmount balanceAmount amountPaid status interestAmount",
           )
           .lean();
-
         let currInt,
           billPrincipal,
           billInterest,
@@ -187,9 +168,7 @@ export async function GET(request) {
           alreadyPaid,
           remainingDue,
           billStatus;
-
         const advanceCredit = parseFloat((m.advanceCredit || 0).toFixed(2));
-
         if (existingBill) {
           // Use stored bill data — source of truth
           currInt = parseFloat(
@@ -274,7 +253,6 @@ export async function GET(request) {
         return row;
       }),
     );
-
     const instructions = [
       {
         "Wing-FlatNo": "⚠ DO NOT change Wing-FlatNo, Period columns",
@@ -295,7 +273,6 @@ export async function GET(request) {
         Remarks: "",
       },
     ];
-
     const ws = XLSX.utils.json_to_sheet([...instructions, ...rows]);
     const headerKeys = Object.keys(rows[0] || {});
     ws["!cols"] = headerKeys.map((k) => {
@@ -308,7 +285,6 @@ export async function GET(request) {
       ws,
       `Bills_${year}_${String(month).padStart(2, "0")}`,
     );
-
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
     return new NextResponse(buf, {
       headers: {

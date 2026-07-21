@@ -1,7 +1,6 @@
 .wrapper {
   position: relative;
 }
-
 .bell {
   position: relative;
   background: var(--bg-tertiary);
@@ -15,15 +14,12 @@
   align-items: center;
   justify-content: center;
 }
-
 .bell:hover {
   background: var(--primary-muted);
   border-color: rgba(30, 58, 138, 0.25);
   transform: scale(1.05);
 }
-
 .bell:active { transform: scale(0.97); }
-
 .badge {
   position: absolute;
   top: -4px;
@@ -43,12 +39,10 @@
   animation: popIn 0.35s var(--ease-spring);
   box-shadow: 0 2px 6px rgba(239, 68, 68, 0.5);
 }
-
 @keyframes popIn {
   from { transform: scale(0) rotate(-15deg); }
   to   { transform: scale(1) rotate(0deg); }
 }
-
 .dropdown {
   position: absolute;
   top: calc(100% + 10px);
@@ -62,12 +56,10 @@
   overflow: hidden;
   animation: slideDown 0.25s var(--ease-spring);
 }
-
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-
 .header {
   display: flex;
   justify-content: space-between;
@@ -79,7 +71,6 @@
   color: var(--text-primary);
   background: var(--bg-tertiary);
 }
-
 .markAll {
   background: none;
   border: none;
@@ -91,29 +82,23 @@
   border-radius: var(--radius-sm);
   transition: all var(--duration-fast);
 }
-
 .markAll:hover {
   background: var(--accent-light);
   color: var(--accent-dark);
 }
-
 .list {
   max-height: 380px;
   overflow-y: auto;
 }
-
 .list::-webkit-scrollbar { width: 4px; }
 .list::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
-
 .empty {
   padding: 40px 16px;
   text-align: center;
   color: var(--text-tertiary);
   font-size: 13px;
 }
-
 .empty span { font-size: 2rem; display: block; margin-bottom: 8px; opacity: 0.4; }
-
 .item {
   display: flex;
   align-items: flex-start;
@@ -124,17 +109,12 @@
   transition: background var(--duration-fast);
   position: relative;
 }
-
 .item:hover { background: var(--bg-tertiary); }
 .item:last-child { border-bottom: none; }
-
 .unread { background: rgba(107, 142, 239, 0.06); }
 .unread:hover { background: rgba(107, 142, 239, 0.1); }
-
 .icon { font-size: 1.2rem; margin-top: 2px; flex-shrink: 0; }
-
 .content { flex: 1; min-width: 0; }
-
 .title {
   font-size: 13px;
   font-weight: 600;
@@ -144,7 +124,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .message {
   font-size: 12px;
   color: var(--text-secondary);
@@ -154,9 +133,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-
 .time { font-size: 10px; color: var(--text-tertiary); margin-top: 4px; }
-
 .dot {
   width: 8px;
   height: 8px;
@@ -166,7 +143,6 @@
   margin-top: 5px;
   box-shadow: 0 0 6px rgba(107, 142, 239, 0.6);
 }
-
 .toastContainer {
   position: fixed;
   top: 20px;
@@ -177,5 +153,4 @@
   gap: 10px;
   pointer-events: none;
 }
-
 .toastContainer > * { pointer-events: all; }

@@ -5,7 +5,6 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getAdminModels } from "@/lib/admin-models";
 import { getTokenFromRequest } from "@/lib/jwt";
-
 export async function GET(req) {
   try {
     const adminToken = req.cookies.get("admin_token")?.value;
@@ -15,7 +14,6 @@ export async function GET(req) {
       ? authHeader.substring(7)
       : null;
     const userToken = cookieToken || bearerToken;
-
     // ── SUPERADMIN ────────────────────────────────────────────────────────────
     if (adminToken) {
       let decoded;
@@ -27,11 +25,9 @@ export async function GET(req) {
           { status: 401 },
         );
       }
-
       if (decoded.role !== "SuperAdmin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-
       const { SuperAdmin } = await getAdminModels();
       const admin = await SuperAdmin.findById(decoded.userId).select(
         "name email role",
@@ -41,7 +37,6 @@ export async function GET(req) {
       }
       return NextResponse.json({ user: admin });
     }
-
     // ── ADMIN / SECRETARY / MEMBER ────────────────────────────────────────────
     else if (userToken) {
       let decoded;
@@ -50,9 +45,7 @@ export async function GET(req) {
       } catch {
         return NextResponse.json({ error: "Invalid token" }, { status: 401 });
       }
-
       await connectDB();
-
       // ── Admin / Secretary — root-level role, unchanged ────────────────────
       if (
         decoded.role === "Admin" ||
@@ -72,32 +65,27 @@ export async function GET(req) {
         }
         return NextResponse.json({ user });
       }
-
       // ── Member — derive context from activeProfileId ──────────────────────
       // JWT contains only { userId, activeProfileId } — never trust societyId from token
       if (decoded.activeProfileId) {
         const user = await User.findById(decoded.userId).select(
           "name username email phone profiles activeProfileId isActive",
         );
-
         if (!user || !user.isActive) {
           return NextResponse.json(
             { error: "User not found" },
             { status: 404 },
           );
         }
-
         const activeProfile = user.profiles.find(
           (p) => String(p.profileId) === String(decoded.activeProfileId),
         );
-
         if (!activeProfile) {
           return NextResponse.json(
             { error: "Active profile not found — please log in again" },
             { status: 401 },
           );
         }
-
         return NextResponse.json({
           user: {
             id: user._id,
@@ -118,7 +106,6 @@ export async function GET(req) {
           },
         });
       }
-
       // ── Legacy Member tokens (pre-migration) ─────────────────────────────
       // If token still has old shape { role: "Member", societyId, memberId }
       if (decoded.role === "Member") {
@@ -153,10 +140,8 @@ export async function GET(req) {
         // Not yet migrated — return old shape so nothing breaks
         return NextResponse.json({ user });
       }
-
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   } catch (err) {
     console.error("/api/auth/me error:", err.message);

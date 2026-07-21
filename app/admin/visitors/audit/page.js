@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -12,7 +11,6 @@ import {
   tokens,
   fmtTime,
 } from "@/components/visitor/ui";
-
 async function api(url) {
   const res = await fetch(url, { credentials: "include" });
   let data = null;
@@ -22,13 +20,11 @@ async function api(url) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const ACTION_META = {
   VISITOR_OFFLINE_ENTRY: { label: "📴 Offline entry", color: "#f59e0b" },
   VISITOR_ENTRY_CONFIRMED: { label: "✅ Confirmed", color: "#10b981" },
   VISITOR_ENTRY_FLAGGED: { label: "🚨 Flagged", color: "#ef4444" },
 };
-
 const S = {
   filters: {
     display: "grid",
@@ -75,7 +71,6 @@ const S = {
   pageInfo: { fontSize: 13, color: tokens.sub },
   resultMeta: { fontSize: 13, color: tokens.sub, marginBottom: 10 },
 };
-
 export default function AdminVisitorAudit() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -83,12 +78,10 @@ export default function AdminVisitorAudit() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [f, setF] = useState({ action: "", from: "", to: "" });
-
   const set = (k, v) => {
     setPage(1);
     setF((prev) => ({ ...prev, [k]: v }));
   };
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -106,19 +99,16 @@ export default function AdminVisitorAudit() {
       setLoading(false);
     }
   }, [page, f]);
-
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
-
   return (
     <div>
       <PageHeader
         title="Offline Entry Audit"
         subtitle="Every offline gate entry and the resident's confirm / flag decision"
       />
-
       <Card>
         <div style={S.filters}>
           <div style={S.filterItem}>
@@ -152,11 +142,9 @@ export default function AdminVisitorAudit() {
             />
           </div>
         </div>
-
         <div style={S.resultMeta}>
           {total} event{total === 1 ? "" : "s"}
         </div>
-
         {loading ? (
           <div style={S.center}>
             <Spinner size={28} />
@@ -228,7 +216,6 @@ export default function AdminVisitorAudit() {
             </table>
           </div>
         )}
-
         <div style={S.pager}>
           <Button
             variant="ghost"

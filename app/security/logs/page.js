@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -17,7 +16,6 @@ import {
   fmtTime,
 } from "@/components/visitor/ui";
 import { VISITOR_STATUSES } from "@/lib/visitor-config";
-
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -31,11 +29,9 @@ async function api(url, opts) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const STATUSES = Array.isArray(VISITOR_STATUSES)
   ? VISITOR_STATUSES
   : ["Pending", "Approved", "Rejected", "Entered", "Exited", "Expired"];
-
 const S = {
   filters: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16, alignItems: "flex-end" },
   filterItem: { minWidth: 160 },
@@ -60,7 +56,6 @@ const S = {
   pager: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 },
   pageInfo: { fontSize: 13, color: tokens.sub },
 };
-
 export default function SecurityLogsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -71,9 +66,7 @@ export default function SecurityLogsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState(null);
-
   const notify = (message, type = "info") => setToast({ message, type });
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -93,11 +86,9 @@ export default function SecurityLogsPage() {
       setLoading(false);
     }
   }, [scope, status, q, page]);
-
   useEffect(() => {
     load();
   }, [load]);
-
   const doExit = async (id) => {
     setBusyId(id);
     try {
@@ -110,7 +101,6 @@ export default function SecurityLogsPage() {
       setBusyId(null);
     }
   };
-
   return (
     <div>
       <PageHeader
@@ -168,7 +158,6 @@ export default function SecurityLogsPage() {
             </Select>
           </div>
         </div>
-
         {loading ? (
           <div style={S.center}>
             <Spinner size={28} />
@@ -229,7 +218,6 @@ export default function SecurityLogsPage() {
             </table>
           </div>
         )}
-
         <div style={S.pager}>
           <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
             ← Prev

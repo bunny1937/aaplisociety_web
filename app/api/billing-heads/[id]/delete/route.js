@@ -6,19 +6,15 @@ import cache from "@/lib/cache";
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const { id } = await params;
-
     const head = await BillingHead.findOneAndUpdate(
       { _id: id, societyId: decoded.societyId },
       {
@@ -31,14 +27,12 @@ export async function DELETE(request, { params }) {
       },
       { new: true },
     );
-
     if (!head) {
       return NextResponse.json(
         { error: "Billing head not found" },
         { status: 404 },
       );
     }
-
     console.log("✅ Deleted billing head:", head.headName);
     await cache.del(`billing-heads:list:${decoded.societyId}`);
     await cache.del(`society:config:${decoded.societyId}`);

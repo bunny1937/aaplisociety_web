@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-
 const ExportSchema = new mongoose.Schema(
   {
     // What was deleted
@@ -18,7 +17,6 @@ const ExportSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-
     // Deletion metadata
     deletedAt: {
       type: Date,
@@ -33,7 +31,6 @@ const ExportSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-
     // Export file info
     exportFile: {
       filename: String,
@@ -45,13 +42,11 @@ const ExportSchema = new mongoose.Schema(
         default: 'excel',
       },
     },
-
     // Deleted data (full copy)
     data: {
       type: mongoose.Schema.Types.Mixed,
       required: true,
     },
-
     // Statistics
     recordCount: {
       type: Number,
@@ -61,7 +56,6 @@ const ExportSchema = new mongoose.Schema(
       type: Number, // For bills: sum of amounts
       default: 0,
     },
-
     // Restoration
     isRestored: {
       type: Boolean,
@@ -75,7 +69,6 @@ const ExportSchema = new mongoose.Schema(
       userId: mongoose.Schema.Types.ObjectId,
       userName: String,
     },
-
     // Auto-expire after 90 days
     willExpireAt: {
       type: Date,
@@ -86,12 +79,9 @@ const ExportSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
 // TTL index - MongoDB auto-deletes after expiry
 ExportSchema.index({ willExpireAt: 1 }, { expireAfterSeconds: 0 });
-
 // Compound indexes for queries
 ExportSchema.index({ societyId: 1, collectionName: 1, deletedAt: -1 });
 ExportSchema.index({ collectionName: 1, isRestored: 1 });
-
 export default ExportSchema;

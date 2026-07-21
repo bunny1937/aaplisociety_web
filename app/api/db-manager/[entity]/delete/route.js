@@ -7,23 +7,18 @@ import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
 import Receipt from "@/models/Receipt";
 import { requireRoles } from "@/lib/authz";
-
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
-
     const auth = requireRoles(request, ["Admin"]);
     if (!auth.valid) return auth;
     const decoded = auth.user;
-
     const { entity } = await params;
     const { searchParams } = new URL(request.url);
     const ids = searchParams.get("ids")?.split(",") || [];
-
     if (ids.length === 0) {
       return NextResponse.json({ error: "No IDs provided" }, { status: 400 });
     }
-
     let Model;
     if (entity === "members") Model = Member;
     else if (entity === "users") Model = User;
@@ -31,18 +26,15 @@ export async function DELETE(request, { params }) {
     else if (entity === "transactions") Model = Transaction;
     else if (entity === "receipts") Model = Receipt;
     else return NextResponse.json({ error: "Invalid entity" }, { status: 400 });
-
     // Perform bulk delete
     const result = await Model.deleteMany({
       _id: { $in: ids },
       societyId: decoded.societyId,
     });
-
     // If deleting members, also delete associated users
     if (entity === "members") {
       await User.deleteMany({ memberId: { $in: ids } });
     }
-
     // If deleting bills, also soft-mark related transactions as reversed
     if (entity === "bills") {
       await Transaction.updateMany(
@@ -54,7 +46,6 @@ export async function DELETE(request, { params }) {
         { $set: { isReversed: true } },
       );
     }
-
     // Audit log
     await AuditLog.create({
       userId: decoded.userId,
@@ -68,7 +59,6 @@ export async function DELETE(request, { params }) {
       },
       timestamp: new Date(),
     });
-
     return NextResponse.json({
       success: true,
       message: `Deleted ${result.deletedCount} ${entity}`,

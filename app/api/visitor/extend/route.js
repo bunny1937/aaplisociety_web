@@ -11,27 +11,22 @@ import { requireSecurity } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { notifyVisitorApproval } from "@/lib/visitor-notify";
 import { APPROVAL_WINDOW_MS } from "@/lib/visitor-config";
-
 export async function PATCH(request) {
   const auth = requireSecurity(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { visitorId } = await request.json();
     if (!visitorId || !mongoose.Types.ObjectId.isValid(visitorId))
       return NextResponse.json({ error: "Valid visitorId required" }, { status: 400 });
-
     const visitor = await Visitor.findOne({ _id: visitorId, societyId: auth.user.societyId });
     if (!visitor)
       return NextResponse.json({ error: "Visitor not found" }, { status: 404 });
-
     if (!["Pending", "Expired"].includes(visitor.status))
       return NextResponse.json(
         { error: `Cannot extend visitor with status: ${visitor.status}` },
         { status: 409 },
       );
-
     const newExpiry = new Date(Date.now() + APPROVAL_WINDOW_MS);
     visitor.status = "Pending";
     visitor.expiresAt = newExpiry;
@@ -43,13 +38,11 @@ export async function PATCH(request) {
       history: visitor.escalation?.history || [],
     };
     await visitor.save();
-
     // Re-notify resident
     const [member, society] = await Promise.all([
       Member.findById(visitor.memberId).lean(),
       Society.findById(auth.user.societyId).select("name").lean(),
     ]);
-
     if (member) {
       await notifyVisitorApproval({
         society: society || { _id: auth.user.societyId },
@@ -58,12 +51,10 @@ export async function PATCH(request) {
         guard: { name: auth.user.name || "Security", phone: auth.user.phone || "" },
       });
     }
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_EXTENDED", null, {
       visitorId: visitor._id.toString(),
       newExpiry: newExpiry.toISOString(),
     });
-
     return NextResponse.json({ success: true, expiresAt: newExpiry });
   } catch (err) {
     console.error("Visitor extend error", err);

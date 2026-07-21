@@ -20,19 +20,15 @@ import { logAudit } from "@/lib/audit-logger";
 import { generateTenantUsername } from "@/lib/tenant-username";
 import { buildTenantDecisionNotification } from "@/lib/tenant-notifications";
 import { sendInApp, sendEmail } from "@/lib/visitor-channels";
-
 function generateTempPassword() {
   return crypto.randomBytes(8).toString("hex");
 }
-
 export async function POST(request, { params }) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   const { id } = await params;
   if (!mongoose.Types.ObjectId.isValid(id))
     return NextResponse.json({ error: "Valid id required" }, { status: 400 });
-
   try {
     await connectDB();
     const tenantRequest = await TenantRequest.findOne({
@@ -42,14 +38,11 @@ export async function POST(request, { params }) {
     });
     if (!tenantRequest)
       return NextResponse.json({ error: "No pending request found for that id" }, { status: 404 });
-
     const member = await Member.findOne({ _id: tenantRequest.memberId, societyId: auth.user.societyId });
     if (!member) return NextResponse.json({ error: "Flat not found" }, { status: 404 });
-
     // Member has no societyName field of its own — look the real name up on
     // Society rather than leaving the tenant's profile.societyName blank.
     const society = await Society.findById(member.societyId).select("name").lean();
-
     // Ensure a unique username, trying phone-derived base then numeric suffixes.
     const base = generateTenantUsername(tenantRequest.tenantPhone);
     let username = base;
@@ -58,10 +51,8 @@ export async function POST(request, { params }) {
       username = `${base}.${suffix}`;
       suffix += 1;
     }
-
     const tempPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 10);
-
     const tenantUser = await User.create({
       name: tenantRequest.tenantName,
       username,
@@ -83,7 +74,6 @@ export async function POST(request, { params }) {
       ],
       isActive: true,
     });
-
     member.addNewTenant({
       name: tenantRequest.tenantName,
       contactNumber: tenantRequest.tenantPhone,
@@ -94,12 +84,10 @@ export async function POST(request, { params }) {
       rentPerMonth: tenantRequest.rentPerMonth,
     });
     await member.save();
-
     tenantRequest.status = "Approved";
     tenantRequest.approvedBy = auth.user.userId;
     tenantRequest.approvedAt = new Date();
     await tenantRequest.save();
-
     const notif = buildTenantDecisionNotification({
       decision: "approved",
       tenantName: tenantRequest.tenantName,
@@ -118,20 +106,17 @@ export async function POST(request, { params }) {
       recipientIds: [String(member._id)],
       metadata: { tenantRequestId: String(tenantRequest._id) },
     });
-
     const emailResult = await sendEmail({
       to: tenantRequest.tenantEmail,
       subject: "Your AapliSociety login",
       text: `Welcome! Your username is ${username} and your temporary password is ${tempPassword}. You'll be asked to change it on first login.`,
     });
-
     await logAudit(auth.user.userId, auth.user.societyId, "TENANT_REQUEST_APPROVED", null, {
       tenantRequestId: String(tenantRequest._id),
       memberId: String(member._id),
       tenantUserId: String(tenantUser._id),
       emailDelivered: emailResult.ok,
     });
-
     return NextResponse.json({
       success: true,
       tenantRequest,

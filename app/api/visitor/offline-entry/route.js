@@ -10,7 +10,6 @@ import Society from "@/models/Society";
 import { requireRoles } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { notifyOfflineEntry } from "@/lib/visitor-notify";
-
 const ALLOWED_PURPOSES = [
   "Guest",
   "Delivery",
@@ -21,15 +20,12 @@ const ALLOWED_PURPOSES = [
 ];
 const MEMBER_FIELDS =
   "flatNo wing ownerName ownershipType currentTenant whatsappNumber contactNumber alternateContact emailPrimary emailSecondary";
-
 export async function POST(request) {
   const auth = requireRoles(request, ["Security"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const body = await request.json();
-
     const name = String(body.name || "").trim();
     const phone = String(body.phone || "").trim();
     const photo = String(body.photo || "").trim();
@@ -40,14 +36,12 @@ export async function POST(request) {
     const flatNo = String(body.flatNo || "").trim();
     const wing = String(body.wing || "").trim();
     const clientRef = String(body.clientRef || "").trim();
-
     if (!name || !ALLOWED_PURPOSES.includes(purpose)) {
       return NextResponse.json(
         { error: "name and a valid purpose are required" },
         { status: 400 },
       );
     }
-
     // Resolve the flat: by id first, otherwise by wing + flatNo (offline-friendly).
     const baseQuery = {
       societyId: auth.user.societyId,
@@ -75,9 +69,7 @@ export async function POST(request) {
         { status: 422 },
       );
     }
-
     const queuedAt = body.queuedAt ? new Date(body.queuedAt) : new Date();
-
     // De-dupe: if this device entry was already synced, return the existing row.
     if (clientRef) {
       const existing = await Visitor.findOne({
@@ -97,7 +89,6 @@ export async function POST(request) {
         });
       }
     }
-
     const visitor = await Visitor.create({
       societyId: auth.user.societyId,
       memberId: member._id,
@@ -120,7 +111,6 @@ export async function POST(request) {
         confirmation: { status: "Pending", at: null, by: null },
       },
     });
-
     // Different, high-priority alert: "X has ENTERED to meet you".
     let notifyResult = { steps: [], anyReachable: false };
     try {
@@ -150,7 +140,6 @@ export async function POST(request) {
       // Never fail the entry just because a notification channel hiccuped.
       console.error("offline-entry notify error", e && e.message);
     }
-
     await logAudit(
       auth.user.userId,
       auth.user.societyId,
@@ -169,7 +158,6 @@ export async function POST(request) {
         clientRef,
       },
     );
-
     const notified = !!(
       notifyResult.anyReachable || (notifyResult.steps || []).some((s) => s.ok)
     );

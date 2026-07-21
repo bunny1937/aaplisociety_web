@@ -11,12 +11,10 @@ import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import { requireRoles } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
-
 function isPlausiblePhone(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   return digits.length >= 10 && digits.length <= 13;
 }
-
 async function loadGuard(id, societyId) {
   if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
   return User.findOne({
@@ -26,18 +24,15 @@ async function loadGuard(id, societyId) {
     isDeleted: { $ne: true },
   });
 }
-
 export async function PATCH(request, { params }) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { id } = await params;
     const guard = await loadGuard(id, auth.user.societyId);
     if (!guard)
       return NextResponse.json({ error: "Guard not found" }, { status: 404 });
-
     const body = await request.json();
     const updates = {};
     if (typeof body.isActive === "boolean") updates.isActive = body.isActive;
@@ -56,7 +51,6 @@ export async function PATCH(request, { params }) {
     }
     if (Object.keys(updates).length === 0)
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-
     const before = {
       isActive: guard.isActive,
       gateLabel: guard.gateLabel,
@@ -65,12 +59,10 @@ export async function PATCH(request, { params }) {
     };
     Object.assign(guard, updates);
     await guard.save();
-
     await logAudit(auth.user.userId, auth.user.societyId, "SECURITY_GUARD_UPDATED", before, {
       id: guard._id.toString(),
       ...updates,
     });
-
     return NextResponse.json({
       success: true,
       guard: {
@@ -87,22 +79,18 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 export async function POST(request, { params }) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { id } = await params;
     const guard = await loadGuard(id, auth.user.societyId);
     if (!guard)
       return NextResponse.json({ error: "Guard not found" }, { status: 404 });
-
     const body = await request.json().catch(() => ({}));
     if (body.action !== "reset-password")
       return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
-
     // Either accept an admin-supplied password or generate a strong temp one.
     let newPassword = String(body.password || "");
     let generated = false;
@@ -119,15 +107,12 @@ export async function POST(request, { params }) {
         { status: 400 },
       );
     }
-
     guard.password = await bcrypt.hash(newPassword, 10);
     await guard.save();
-
     await logAudit(auth.user.userId, auth.user.societyId, "SECURITY_GUARD_PASSWORD_RESET", null, {
       id: guard._id.toString(),
       username: guard.username,
     });
-
     // Show the temp password exactly once (only when generated).
     return NextResponse.json({
       success: true,
@@ -139,34 +124,28 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 export async function DELETE(request, { params }) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { id } = await params;
     const guard = await loadGuard(id, auth.user.societyId);
     if (!guard)
       return NextResponse.json({ error: "Guard not found" }, { status: 404 });
-
     guard.isDeleted = true;
     guard.isActive = false;
     await guard.save();
-
     await logAudit(auth.user.userId, auth.user.societyId, "SECURITY_GUARD_DELETED", null, {
       id: guard._id.toString(),
       username: guard.username,
     });
-
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Delete guard error", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 function generatePassword() {
   // 10-char temp password guaranteed to contain a letter and a digit.
   const letters = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";

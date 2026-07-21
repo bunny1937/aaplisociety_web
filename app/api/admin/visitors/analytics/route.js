@@ -6,11 +6,9 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import Visitor from "@/models/Visitor";
 import { requireRoles } from "@/lib/authz";
-
 export async function GET(request) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
@@ -21,10 +19,8 @@ export async function GET(request) {
     const since = new Date();
     since.setDate(since.getDate() - days);
     since.setHours(0, 0, 0, 0);
-
     const societyId = new mongoose.Types.ObjectId(String(auth.user.societyId));
     const match = { societyId, createdAt: { $gte: since } };
-
     const [daily, byPurpose, byHour, byStatus, approvalAgg] = await Promise.all(
       [
         Visitor.aggregate([
@@ -81,7 +77,6 @@ export async function GET(request) {
         ]),
       ],
     );
-
     return NextResponse.json({
       success: true,
       range: { days, since },

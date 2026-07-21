@@ -4,17 +4,13 @@
  *   Sheet1  = Society (identical to society_upload_template.xlsx)
  *   Sheets 2-7 = Members (identical structure to member_import_template.xlsx)
  */
-
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { validateAdminRequest } from "@/lib/admin-middleware";
-
 export async function GET(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
-
   const wb = XLSX.utils.book_new();
-
   // ── Sheet 1: Society (exact same as society_upload_template.xlsx) ──
   const societyHeaders = [
     "Society Name",
@@ -67,9 +63,7 @@ export async function GET(request) {
   const societyWs = XLSX.utils.aoa_to_sheet([societyHeaders, societySample]);
   societyWs["!cols"] = societyHeaders.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
   XLSX.utils.book_append_sheet(wb, societyWs, "Society");
-
   // ── Sheets 2-7: Members (exact same structure as member_import_template.xlsx) ──
-
   // Sheet 2: Basic Info
   const basicInfoRows = [
     ["flatNo*", "wing", "floor", "ownerName*", "contactNumber*", "emailPrimary*", "carpetAreaSqft*", "flatType", "ownershipType", "openingPrincipal", "openingInterest"],
@@ -86,13 +80,11 @@ export async function GET(request) {
     ["openingInterest  = Interest already accrued on old dues as on cutover date. Enter 0 for new members or if no historic interest."],
     ["RULE: System will always clear openingInterest FIRST, then openingPrincipal (Interest Satisfy First rule)."],
   ];
-
   // Sheet 3: Additional Details
   const additionalRows = [
     ["flatNo*", "panCard", "aadhaar", "alternateContact", "whatsappNumber", "emailSecondary", "builtUpAreaSqft", "possessionDate"],
     ["1310", "ABCDE1234F", "123456789012", "9123456789", "9876543210", "arjun.alt@example.com", 2000, "2024-01-15"],
   ];
-
   // Sheet 4: Parking Slots
   const parkingRows = [
     ["flatNo", "slotNumber", "type", "vehicleType"],
@@ -107,13 +99,11 @@ export async function GET(request) {
     ["One row = one parking slot. Add multiple rows for multiple slots per flat."],
     ["Stilt slots will NOT generate monthly parking charges. Open/Covered will."],
   ];
-
   // Sheet 5: Family Members
   const familyRows = [
     ["flatNo*", "name", "relation", "age", "contactNumber", "occupation"],
     ["1310", "Aarav Rastogi", "Son", 12, "", "Student"],
   ];
-
   // Sheet 6: Owner History
   const ownerRows = [
     ["flatNo*", "ownerSequence", "ownerName", "contactNumber", "emailPrimary", "panCard", "ownershipStartDate", "ownershipEndDate", "purchaseAmount", "saleAmount"],
@@ -121,7 +111,6 @@ export async function GET(request) {
     [],
     ["NOTE: Only add previous owners (not current owner)"],
   ];
-
   // Sheet 7: Tenant History
   const tenantRows = [
     ["flatNo*", "tenantSequence", "name", "contactNumber", "email", "panCard", "startDate", "endDate", "depositAmount", "rentPerMonth", "isCurrent"],
@@ -131,7 +120,6 @@ export async function GET(request) {
     ["NOTE: Leave endDate blank for current tenant"],
     ["isCurrent: Yes or No"],
   ];
-
   const memberSheets = [
     { name: "1. Basic Info (Required)", rows: basicInfoRows },
     { name: "2. Additional Details", rows: additionalRows },
@@ -140,16 +128,13 @@ export async function GET(request) {
     { name: "5. Owner History", rows: ownerRows },
     { name: "6. Tenant History", rows: tenantRows },
   ];
-
   for (const { name, rows } of memberSheets) {
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const headerRow = rows[0];
     ws["!cols"] = headerRow.map((h) => ({ wch: Math.max(String(h || "").length + 4, 16) }));
     XLSX.utils.book_append_sheet(wb, ws, name);
   }
-
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-
   return new NextResponse(buf, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

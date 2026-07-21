@@ -7,36 +7,29 @@ import BillingHead from "@/models/BillingHead";
 import Transaction from "@/models/Transaction";
 import { safeConfigDate } from "../../../../utils/dateUtils";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const { month, year, memberId } = await request.json();
-
     if (month === undefined || !year) {
       return NextResponse.json(
         { error: "Month and year required" },
         { status: 400 },
       );
     }
-
     // Fetch society config
     const society = await Society.findById(decoded.societyId).lean();
     if (!society) {
       return NextResponse.json({ error: "Society not found" }, { status: 404 });
     }
-
     // Fetch billing heads
     const billingHeads = await BillingHead.find({
       societyId: decoded.societyId,
@@ -45,18 +38,15 @@ export async function POST(request) {
     })
       .sort({ order: 1 })
       .lean();
-
     // Fetch members
     const memberQuery = { societyId: decoded.societyId };
     if (memberId) {
       memberQuery._id = memberId;
     }
     const members = await Member.find(memberQuery).lean();
-
     if (members.length === 0) {
       return NextResponse.json({ error: "No members found" }, { status: 404 });
     }
-
     // Generate preview data
     const billPeriod = `${year}-${String(month + 1).padStart(2, "0")}`;
     const billDate = new Date(year, month - 1, 1); // also fix: was using month (0-based off-by-one bug)
@@ -65,9 +55,7 @@ export async function POST(request) {
       month,
       society.config?.billDueDay || 10,
     );
-
     const preview = [];
-
     for (const member of members) {
       // Get previous balance
       const lastTransaction = await Transaction.findOne({
@@ -77,19 +65,15 @@ export async function POST(request) {
       })
         .sort({ date: -1, createdAt: -1 })
         .lean();
-
       const previousBalance = lastTransaction?.balanceAfterTransaction || 0;
-
       // Calculate charges
       const charges = [];
       let subtotal = 0;
-
       // Default charges (per sq ft)
       // Normalize area — Member model uses carpetAreaSqft, fallback chain
       const areaSqFt = Number(
         member.carpetAreaSqft ?? member.builtUpAreaSqft ?? member.areaSqFt ?? 0,
       );
-
       if (society.config?.maintenanceRate) {
         const amount = areaSqFt * society.config.maintenanceRate;
         charges.push({
@@ -99,7 +83,6 @@ export async function POST(request) {
         });
         subtotal += amount;
       }
-
       if (society.config?.sinkingFundRate) {
         const amount = areaSqFt * society.config.sinkingFundRate;
         charges.push({
@@ -109,7 +92,6 @@ export async function POST(request) {
         });
         subtotal += amount;
       }
-
       if (society.config?.repairFundRate) {
         const amount = areaSqFt * society.config.repairFundRate;
         charges.push({
@@ -119,7 +101,6 @@ export async function POST(request) {
         });
         subtotal += amount;
       }
-
       // Fixed charges
       if (society.config?.fixedCharges?.water) {
         charges.push({
@@ -129,7 +110,6 @@ export async function POST(request) {
         });
         subtotal += society.config.fixedCharges.water;
       }
-
       if (society.config?.fixedCharges?.security) {
         charges.push({
           name: "Security",
@@ -138,7 +118,6 @@ export async function POST(request) {
         });
         subtotal += society.config.fixedCharges.security;
       }
-
       if (society.config?.fixedCharges?.electricity) {
         charges.push({
           name: "Electricity",
@@ -147,20 +126,17 @@ export async function POST(request) {
         });
         subtotal += society.config.fixedCharges.electricity;
       }
-
       // Custom billing heads
       for (const head of billingHeads) {
         let amount = 0;
         let rateDisplay = "";
         const headNameLower = head.headName.trim().toLowerCase();
-
         const isParkingCharge =
           headNameLower.includes("parking") ||
           headNameLower.includes("two-wheeler") ||
           headNameLower.includes("four-wheeler") ||
           headNameLower.includes("two wheeler") ||
           headNameLower.includes("four wheeler");
-
         if (isParkingCharge && head.calculationType === "Fixed") {
           const slots = member.parkingSlots ?? [];
           const matchingCount = slots.filter((slot) => {
@@ -188,13 +164,10 @@ export async function POST(request) {
           amount = subtotal * (head.defaultAmount / 100);
           rateDisplay = `${head.defaultAmount}% of subtotal`;
         }
-
         charges.push({ name: head.headName, rate: rateDisplay, amount });
         subtotal += amount;
       }
-
       const total = subtotal + previousBalance;
-
       preview.push({
         member: {
           id: member._id,
@@ -213,7 +186,6 @@ export async function POST(request) {
         total,
       });
     }
-
     return NextResponse.json({
       success: true,
       preview,

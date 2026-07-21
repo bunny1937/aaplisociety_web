@@ -1,25 +1,19 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-
 export default function RouteLoadingBar() {
   const pathname = usePathname();
   const [progress, setProgress] = useState(0);
   const [visible, setVisible] = useState(false);
   const timerRef = useRef(null);
   const prevPath = useRef(pathname);
-
   useEffect(() => {
     if (pathname === prevPath.current) return;
     prevPath.current = pathname;
-
     // Start
     setVisible(true);
     setProgress(15);
-
     clearInterval(timerRef.current);
-
     // Simulate incremental progress
     timerRef.current = setInterval(() => {
       setProgress((p) => {
@@ -27,7 +21,6 @@ export default function RouteLoadingBar() {
         return p + Math.random() * 12;
       });
     }, 200);
-
     // Complete after a tick — route rendered
     const completeTimer = setTimeout(() => {
       clearInterval(timerRef.current);
@@ -37,15 +30,12 @@ export default function RouteLoadingBar() {
         setProgress(0);
       }, 300);
     }, 400);
-
     return () => {
       clearInterval(timerRef.current);
       clearTimeout(completeTimer);
     };
   }, [pathname]);
-
   if (!visible && progress === 0) return null;
-
   return (
     <div
       style={{

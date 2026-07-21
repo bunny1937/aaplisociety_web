@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
 const MONTH_NAMES = [
   "",
   "Jan",
@@ -22,7 +21,6 @@ const STATUS_COLOR = {
   Approved: "#10b981",
   Rejected: "#ef4444",
 };
-
 async function adminFetch(url, opts = {}) {
   const res = await fetch(url, {
     ...opts,
@@ -35,19 +33,16 @@ async function adminFetch(url, opts = {}) {
   if (!res.ok) throw new Error((await res.json()).error || "Request failed");
   return res.json();
 }
-
 export default function SuperAdminAuditReportsPage() {
   const qc = useQueryClient();
   const [selected, setSelected] = useState(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-
   const { data, isLoading } = useQuery({
     queryKey: ["superadmin-audit-reports"],
     queryFn: () => adminFetch("/api/superadmin/audit-reports"),
   });
-
   const reviewMutation = useMutation({
     mutationFn: ({ reportId, status, reviewNotes }) =>
       adminFetch("/api/superadmin/audit-reports", {
@@ -59,7 +54,6 @@ export default function SuperAdminAuditReportsPage() {
       setSelected(null);
     },
   });
-
   const handleDownload = async (societyId, societyName) => {
     const res = await fetch(
       `/api/superadmin/audit-reports?societyId=${societyId}&download=true`,
@@ -75,13 +69,11 @@ export default function SuperAdminAuditReportsPage() {
     a.download = `AuditReport-${societyName}.xlsx`;
     a.click();
   };
-
   const reports = (data?.reports || []).filter(
     (r) =>
       (filterStatus === "all" || r.status === filterStatus) &&
       r.societyName?.toLowerCase().includes(search.toLowerCase()),
   );
-
   return (
     <div style={{ padding: "2rem", maxWidth: 1200, margin: "0 auto" }}>
       <h1
@@ -92,7 +84,6 @@ export default function SuperAdminAuditReportsPage() {
       <p style={{ color: "#6b7280", marginBottom: "2rem" }}>
         All society audit submissions. Review, approve, or reject each report.
       </p>
-
       {/* Filters */}
       <div
         style={{
@@ -140,7 +131,6 @@ export default function SuperAdminAuditReportsPage() {
           {reports.length} Reports
         </span>
       </div>
-
       {isLoading ? (
         <div style={{ padding: "3rem", textAlign: "center", color: "#6b7280" }}>
           Loading reports...
@@ -274,7 +264,6 @@ export default function SuperAdminAuditReportsPage() {
           </table>
         </div>
       )}
-
       {/* Detail modal */}
       {selected && (
         <div
@@ -305,7 +294,6 @@ export default function SuperAdminAuditReportsPage() {
             <h2 style={{ marginBottom: "1rem", fontWeight: 700 }}>
               {selected.societyName} — Audit Report
             </h2>
-
             <div
               style={{
                 display: "grid",
@@ -349,7 +337,6 @@ export default function SuperAdminAuditReportsPage() {
                 </div>
               ))}
             </div>
-
             {selected.validation?.warnings?.length > 0 && (
               <div
                 style={{
@@ -368,7 +355,6 @@ export default function SuperAdminAuditReportsPage() {
                 </ul>
               </div>
             )}
-
             <div style={{ marginBottom: "1rem" }}>
               <label
                 style={{
@@ -393,7 +379,6 @@ export default function SuperAdminAuditReportsPage() {
                 placeholder="Optional notes for the society admin..."
               />
             </div>
-
             <div style={{ display: "flex", gap: "0.75rem" }}>
               <button
                 onClick={() =>

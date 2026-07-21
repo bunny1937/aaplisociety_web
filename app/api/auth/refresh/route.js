@@ -3,7 +3,6 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { signToken } from "@/lib/jwt";
 import { rotateRefreshToken, setRefreshCookie, clearRefreshCookie } from "@/lib/refresh-token";
-
 // Real rotating refresh: reads the httpOnly refreshToken cookie (never a
 // client-supplied token in the body — the previous version accepted any
 // signature-valid token from anyone, not necessarily the session's own),
@@ -14,26 +13,22 @@ import { rotateRefreshToken, setRefreshCookie, clearRefreshCookie } from "@/lib/
 export async function POST(request) {
   try {
     await connectDB();
-
     const refreshCookie = request.cookies.get("refreshToken")?.value;
     if (!refreshCookie) {
       return NextResponse.json({ error: "No refresh token" }, { status: 401 });
     }
-
     const rotated = await rotateRefreshToken(refreshCookie);
     if (!rotated) {
       const res = NextResponse.json({ error: "Invalid or expired refresh token" }, { status: 401 });
       clearRefreshCookie(res);
       return res;
     }
-
     const user = await User.findById(rotated.userId);
     if (!user || !user.isActive) {
       const res = NextResponse.json({ error: "User not found" }, { status: 401 });
       clearRefreshCookie(res);
       return res;
     }
-
     const activeProfile = (user.profiles ?? []).find(
       (p) => String(p.profileId) === String(user.activeProfileId) && p.status === "Active",
     );
@@ -52,9 +47,7 @@ export async function POST(request) {
           societyId: user.societyId,
           societyCode: user.societyCode,
         };
-
     const newAccessToken = signToken(claims);
-
     const response = NextResponse.json({ success: true });
     response.cookies.set("token", newAccessToken, {
       httpOnly: true,

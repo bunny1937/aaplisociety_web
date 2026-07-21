@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const TenantRequestDocumentsSchema = new mongoose.Schema(
   {
     contractKey: String,
@@ -9,7 +8,6 @@ const TenantRequestDocumentsSchema = new mongoose.Schema(
   },
   { _id: false },
 );
-
 // Mirrors mobile-backend's TenantRequest collection (apps/mobile-backend/src/models/index.ts).
 // Owner-submitted, admin-pending tenant onboarding data — deliberately its own
 // collection, not written onto Member.currentTenant, until this app's approve
@@ -37,5 +35,4 @@ const TenantRequestSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 export default mongoose.models.TenantRequest || mongoose.model("TenantRequest", TenantRequestSchema);

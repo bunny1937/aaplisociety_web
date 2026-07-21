@@ -6,9 +6,7 @@ import Society from "@/models/Society";
 import AuditReport from "@/models/AuditReport";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import * as XLSX from "xlsx";
-
 // ─── Indian FY helpers ────────────────────────────────────────────────────────
-
 /**
  * Given a join month (1-12) and join year, returns the required audit window.
  * Indian FY: April (4) → March (3).
@@ -22,11 +20,9 @@ function getAuditWindow(joinMonth, joinYear) {
   // Determine which financial year the joining month belongs to
   // FY 2026-27 = April 2026 to March 2027
   const joinFY = joinMonth >= 4 ? joinYear : joinYear - 1;
-
   // Required period starts from April of the PREVIOUS FY
   const fromMonth = 4;
   const fromYear = joinFY - 1; // April of prev FY
-
   // Required period ends at month BEFORE joining (n-1)
   let toMonth = joinMonth - 1;
   let toYear = joinYear;
@@ -34,13 +30,10 @@ function getAuditWindow(joinMonth, joinYear) {
     toMonth = 12;
     toYear -= 1;
   }
-
   // Calculate total months
   const totalMonths = (toYear - fromYear) * 12 + (toMonth - fromMonth) + 1;
-
   return { fromMonth, fromYear, toMonth, toYear, totalMonths };
 }
-
 /** Returns array of { month, year, periodId } for every month in the window */
 function expandWindow(fromMonth, fromYear, toMonth, toYear) {
   const periods = [];
@@ -60,10 +53,8 @@ function expandWindow(fromMonth, fromYear, toMonth, toYear) {
   }
   return periods;
 }
-
 // ─── POST /api/admin/audit-report ─────────────────────────────────────────────
 // Body: multipart — file (xlsx), joinMonth (number), joinYear (number)
-
 export async function POST(request) {
   try {
     await connectDB();
@@ -73,12 +64,10 @@ export async function POST(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const formData = await request.formData();
     const file = formData.get("file");
     const joinMonth = parseInt(formData.get("joinMonth"));
     const joinYear = parseInt(formData.get("joinYear"));
-
     if (!file)
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     if (!joinMonth || !joinYear)
@@ -96,11 +85,9 @@ export async function POST(request) {
         { error: "File too large. Max 20MB." },
         { status: 400 },
       );
-
     const society = await Society.findById(decoded.societyId).lean();
     if (!society)
       return NextResponse.json({ error: "Society not found" }, { status: 404 });
-
     // ── 1. Calculate required audit window ──────────────────────────────────
     const win = getAuditWindow(joinMonth, joinYear);
     const requiredPeriods = expandWindow(
@@ -110,7 +97,6 @@ export async function POST(request) {
       win.toYear,
     );
     const requiredPeriodIds = new Set(requiredPeriods.map((p) => p.periodId));
-
     // ── 2. Fetch members & billing heads ────────────────────────────────────
     const [members, heads] = await Promise.all([
       Member.find({ societyId: decoded.societyId, isDeleted: { $ne: true } })
@@ -124,23 +110,19 @@ export async function POST(request) {
         .sort({ order: 1 })
         .lean(),
     ]);
-
     const memberCount = members.length;
     const expectedTotalRows = memberCount * win.totalMonths;
     const memberMap = {};
     members.forEach((m) => {
       memberMap[m._id.toString()] = m;
     });
-
     // ── 3. Parse Excel ───────────────────────────────────────────────────────
     const bytes = await file.arrayBuffer();
     const wb = XLSX.read(Buffer.from(bytes), { type: "buffer" });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rawRows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-
     const errors = [];
     const warnings = [];
-
     // ── 4. Column validation ─────────────────────────────────────────────────
     const REQUIRED_COLS = [
       "MemberId",
@@ -156,7 +138,6 @@ export async function POST(request) {
     const excelCols = rawRows.length ? Object.keys(rawRows[0]) : [];
     const colChecks = {};
     const headNames = heads.map((h) => h.headName);
-
     for (const col of REQUIRED_COLS) {
       colChecks[col] = excelCols.includes(col) ? "pass" : "fail";
       if (!excelCols.includes(col))
@@ -165,7 +146,6 @@ export async function POST(request) {
     for (const head of headNames) {
       colChecks[head] = excelCols.includes(head) ? "pass" : "missing";
     }
-
     if (errors.length > 0) {
       return NextResponse.json({
         passed: false,
@@ -179,7 +159,6 @@ export async function POST(request) {
         },
       });
     }
-
     // ── 5. Row-level validation ──────────────────────────────────────────────
     const dataRows = rawRows.filter(
       (r) => !String(r.MemberId || "").startsWith("//"),
@@ -190,7 +169,6 @@ export async function POST(request) {
     const billRows = [];
     let amountMismatches = 0;
     let duplicateCount = 0;
-
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
       const rowNum = i + 2;
@@ -198,7 +176,6 @@ export async function POST(request) {
       const rowMonth = parseInt(row.Month);
       const rowYear = parseInt(row.Year);
       const periodId = `${rowYear}-${String(rowMonth).padStart(2, "0")}`;
-
       // Member exists?
       if (!memberId || !memberMap[memberId]) {
         errors.push(
@@ -224,12 +201,10 @@ export async function POST(request) {
       }
       seenCombo.add(combo);
       foundPeriods.add(periodId);
-
       // Parse amounts
       const prevBal = parseFloat(row.PreviousBalance) || 0;
       const intDue = parseFloat(row.InterestDue) || 0;
       const grand = parseFloat(row.GrandTotal) || 0;
-
       if (isNaN(prevBal) || isNaN(intDue) || isNaN(grand)) {
         errors.push(
           `Row ${rowNum}: Non-numeric amount in PreviousBalance/InterestDue/GrandTotal`,
@@ -244,7 +219,6 @@ export async function POST(request) {
         errors.push(
           `Row ${rowNum}: Negative InterestDue (${intDue}) is invalid`,
         );
-
       // Charges
       const charges = {};
       let chargeSum = 0;
@@ -257,7 +231,6 @@ export async function POST(request) {
       const expectedGrand = parseFloat(
         (subtotal + prevBal + intDue).toFixed(2),
       );
-
       if (Math.abs(expectedGrand - grand) > 0.5) {
         amountMismatches++;
         errors.push(
@@ -266,7 +239,6 @@ export async function POST(request) {
             `(Subtotal ${subtotal} + PrevBal ${prevBal} + Interest ${intDue})`,
         );
       }
-
       billRows.push({
         memberId,
         wing: row.Wing,
@@ -282,7 +254,6 @@ export async function POST(request) {
         grandTotal: grand,
       });
     }
-
     // ── 6. Missing month check ───────────────────────────────────────────────
     const missingMonths = [];
     for (const p of requiredPeriods) {
@@ -291,7 +262,6 @@ export async function POST(request) {
     if (missingMonths.length > 0) {
       errors.push(`Missing bills for periods: ${missingMonths.join(", ")}`);
     }
-
     // Member count check
     if (foundRows > 0 && memberCount !== foundRows / win.totalMonths) {
       warnings.push(
@@ -299,9 +269,7 @@ export async function POST(request) {
           `Excel has ~${Math.round(foundRows / win.totalMonths)} members per month`,
       );
     }
-
     const passed = errors.length === 0;
-
     if (!passed) {
       return NextResponse.json({
         passed: false,
@@ -321,7 +289,6 @@ export async function POST(request) {
         },
       });
     }
-
     // ── 7. All checks passed — store in AuditReport ──────────────────────────
     const existing = await AuditReport.findOne({
       societyId: decoded.societyId,
@@ -363,7 +330,6 @@ export async function POST(request) {
         warnings,
       });
     }
-
     const report = await AuditReport.create({
       societyId: decoded.societyId,
       societyName: society.name,
@@ -394,7 +360,6 @@ export async function POST(request) {
       fileName: file.name,
       fileSize: file.size,
     });
-
     return NextResponse.json({
       success: true,
       reportId: report._id,
@@ -406,7 +371,6 @@ export async function POST(request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 // GET /api/admin/audit-report — fetch own society's report status
 export async function GET(request) {
   try {
@@ -417,11 +381,9 @@ export async function GET(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const report = await AuditReport.findOne({ societyId: decoded.societyId })
       .select("-billRows") // exclude large array from status check
       .lean();
-
     return NextResponse.json({ success: true, report: report || null });
   } catch (err) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

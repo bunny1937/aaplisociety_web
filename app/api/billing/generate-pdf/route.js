@@ -7,19 +7,15 @@ import BillingHead from "@/models/BillingHead";
 import Member from "@/models/Member";
 import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
-
 export async function POST(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const body = await request.json();
     const {
       memberId,
@@ -34,18 +30,14 @@ export async function POST(request) {
       previousBalance,
       totalPayable,
     } = body;
-
     // Fetch data
     const society = await Society.findById(decoded.societyId);
     const member = await Member.findById(memberId);
-
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
-
     let pdfDoc;
     let useTemplate = false;
-
     // **CHECK FOR UPLOADED TEMPLATE**
     if (
       society?.billTemplate?.type === "uploaded" &&
@@ -56,18 +48,14 @@ export async function POST(request) {
         "public",
         society.billTemplate.filePath
       );
-
       if (fs.existsSync(templatePath)) {
         console.log("✅ Loading uploaded template:", templatePath);
         const templateBytes = fs.readFileSync(templatePath);
         pdfDoc = await PDFDocument.load(templateBytes);
         useTemplate = true;
-
         const form = pdfDoc.getForm();
         const fields = form.getFields();
-
         console.log(`📄 Template has ${fields.length} form fields`);
-
         // **FILL FORM FIELDS (if they exist)**
         if (fields.length > 0) {
           const fieldMappings = {
@@ -75,64 +63,47 @@ export async function POST(request) {
             companyName: society?.name || "",
             "Your company name": society?.name || "",
             company: society?.name || "",
-
             address: society?.address || "",
             "Your address": society?.address || "",
-
             // Bill Info
             invoiceNumber: `INV-${billPeriod}-${member.roomNo}`,
             "Invoice number": `INV-${billPeriod}-${member.roomNo}`,
-
             billDate: billDate,
             "Bill date": billDate,
             date: billDate,
-
             dueDate: dueDate,
             "Due Date": dueDate,
-
             billPeriod: billPeriod,
-
             // Customer Info
             customerName: member.ownerName,
             "Customer name": member.ownerName,
             name: member.ownerName,
-
             customerAddress: `${member.wing}-${member.roomNo}`,
             "Customer address": `${member.wing}-${member.roomNo}`,
             flatNo: `${member.wing}-${member.roomNo}`,
-
             customerPhone: member.contact || "",
             "Customer phone": member.contact || "",
             phone: member.contact || "",
-
             area: `${member.areaSqFt} sq ft`,
-
             // Amounts
             subtotal: subtotal.toFixed(2),
             "Sub total": subtotal.toFixed(2),
-
             tax: tax.toFixed(2),
             Tax: tax.toFixed(2),
-
             currentBillTotal: currentBillTotal.toFixed(2),
             "CURRENT BILL TOTAL": currentBillTotal.toFixed(2),
-
             interestCharged: interestCharged.toFixed(2),
             Interest: interestCharged.toFixed(2),
-
             previousBalance: previousBalance.toFixed(2),
             "Previous Balance": previousBalance.toFixed(2),
-
             total: totalPayable.toFixed(2),
             Total: totalPayable.toFixed(2),
             "TOTAL PAYABLE": totalPayable.toFixed(2),
           };
-
           // Fill fields
           fields.forEach((field) => {
             const fieldName = field.getName();
             const value = fieldMappings[fieldName];
-
             try {
               if (field.constructor.name === "PDFTextField" && value) {
                 field.setText(value.toString());
@@ -142,11 +113,9 @@ export async function POST(request) {
               console.log(`⚠️ Could not fill ${fieldName}:`, err.message);
             }
           });
-
           // Fill table rows (items)
           items.forEach((item, index) => {
             const rowIndex = index + 1;
-
             // Try different field name patterns
             const patterns = [
               `description_${rowIndex}`,
@@ -154,20 +123,17 @@ export async function POST(request) {
               `description${rowIndex}`,
               `item_${rowIndex}`,
             ];
-
             patterns.forEach((pattern) => {
               try {
                 const descField = form.getTextField(pattern);
                 if (descField) descField.setText(item.description);
               } catch {}
             });
-
             const amountPatterns = [
               `amount_${rowIndex}`,
               `Amount[${index}]`,
               `amount${rowIndex}`,
             ];
-
             amountPatterns.forEach((pattern) => {
               try {
                 const amountField = form.getTextField(pattern);
@@ -176,11 +142,9 @@ export async function POST(request) {
               } catch {}
             });
           });
-
           // DON'T flatten - keep editable for user
           // form.flatten(); // REMOVE THIS
         }
-
         // **IF NO FORM FIELDS → OVERLAY DATA**
         else {
           console.log("⚠️ No form fields. Overlaying data on template...");
@@ -201,7 +165,6 @@ export async function POST(request) {
         }
       }
     }
-
     // **NO TEMPLATE → CREATE CUSTOM BILL**
     if (!useTemplate) {
       console.log("🆕 No template found. Creating default bill...");
@@ -220,9 +183,7 @@ export async function POST(request) {
         totalPayable,
       });
     }
-
     const pdfBytes = await pdfDoc.save();
-
     return new NextResponse(pdfBytes, {
       headers: {
         "Content-Type": "application/pdf",
@@ -234,7 +195,6 @@ export async function POST(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-
 // **HELPER: Overlay data on non-fillable PDF**
 async function overlayDataOnTemplate(pdfDoc, data) {
   const {
@@ -251,12 +211,10 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     previousBalance,
     totalPayable,
   } = data;
-
   const page = pdfDoc.getPages()[0];
   const { width, height } = page.getSize();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
   // Header
   page.drawText(society?.name || "Society Name", {
     x: width / 2 - 80,
@@ -265,7 +223,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     font: boldFont,
     color: rgb(0, 0, 0),
   });
-
   // Bill Period & Flat
   page.drawText(`Bill Period: ${billPeriod}`, {
     x: 50,
@@ -279,7 +236,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     size: 10,
     font: boldFont,
   });
-
   // Dates & Member Info
   page.drawText(`Bill Date: ${billDate}`, {
     x: 50,
@@ -293,7 +249,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     size: 10,
     font,
   });
-
   page.drawText(`Due Date: ${dueDate}`, {
     x: 50,
     y: height - 260,
@@ -306,7 +261,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     size: 10,
     font,
   });
-
   // Table
   let tableY = height - 310;
   page.drawText("Sr", { x: 50, y: tableY, size: 10, font: boldFont });
@@ -317,7 +271,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     size: 10,
     font: boldFont,
   });
-
   tableY -= 25;
   items.forEach((item, index) => {
     page.drawText(`${index + 1}`, { x: 50, y: tableY, size: 9, font });
@@ -330,7 +283,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     });
     tableY -= 20;
   });
-
   // Totals
   tableY -= 10;
   page.drawText("Subtotal", { x: width - 250, y: tableY, size: 10, font });
@@ -340,7 +292,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     size: 10,
     font,
   });
-
   tableY -= 20;
   page.drawText("Tax (2%)", { x: width - 250, y: tableY, size: 10, font });
   page.drawText(`₹${tax.toFixed(2)}`, {
@@ -349,7 +300,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     size: 10,
     font,
   });
-
   tableY -= 25;
   page.drawText("CURRENT BILL TOTAL", {
     x: width - 250,
@@ -364,7 +314,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     font: boldFont,
     color: rgb(0.8, 0, 0),
   });
-
   if (interestCharged > 0) {
     tableY -= 30;
     page.drawText("Interest Charged", {
@@ -381,7 +330,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
       color: rgb(0.8, 0, 0),
     });
   }
-
   tableY -= 35;
   page.drawText("TOTAL PAYABLE", {
     x: width - 250,
@@ -397,7 +345,6 @@ async function overlayDataOnTemplate(pdfDoc, data) {
     color: rgb(0.8, 0, 0),
   });
 }
-
 // **HELPER: Create default bill from scratch**
 async function createDefaultBill(data) {
   const {
@@ -414,15 +361,12 @@ async function createDefaultBill(data) {
     previousBalance,
     totalPayable,
   } = data;
-
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]); // A4
   const { width, height } = page.getSize();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
   // Same layout as overlay function
   await overlayDataOnTemplate(pdfDoc, data);
-
   return pdfDoc;
 }

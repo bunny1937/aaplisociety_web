@@ -8,7 +8,6 @@
   position: relative;
   overflow: hidden;
 }
-
 /* Ambient glow orbs */
 .authContainer::before {
   content: '';
@@ -20,7 +19,6 @@
   background: radial-gradient(circle, rgba(107, 142, 239, 0.2) 0%, transparent 65%);
   pointer-events: none;
 }
-
 .authContainer::after {
   content: '';
   position: absolute;
@@ -31,7 +29,6 @@
   background: radial-gradient(circle, rgba(165, 180, 252, 0.15) 0%, transparent 65%);
   pointer-events: none;
 }
-
 .authCard {
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(20px);
@@ -44,12 +41,10 @@
   position: relative;
   z-index: 1;
 }
-
 .authHeader {
   text-align: center;
   margin-bottom: 28px;
 }
-
 .authLogoMark {
   width: 52px;
   height: 52px;
@@ -64,7 +59,6 @@
   color: white;
   box-shadow: 0 8px 20px rgba(30, 58, 138, 0.35);
 }
-
 .authTitle {
   font-size: 22px;
   font-weight: 800;
@@ -72,24 +66,19 @@
   margin-bottom: 6px;
   letter-spacing: -0.02em;
 }
-
 .authSubtitle {
   font-size: 13px;
   color: var(--text-secondary);
 }
-
 .formGroup {
   margin-bottom: 18px;
 }
-
 .passwordWrapper {
   position: relative;
 }
-
 .passwordWrapper .input {
   padding-right: 42px;
 }
-
 .passwordToggle {
   position: absolute;
   top: 50%;
@@ -107,41 +96,34 @@
   cursor: pointer;
   border-radius: var(--radius-sm, 6px);
 }
-
 .passwordToggle:hover:not(:disabled) {
   color: var(--text-secondary);
 }
-
 .passwordToggle:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
-
 .passwordToggle:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
-
 .formActions {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
   margin-top: 24px;
 }
-
 .authFooter {
   text-align: center;
   margin-top: var(--spacing-lg);
   font-size: var(--font-sm);
   color: var(--text-secondary);
 }
-
 .authLink {
   color: var(--primary);
   font-weight: 600;
   margin-left: var(--spacing-xs);
 }
-
 .authDivider {
   display: flex;
   align-items: center;
@@ -150,7 +132,6 @@
   color: var(--text-tertiary);
   font-size: 12px;
 }
-
 .authDivider::before,
 .authDivider::after {
   content: '';

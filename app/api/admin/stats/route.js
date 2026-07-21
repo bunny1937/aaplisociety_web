@@ -6,7 +6,6 @@ import Bill from "@/models/Bill";
 import jwt from "jsonwebtoken";
 import { getAdminModels } from "@/lib/admin-models";
 import cache from "@/lib/cache";
-
 export async function GET(request) {
   try {
     // ✅ Simple JWT validation (no API key required)
@@ -17,7 +16,6 @@ export async function GET(request) {
     }
     if (!token)
       return NextResponse.json({ error: "No token provided" }, { status: 401 });
-
     // Verify token
     let decoded;
     try {
@@ -26,19 +24,16 @@ export async function GET(request) {
       console.error("Token verification failed:", error.message);
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     // Check if SuperAdmin
     if (decoded.role !== "SuperAdmin") {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
-
     // Fetch stats
     await connectDB();
     const { Export } = await getAdminModels();
     const cacheKey = `admin:stats:global`;
     const cached = await cache.get(cacheKey);
     if (cached) return NextResponse.json(cached);
-
     const [societyCount, memberCount, billCount, exportCount] =
       await Promise.all([
         Society.countDocuments({ isDeleted: false }),
@@ -46,7 +41,6 @@ export async function GET(request) {
         Bill.countDocuments({}),
         Export.countDocuments({ isRestored: false }),
       ]);
-
     const responseData = {
       success: true,
       societies: societyCount,

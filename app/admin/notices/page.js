@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import styles from "@/styles/AdminNotices.module.css";
-
 const NOTICE_TYPES = [
   "maintenance",
   "meeting",
@@ -22,7 +21,6 @@ const EXPIRY_OPTIONS = [
   { value: "custom", label: "Custom Date" },
   { value: "", label: "No Expiry" },
 ];
-
 const TYPE_ICONS = {
   maintenance: "🔧",
   meeting: "📅",
@@ -40,7 +38,6 @@ const PRIORITY_COLORS = {
   high: { bg: "#fef3c7", color: "#92400e", border: "#fcd34d" },
   urgent: { bg: "#fee2e2", color: "#991b1b", border: "#fca5a5" },
 };
-
 const EMPTY_FORM = {
   type: "maintenance",
   priority: "medium",
@@ -50,7 +47,6 @@ const EMPTY_FORM = {
   expiryOption: "7d",
   customExpiryDate: "",
 };
-
 export default function AdminNoticesPage() {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,12 +60,10 @@ export default function AdminNoticesPage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({});
   const [actionLoading, setActionLoading] = useState({});
-
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
-
   const fetchNotices = async () => {
     setLoading(true);
     try {
@@ -88,11 +82,9 @@ export default function AdminNoticesPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchNotices();
   }, [filterType, filterPriority, page]);
-
   const validate = () => {
     const e = {};
     if (!form.title || form.title.length < 10)
@@ -106,7 +98,6 @@ export default function AdminNoticesPage() {
       e.customExpiryDate = "Please select a date";
     return e;
   };
-
   const handleCreate = async (e) => {
     e.preventDefault();
     const errs = validate();
@@ -132,7 +123,6 @@ export default function AdminNoticesPage() {
       setSubmitting(false);
     }
   };
-
   const handleDelete = async (id) => {
     if (!confirm("Delete this notice? This cannot be undone.")) return;
     setActionLoading({ ...actionLoading, [id]: "delete" });
@@ -151,7 +141,6 @@ export default function AdminNoticesPage() {
       setActionLoading({ ...actionLoading, [id]: null });
     }
   };
-
   const handlePin = async (id, currentPinned) => {
     setActionLoading({ ...actionLoading, [id]: "pin" });
     try {
@@ -171,7 +160,6 @@ export default function AdminNoticesPage() {
       setActionLoading({ ...actionLoading, [id]: null });
     }
   };
-
   const timeAgo = (date) => {
     const diff = (Date.now() - new Date(date)) / 1000;
     if (diff < 60) return "just now";
@@ -179,7 +167,6 @@ export default function AdminNoticesPage() {
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return `${Math.floor(diff / 86400)}d ago`;
   };
-
   return (
     <div className={styles.page}>
       {toast && (
@@ -187,7 +174,6 @@ export default function AdminNoticesPage() {
           {toast.msg}
         </div>
       )}
-
       <div className={styles.pageHeader}>
         <div>
           <h1>Notice Board</h1>
@@ -197,7 +183,6 @@ export default function AdminNoticesPage() {
           + New Notice
         </button>
       </div>
-
       {/* Filters */}
       <div className={styles.filters}>
         <div className={styles.filterGroup}>
@@ -241,7 +226,6 @@ export default function AdminNoticesPage() {
           ))}
         </div>
       </div>
-
       {/* Notices List */}
       {loading ? (
         <div className={styles.loading}>
@@ -309,10 +293,8 @@ export default function AdminNoticesPage() {
                     </button>
                   </div>
                 </div>
-
                 <h3 className={styles.cardTitle}>{n.title}</h3>
                 <p className={styles.cardDesc}>{n.description}</p>
-
                 <div className={styles.cardFooter}>
                   <span className={styles.author}>By {n.createdByName}</span>
                   {n.expiresAt && (
@@ -336,7 +318,6 @@ export default function AdminNoticesPage() {
           })}
         </div>
       )}
-
       {pagination.pages > 1 && (
         <div className={styles.pagination}>
           <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
@@ -353,7 +334,6 @@ export default function AdminNoticesPage() {
           </button>
         </div>
       )}
-
       {/* Create Notice Modal */}
       {showForm && (
         <div className={styles.modalOverlay} onClick={() => setShowForm(false)}>
@@ -398,7 +378,6 @@ export default function AdminNoticesPage() {
                   </select>
                 </div>
               </div>
-
               <div className={styles.field}>
                 <label>
                   Title *{" "}
@@ -416,7 +395,6 @@ export default function AdminNoticesPage() {
                   <span className={styles.error}>{errors.title}</span>
                 )}
               </div>
-
               <div className={styles.field}>
                 <label>
                   Description *{" "}
@@ -438,7 +416,6 @@ export default function AdminNoticesPage() {
                   <span className={styles.error}>{errors.description}</span>
                 )}
               </div>
-
               <div className={styles.formRow}>
                 <div className={styles.field}>
                   <label>Expiry</label>
@@ -477,7 +454,6 @@ export default function AdminNoticesPage() {
                   </div>
                 )}
               </div>
-
               <label className={styles.checkboxLabel}>
                 <input
                   type="checkbox"
@@ -488,7 +464,6 @@ export default function AdminNoticesPage() {
                 />
                 <span>📌 Pin this notice to top</span>
               </label>
-
               <div className={styles.formActions}>
                 <button
                   type="button"

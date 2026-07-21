@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-
 export default function SecurityGuardsPage() {
   const [guards, setGuards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +12,6 @@ export default function SecurityGuardsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
-
   async function loadGuards() {
     setLoading(true);
     try {
@@ -26,11 +24,9 @@ export default function SecurityGuardsPage() {
       setLoading(false);
     }
   }
-
   useEffect(() => {
     loadGuards();
   }, []);
-
   async function handleCreate(e) {
     e.preventDefault();
     setMsg("");
@@ -55,7 +51,6 @@ export default function SecurityGuardsPage() {
       setSaving(false);
     }
   }
-
   async function toggleActive(guardId, current) {
     const res = await fetch(`/api/admin/security-guards/${guardId}`, {
       method: "PATCH",
@@ -65,7 +60,6 @@ export default function SecurityGuardsPage() {
     });
     if (res.ok) loadGuards();
   }
-
   return (
     <div style={{ padding: 24, display: "grid", gap: 24 }}>
       <div
@@ -101,7 +95,6 @@ export default function SecurityGuardsPage() {
           {showForm ? "Cancel" : "+ Add Guard"}
         </button>
       </div>
-
       {msg && (
         <div
           style={{
@@ -116,7 +109,6 @@ export default function SecurityGuardsPage() {
           {msg}
         </div>
       )}
-
       {showForm && (
         <form
           onSubmit={handleCreate}
@@ -237,7 +229,6 @@ export default function SecurityGuardsPage() {
           </button>
         </form>
       )}
-
       <div
         style={{
           background: "#fff",

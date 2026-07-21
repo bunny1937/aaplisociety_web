@@ -3,7 +3,6 @@ import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import * as XLSX from "xlsx";
-
 export async function POST(request) {
   try {
     await connectDB();
@@ -13,15 +12,12 @@ export async function POST(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     const { period } = await request.json();
-
     const query = {
       societyId: decoded.societyId,
       isDeleted: { $ne: true },
     };
     if (period) query.billPeriodId = period;
-
     const bills = await Bill.find(query)
       .populate(
         "memberId",
@@ -29,17 +25,14 @@ export async function POST(request) {
       )
       .sort({ billYear: -1, billMonth: -1, "memberId.wing": 1 })
       .lean();
-
     if (!bills.length) {
       return NextResponse.json(
         { error: "No bills found for this period" },
         { status: 404 },
       );
     }
-
     // Normalize charge key — strip slot number suffix like " (P-A-101)"
     const normalizeKey = (k) => k.replace(/\s*\(P-[A-Z]-\d+\)\s*$/i, "").trim();
-
     // Collect all unique normalized charge head names
     const allHeads = new Set();
     bills.forEach((b) => {
@@ -48,7 +41,6 @@ export async function POST(request) {
       );
     });
     const headCols = [...allHeads].sort();
-
     const rows = bills.map((b) => {
       const row = {
         "Bill Period": b.billPeriodId || "",
@@ -82,24 +74,19 @@ export async function POST(request) {
         : "";
       return row;
     });
-
     const ws = XLSX.utils.json_to_sheet(rows);
-
     // Auto column widths
     const colWidths = Object.keys(rows[0] || {}).map((k) => ({
       wch: Math.max(k.length + 2, 14),
     }));
     ws["!cols"] = colWidths;
-
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
       wb,
       ws,
       period ? `Bills_${period}` : "All_Bills",
     );
-
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-
     const filename = period ? `Bills-${period}.xlsx` : `Bills-All.xlsx`;
     return new NextResponse(buf, {
       headers: {

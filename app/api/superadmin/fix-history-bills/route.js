@@ -17,18 +17,14 @@ import Bill from "@/models/Bill";
 import Member from "@/models/Member";
 import mongoose from "mongoose";
 import { validateAdminRequest } from "@/lib/admin-middleware";
-
 export async function GET(request) {
   const authResult = validateAdminRequest(request);
   if (!authResult?.valid) return authResult;
-
   const { searchParams } = new URL(request.url);
   const societyId = searchParams.get("societyId");
   if (!societyId) return NextResponse.json({ error: "societyId required" }, { status: 400 });
-
   await connectDB();
   const sid = new mongoose.Types.ObjectId(societyId);
-
   const unpaid = await Bill.find({
     societyId: sid,
     status: { $in: ["Unpaid", "Partial", "Overdue"] },
@@ -38,7 +34,6 @@ export async function GET(request) {
     .populate("memberId", "flatNo wing")
     .sort({ billPeriodId: 1 })
     .lean();
-
   return NextResponse.json({
     count: unpaid.length,
     bills: unpaid.map((b) => ({
@@ -50,24 +45,19 @@ export async function GET(request) {
     })),
   });
 }
-
 export async function POST(request) {
   const authResult = validateAdminRequest(request);
   if (!authResult?.valid) return authResult;
-
   const { societyId, beforePeriodId } = await request.json();
   if (!societyId) return NextResponse.json({ error: "societyId required" }, { status: 400 });
-
   await connectDB();
   const sid = new mongoose.Types.ObjectId(societyId);
-
   // Match: importedFrom=BulkImport OR (beforePeriodId provided AND billPeriodId < beforePeriodId)
   const orClauses = [{ importedFrom: "BulkImport" }];
   if (beforePeriodId) {
     // billPeriodId is "YYYY-MM" string — lexicographic comparison works
     orClauses.push({ billPeriodId: { $lt: beforePeriodId } });
   }
-
   const result = await Bill.updateMany(
     {
       societyId: sid,
@@ -94,7 +84,6 @@ export async function POST(request) {
       },
     },
   );
-
   return NextResponse.json({
     success: true,
     matched: result.matchedCount,

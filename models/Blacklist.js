@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 /**
  * Blacklist / Watchlist — society-scoped list of visitors who should be
  * flagged (and optionally blocked) at the gate.
@@ -18,7 +17,6 @@ const BlacklistSchema = new mongoose.Schema(
     phone: { type: String, trim: true, default: "", index: true }, // normalized digits
     reason: { type: String, trim: true, required: true, maxlength: 300 },
     photo: { type: String, trim: true, default: "" },
-
     // 'flag' = allow but warn the guard · 'block' = deny entry outright
     severity: {
       type: String,
@@ -26,7 +24,6 @@ const BlacklistSchema = new mongoose.Schema(
       default: "flag",
       index: true,
     },
-
     addedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -36,15 +33,12 @@ const BlacklistSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 BlacklistSchema.index({ societyId: 1, phone: 1, active: 1 });
 BlacklistSchema.index({ societyId: 1, active: 1, createdAt: -1 });
-
 // Normalize a phone to comparable digits (last 10).
 BlacklistSchema.statics.normalizePhone = function (phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   return digits.length > 10 ? digits.slice(-10) : digits;
 };
-
 export default mongoose.models.Blacklist ||
   mongoose.model("Blacklist", BlacklistSchema);

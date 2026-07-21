@@ -1,9 +1,7 @@
 "use client";
-
 import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import styles from "@/styles/ImportMembers.module.css";
-
 export default function ImportMembersPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
@@ -13,34 +11,27 @@ export default function ImportMembersPage() {
   const [activeSheet, setActiveSheet] = useState(0);
   const [importResults, setImportResults] = useState(null);
   const [currentFile, setCurrentFile] = useState(null); // ← STORE FILE
-
   // PREVIEW MUTATION (confirmImport=false)
   const previewMutation = useMutation({
     mutationFn: async (file) => {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("confirmImport", "false"); // ← KEY CHANGE
-
       setUploadProgress({ stage: "analyzing", percent: 30 });
-
       const response = await fetch("/api/members/import", {
         // ← SAME API
         method: "POST",
         credentials: "include",
         body: formData,
       });
-
       setUploadProgress({ stage: "validating", percent: 60 });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Preview failed");
       }
-
       const data = await response.json();
       console.log("🔥 VALIDATION RESPONSE:", data.validation); // ← ADD THIS
       console.log("🔥 ISSUES COUNT:", data.validation.issues.length); // ← ADD THIS
-
       return data;
     },
     onSuccess: (data) => {
@@ -53,30 +44,24 @@ export default function ImportMembersPage() {
       alert(`Preview failed: ${error.message}`);
     },
   });
-
   // CONFIRM MUTATION (confirmImport=true)
   const confirmMutation = useMutation({
     mutationFn: async (file) => {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("confirmImport", "true"); // ← KEY CHANGE
-
       setUploadProgress({ stage: "importing", percent: 20 });
-
       const response = await fetch("/api/members/import", {
         // ← SAME API
         method: "POST",
         credentials: "include",
         body: formData,
       });
-
       setUploadProgress({ stage: "processing", percent: 70 });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Import failed");
       }
-
       return response.json();
     },
     onSuccess: (data) => {
@@ -92,7 +77,6 @@ export default function ImportMembersPage() {
       alert(`Import failed: ${error.message}`);
     },
   });
-
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -102,28 +86,23 @@ export default function ImportMembersPage() {
       setDragActive(false);
     }
   };
-
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     const files = e.dataTransfer.files;
     if (files && files[0]) {
       handleFile(files[0]);
     }
   };
-
   const handleFile = async (file) => {
     if (!file.name.endsWith(".xlsx")) {
       alert("Please upload a valid .xlsx file");
       return;
     }
-
     setCurrentFile(file); // ← STORE FOR LATER
     previewMutation.mutate(file);
   };
-
   const handleConfirm = () => {
     if (!currentFile) {
       alert("File not found. Please re-upload.");
@@ -131,7 +110,6 @@ export default function ImportMembersPage() {
     }
     confirmMutation.mutate(currentFile); // ← USE STORED FILE
   };
-
   const downloadTemplate = () => {
     const link = document.createElement("a");
     link.href = "/api/members/template";
@@ -140,10 +118,8 @@ export default function ImportMembersPage() {
     link.click();
     document.body.removeChild(link);
   };
-
   const downloadCredentials = async () => {
     if (!importResults?.userCredentials) return;
-
     try {
       const response = await fetch("/api/members/download-credentials", {
         method: "POST",
@@ -151,9 +127,7 @@ export default function ImportMembersPage() {
         credentials: "include",
         body: JSON.stringify({ credentials: importResults.userCredentials }),
       });
-
       if (!response.ok) throw new Error("Download failed");
-
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -168,27 +142,21 @@ export default function ImportMembersPage() {
       alert("Failed to download credentials");
     }
   };
-
   const getCellStyle = (sheetName, rowIndex, colIndex) => {
     if (!previewData?.validation?.issues || rowIndex === 0) {
       if (rowIndex === 0)
         return { backgroundColor: "#F3F4F6", fontWeight: 700 };
       return { backgroundColor: "#D1FAE5" };
     }
-
     const issue = previewData.validation.issues.find(
       (i) => i.sheet === sheetName && i.row === rowIndex + 1,
     );
-
     if (!issue) return { backgroundColor: "#D1FAE5" };
-
     const headers = previewData.sheets[sheetName][0];
     const header = headers[colIndex]?.value;
-
     // ✅ STEP 1: If THIS SPECIFIC CELL has an issue, show STRONG styling
     if (header && issue.cellIssues[header]) {
       const issueType = issue.cellIssues[header].type;
-
       switch (issueType) {
         case "ERROR":
           return {
@@ -210,43 +178,32 @@ export default function ImportMembersPage() {
           return {};
       }
     }
-
     // ✅ STEP 2: If THIS ROW has ANY issues, make whole row LIGHT RED/YELLOW
     const issueTypes = Object.values(issue.cellIssues).map((ci) => ci.type);
-
     if (issueTypes.includes("ERROR")) {
       return { backgroundColor: "#FEE2E2", fontStyle: "italic" }; // Light pink for error rows
     }
-
     if (
       issueTypes.includes("DUPLICATE_DB") ||
       issueTypes.includes("DUPLICATE_FILE")
     ) {
       return { backgroundColor: "#FFE5E5", fontStyle: "italic" }; // Very light red for duplicate rows
     }
-
     if (issueTypes.includes("WARNING")) {
       return { backgroundColor: "#FFF9E6", fontStyle: "italic" }; // Very light yellow for warning rows
     }
-
     return {};
   };
-
   const getCellTooltip = (sheetName, rowIndex, colIndex) => {
     if (!previewData?.validation?.issues || rowIndex === 0) return null;
-
     const issue = previewData.validation.issues.find(
       (i) => i.sheet === sheetName && i.row === rowIndex + 1,
     );
-
     if (!issue) return null;
-
     const headers = previewData.sheets[sheetName][0];
     const header = headers[colIndex]?.value;
-
     return issue.cellIssues[header]?.message || null;
   };
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -255,7 +212,6 @@ export default function ImportMembersPage() {
           Upload Excel → Preview & Validate → Confirm Import
         </p>
       </div>
-
       {/* Upload Progress */}
       {uploadProgress && (
         <div className={styles.progressCard}>
@@ -281,7 +237,6 @@ export default function ImportMembersPage() {
           <p className={styles.progressText}>{uploadProgress.percent}%</p>
         </div>
       )}
-
       {/* PREVIEW MODE */}
       {previewData && !importResults && (
         <>
@@ -330,14 +285,12 @@ export default function ImportMembersPage() {
                   <span className={styles.statLabel}>⚠️ Warnings</span>
                 </div>
               </div>
-
               {!previewData.validation.summary.canImport && (
                 <div className={styles.errorBanner}>
                   ❌ Cannot import: Fix all errors and duplicates first, then
                   re-upload
                 </div>
               )}
-
               {previewData.validation.summary.canImport && (
                 <div className={styles.successBanner}>
                   ✅ All validations passed! Ready to import{" "}
@@ -345,7 +298,6 @@ export default function ImportMembersPage() {
                 </div>
               )}
             </div>
-
             {/* Legend */}
             <div className={styles.legend}>
               <h4>🎨 Color Guide:</h4>
@@ -384,7 +336,6 @@ export default function ImportMembersPage() {
               </div>
             </div>
           </div>
-
           {/* Sheet Tabs */}
           <div className={styles.sheetTabs}>
             {Object.keys(previewData.sheets).map((sheetName, index) => (
@@ -397,7 +348,6 @@ export default function ImportMembersPage() {
               </button>
             ))}
           </div>
-
           {/* Excel Preview Table */}
           <div className={styles.previewTable}>
             <table>
@@ -417,7 +367,6 @@ export default function ImportMembersPage() {
                         rowIndex,
                         colIndex,
                       );
-
                       return (
                         <td
                           key={colIndex}
@@ -433,7 +382,6 @@ export default function ImportMembersPage() {
               </tbody>
             </table>
           </div>
-
           {/* Actions */}
           <div className={styles.actions}>
             <button
@@ -461,7 +409,6 @@ export default function ImportMembersPage() {
           </div>
         </>
       )}
-
       {/* Import Results */}
       {importResults && (
         <div className={styles.resultsCard}>
@@ -474,7 +421,6 @@ export default function ImportMembersPage() {
               ✕
             </button>
           </div>
-
           <div className={styles.statsGrid}>
             <div className={`${styles.statBox} ${styles.success}`}>
               <div className={styles.statIcon}>✅</div>
@@ -483,7 +429,6 @@ export default function ImportMembersPage() {
               </div>
               <div className={styles.statLabel}>Successfully Imported</div>
             </div>
-
             <div className={`${styles.statBox} ${styles.warning}`}>
               <div className={styles.statIcon}>⚠️</div>
               <div className={styles.statValue}>
@@ -491,7 +436,6 @@ export default function ImportMembersPage() {
               </div>
               <div className={styles.statLabel}>Warnings</div>
             </div>
-
             <div className={`${styles.statBox} ${styles.error}`}>
               <div className={styles.statIcon}>❌</div>
               <div className={styles.statValue}>
@@ -499,7 +443,6 @@ export default function ImportMembersPage() {
               </div>
               <div className={styles.statLabel}>Failed</div>
             </div>
-
             <div className={`${styles.statBox} ${styles.info}`}>
               <div className={styles.statIcon}>📊</div>
               <div className={styles.statValue}>
@@ -508,7 +451,6 @@ export default function ImportMembersPage() {
               <div className={styles.statLabel}>Total Records</div>
             </div>
           </div>
-
           {/* Detailed Checklist */}
           <div className={styles.checklist}>
             <h3>📋 Import Checklist</h3>
@@ -572,7 +514,6 @@ export default function ImportMembersPage() {
               )}
             </div>
           </div>
-
           {/* Warnings */}
           {importResults.warnings && importResults.warnings.length > 0 && (
             <div className={styles.warningsList}>
@@ -587,7 +528,6 @@ export default function ImportMembersPage() {
               ))}
             </div>
           )}
-
           {/* Errors */}
           {importResults.errors && importResults.errors.length > 0 && (
             <div className={styles.errorsList}>
@@ -605,7 +545,6 @@ export default function ImportMembersPage() {
               ))}
             </div>
           )}
-
           {/* Download Credentials */}
           {importResults.userCredentials &&
             importResults.userCredentials.length > 0 && (
@@ -622,7 +561,6 @@ export default function ImportMembersPage() {
             )}
         </div>
       )}
-
       {/* Upload Area (Initial State) */}
       {!previewData && !importResults && (
         <div className={styles.uploadSection}>
@@ -640,12 +578,10 @@ export default function ImportMembersPage() {
               <li>Make sure flatNo matches across all sheets</li>
               <li>Upload the completed file for preview</li>
             </ol>
-
             <button onClick={downloadTemplate} className={styles.templateBtn}>
               📄 Download Enhanced Template
             </button>
           </div>
-
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -658,7 +594,6 @@ export default function ImportMembersPage() {
             <h3>Drag & Drop Excel File Here</h3>
             <p>or click to browse</p>
             <p className={styles.fileFormat}>Supports: .xlsx files only</p>
-
             <input
               ref={fileInputRef}
               type="file"
@@ -671,7 +606,6 @@ export default function ImportMembersPage() {
               style={{ display: "none" }}
             />
           </div>
-
           <div className={styles.featuresGrid}>
             <div className={styles.featureCard}>
               <div className={styles.featureIcon}>👤</div>

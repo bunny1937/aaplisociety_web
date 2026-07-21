@@ -10,40 +10,31 @@ import { requireSecurity } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { sendInApp } from "@/lib/visitor-channels";
 import { stopEscalation } from "@/lib/escalation";
-
 const ADMITTABLE = ["Pending", "Approved", "Expired"];
-
 export async function PATCH(request) {
   const auth = requireSecurity(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { visitorId } = await request.json();
     if (!visitorId || !mongoose.Types.ObjectId.isValid(visitorId))
       return NextResponse.json({ error: "Valid visitorId required" }, { status: 400 });
-
     const visitor = await Visitor.findOne({ _id: visitorId, societyId: auth.user.societyId });
     if (!visitor)
       return NextResponse.json({ error: "Visitor not found" }, { status: 404 });
-
     if (!ADMITTABLE.includes(visitor.status))
       return NextResponse.json(
         { error: `Cannot admit visitor with status: ${visitor.status}` },
         { status: 409 },
       );
-
     await stopEscalation(visitor);
-
     visitor.status = "Entered";
     visitor.entryTime = new Date();
     visitor.approvedBy = auth.user.userId;
     visitor.approvedAt = new Date();
     visitor.approverRole = "Security";
     await visitor.save();
-
     const member = await Member.findById(visitor.memberId).select("flatNo wing").lean();
-
     await sendInApp({
       societyId: auth.user.societyId,
       createdBy: auth.user.userId,
@@ -56,13 +47,11 @@ export async function PATCH(request) {
       actionUrl: "/member/visitors",
       metadata: { visitorId: visitor._id.toString() },
     });
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_GUARD_ADMIT", null, {
       visitorId: visitor._id.toString(),
       flat: member ? `${member.wing || ""}-${member.flatNo}` : "",
       previousStatus: visitor.status,
     });
-
     return NextResponse.json({ success: true, status: "Entered" });
   } catch (err) {
     console.error("Visitor guard-admit error", err);

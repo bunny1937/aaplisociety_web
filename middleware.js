@@ -1,17 +1,14 @@
 // middleware.js
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-
 const ALLOWED_ORIGIN =
   process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
 // Extra CSRF-allowed origins (comma-separated). Use for tunnels like ngrok.
 // e.g. ALLOWED_ORIGINS="https://nguyet-diffusible-madonna.ngrok-free.dev"
 const EXTRA_ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
-
 async function parseJwt(t, secretEnvKey = "JWT_SECRET") {
   try {
     const secret = new TextEncoder().encode(process.env[secretEnvKey]);
@@ -21,11 +18,9 @@ async function parseJwt(t, secretEnvKey = "JWT_SECRET") {
     return null;
   }
 }
-
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
   const method = request.method;
-
   // API routes: only do CSRF check, then pass through — never redirect to login page
   if (pathname.startsWith("/api/")) {
     const isUnsafeMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
@@ -37,10 +32,8 @@ export async function middleware(request) {
       const isTestBypass =
         process.env.NODE_ENV !== "production" &&
         request.headers.get("x-test-mode") === "true";
-
       // Allowed origins: the canonical app URL + any explicit extras.
       const allowedOrigins = [ALLOWED_ORIGIN, ...EXTRA_ALLOWED_ORIGINS];
-
       // DEV ONLY: also accept same-origin requests (Origin host === Host header).
       // Lets you tunnel via ngrok / LAN IP on mobile without hardcoding URLs.
       // Hard-disabled in production.
@@ -53,20 +46,16 @@ export async function middleware(request) {
           isSameOriginDev = false;
         }
       }
-
       const originOk =
         !!origin && (allowedOrigins.includes(origin) || isSameOriginDev);
-
       if (!isTestBypass && !originOk) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
     return NextResponse.next();
   }
-
   const token = request.cookies.get("token")?.value;
   const adminToken = request.cookies.get("admin_token")?.value;
-
   // ── PUBLIC ROUTES ─────────────────────────────────────────────────────────
   const publicRoutes = [
     "/auth/login",
@@ -80,7 +69,6 @@ export async function middleware(request) {
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next();
   }
-
   // ── ROOT REDIRECT ─────────────────────────────────────────────────────────
   if (pathname === "/") {
     if (adminToken) {
@@ -105,7 +93,6 @@ export async function middleware(request) {
       ) {
         return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       }
-
       // Member token: new shape has activeProfileId, no role
       // Old shape: role === "Member"
       if (payload?.activeProfileId || payload?.role === "Member") {
@@ -114,7 +101,6 @@ export async function middleware(request) {
     }
     return NextResponse.next();
   }
-
   // ── SUPERADMIN ROUTES ─────────────────────────────────────────────────────
   if (pathname.startsWith("/superadmin")) {
     if (!adminToken) {
@@ -126,7 +112,6 @@ export async function middleware(request) {
     }
     return NextResponse.next();
   }
-
   // ── ADMIN + MEMBER PROTECTED ROUTES ──────────────────────────────────────
   if (!token) {
     if (pathname.startsWith("/security")) {
@@ -134,7 +119,6 @@ export async function middleware(request) {
     }
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
-
   const payload = await parseJwt(token);
   if (!payload) {
     if (pathname.startsWith("/security")) {
@@ -142,7 +126,6 @@ export async function middleware(request) {
     }
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
-
   // Determine effective role:
   // - Admin/Secretary: payload.role present
   // - Member (new JWT): payload.activeProfileId present, no role
@@ -154,7 +137,6 @@ export async function middleware(request) {
     payload.role === "SOCIETY_ADMIN";
   const isMember = payload.role === "Member" || !!payload.activeProfileId;
   const isSecurity = payload.role === "Security";
-
   // /admin exact → redirect to dashboard
   if (pathname === "/admin") {
     return NextResponse.redirect(new URL("/admin/dashboard", request.url));
@@ -164,7 +146,6 @@ export async function middleware(request) {
   if (pathname.startsWith("/admin") && !isAdmin) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
-
   if (pathname.startsWith("/member") && !isMember) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
@@ -173,7 +154,6 @@ export async function middleware(request) {
   }
   return NextResponse.next();
 }
-
 export const config = {
   matcher: [
     "/",

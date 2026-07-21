@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const ComplaintReplySchema = new mongoose.Schema(
   {
     complaintId: {
@@ -37,8 +36,6 @@ const ComplaintReplySchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 ComplaintReplySchema.index({ complaintId: 1, createdAt: 1 });
-
 export default mongoose.models.ComplaintReply ||
   mongoose.model("ComplaintReply", ComplaintReplySchema);

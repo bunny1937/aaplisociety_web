@@ -3,21 +3,17 @@ import connectDB from "@/lib/mongodb";
 import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import cache from "@/lib/cache";
-
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     const cacheKey = `society:config:${decoded.societyId}`;
     const society = await cache.getOrSet(
       cacheKey,

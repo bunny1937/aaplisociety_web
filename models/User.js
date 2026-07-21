@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 // ─── Profile sub-document (one per society membership) ───────────────────────
 const ProfileSchema = new mongoose.Schema(
   {
@@ -31,7 +30,6 @@ const ProfileSchema = new mongoose.Schema(
   },
   { _id: false },
 );
-
 // ─── Main User schema ─────────────────────────────────────────────────────────
 const UserSchema = new mongoose.Schema(
   {
@@ -40,7 +38,6 @@ const UserSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-
     // username: for Member login  (GH_TANVIB_1001_27)
     // sparse so Admin docs can omit it without unique conflicts
     username: {
@@ -48,7 +45,6 @@ const UserSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-
     email: {
       type: String,
       lowercase: true,
@@ -56,17 +52,14 @@ const UserSchema = new mongoose.Schema(
       // NOT unique at schema level — uniqueness enforced by app logic
       // (same person can appear in multiple societies with same email)
     },
-
     phone: {
       type: String,
       trim: true,
     },
-
     password: {
       type: String,
       required: true,
     },
-
     // ── Admin / Secretary accounts keep root-level fields ──────────────────
     // Member accounts: role="Member", societyId/memberId live inside profiles[]
     role: {
@@ -99,12 +92,10 @@ const UserSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       // points to profiles[n].profileId for the current session
     },
-
     isActive: {
       type: Boolean,
       default: true,
     },
-
     // True for members created via bulk-import until they complete the
     // onboarding "set your own credentials" flow (auto-generated username
     // and temp password aren't meant to be permanent).
@@ -115,7 +106,6 @@ const UserSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
 // ── Indexes ───────────────────────────────────────────────────────────────────
 UserSchema.index({ username: 1 }, { unique: true, sparse: true });
 UserSchema.index({ email: 1 });
@@ -123,5 +113,4 @@ UserSchema.index({ phone: 1 });
 UserSchema.index({ "profiles.memberId": 1 });
 UserSchema.index({ "profiles.societyId": 1 });
 UserSchema.index({ societyId: 1 }); // existing admin queries still fast
-
 export default mongoose.models.User || mongoose.model("User", UserSchema);

@@ -6,40 +6,33 @@ import cache from "@/lib/cache";
 export async function PUT(request, { params }) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const decoded = verifyToken(token);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
-
     if (decoded.role === "Accountant") {
       return NextResponse.json(
         { error: "Insufficient permissions" },
         { status: 403 },
       );
     }
-
     const { id } = await params;
     const updates = await request.json();
-
     const head = await BillingHead.findOne({
       _id: id,
       societyId: decoded.societyId,
       isDeleted: false,
     });
-
     if (!head) {
       return NextResponse.json(
         { error: "Billing head not found" },
         { status: 404 },
       );
     }
-
     // Update allowed fields
     const allowedUpdates = [
       "headName",
@@ -53,10 +46,8 @@ export async function PUT(request, { params }) {
         head[key] = updates[key];
       }
     });
-
     head.lastModifiedAt = new Date();
     head.lastModifiedBy = decoded.userId;
-
     await head.save();
     await cache.del(`billing-heads:list:${decoded.societyId}`);
     await cache.del(`society:config:${decoded.societyId}`);

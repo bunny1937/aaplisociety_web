@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -15,7 +14,6 @@ import {
   tokens,
   fmtTime,
 } from "@/components/visitor/ui";
-
 async function api(url) {
   const res = await fetch(url, { credentials: "include" });
   let data = null;
@@ -25,7 +23,6 @@ async function api(url) {
   if (!res.ok) throw new Error((data && data.error) || "Request failed");
   return data;
 }
-
 const S = {
   section: { marginTop: 22 },
   sectionHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
@@ -47,7 +44,6 @@ const S = {
   rowName: { fontWeight: 600, color: tokens.text },
   rowMeta: { fontSize: 12, color: tokens.sub, marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
 };
-
 function rangeBtn(active) {
   return {
     padding: "6px 12px",
@@ -60,14 +56,12 @@ function rangeBtn(active) {
     cursor: "pointer",
   };
 }
-
 export default function AdminVisitorsOverview() {
   const [summary, setSummary] = useState({});
   const [recent, setRecent] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -83,17 +77,14 @@ export default function AdminVisitorsOverview() {
       setLoading(false);
     }
   }, [days]);
-
   useEffect(() => {
     load();
   }, [load]);
-
   const total = Object.values(summary).reduce((a, b) => a + b, 0);
   const maxPurpose = analytics ? Math.max(1, ...analytics.byPurpose.map((p) => p.count)) : 1;
   const maxHour = analytics ? Math.max(1, ...analytics.byHour.map((h) => h.count)) : 1;
   const hourMap = {};
   if (analytics) analytics.byHour.forEach((h) => (hourMap[h._id] = h.count));
-
   return (
     <div>
       <PageHeader
@@ -105,7 +96,6 @@ export default function AdminVisitorsOverview() {
           </Link>
         }
       />
-
       <div style={grid(170)}>
         <StatCard label="Total visitors" value={total} icon="👥" />
         <StatCard label="Inside now" value={summary.Entered || 0} color={tokens.success} icon="🟢" />
@@ -119,7 +109,6 @@ export default function AdminVisitorsOverview() {
           icon="⚡"
         />
       </div>
-
       {loading ? (
         <div style={S.center}>
           <Spinner size={28} />
@@ -189,7 +178,6 @@ export default function AdminVisitorsOverview() {
               </Card>
             </div>
           </div>
-
           <div style={S.section}>
             <div style={S.sectionHead}>
               <div style={S.sectionTitle}>Recent activity</div>

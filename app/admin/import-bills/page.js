@@ -1,19 +1,15 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import * as XLSX from "xlsx";
 import styles from "@/styles/ImportBills.module.css";
 import DropZone from "../../../components/DropZone";
-
 export default function ImportBillsPage() {
   const queryClient = useQueryClient();
-
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [step, setStep] = useState(1);
-
   // Fetch billing config to get dynamic columns
   const { data: configData } = useQuery({
     queryKey: ["billing-config-for-import"],
@@ -25,17 +21,14 @@ export default function ImportBillsPage() {
       return { society: society.society, heads: heads.heads };
     },
   });
-
   // Generate dynamic template
   const downloadTemplate = () => {
     if (!configData) {
       alert("Loading configuration...");
       return;
     }
-
     const society = configData.society;
     const heads = configData.heads;
-
     // Build template headers
     const headers = [
       "Member ID",
@@ -51,17 +44,14 @@ export default function ImportBillsPage() {
       "Security",
       "Electricity",
     ];
-
     // Add custom billing heads
     heads.forEach((head) => {
       if (!headers.includes(head.headName)) {
         headers.push(head.headName);
       }
     });
-
     headers.push("Notes");
     headers.push("Total Amount"); // Calculate or enter manually
-
     // Create sample row
     const sampleRow = [
       "670e123456789abc", // Member ID
@@ -77,24 +67,18 @@ export default function ImportBillsPage() {
       "150",
       "100",
     ];
-
     // Add sample values for custom heads
     heads.forEach((head) => {
       sampleRow.push("0");
     });
-
     sampleRow.push("Regular bill"); // Notes
     sampleRow.push("5450"); // Total
-
     // Create workbook
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
-
     // Set column widths
     ws["!cols"] = headers.map(() => ({ wch: 15 }));
-
     XLSX.utils.book_append_sheet(wb, ws, "Bills Template");
-
     // Add instructions sheet
     const instructionsData = [
       ["Import Bills - Instructions"],
@@ -122,26 +106,21 @@ export default function ImportBillsPage() {
       ["- Previous balance auto-added"],
       ["- Fill only required columns, rest can be 0"],
     ];
-
     const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData);
     wsInstructions["!cols"] = [{ wch: 50 }];
     XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
-
     // Download
     XLSX.writeFile(wb, `Bills_Import_Template_${new Date().getTime()}.xlsx`);
   };
-
   // Validate file
   const validateMutation = useMutation({
     mutationFn: async (file) => {
       const formData = new FormData();
       formData.append("file", file);
-
       const response = await fetch(`/api/bills/import?action=preview`, {
         credentials: "include",
         body: formData,
       });
-
       if (!response.ok) throw new Error("Validation failed");
       return response.json();
     },
@@ -153,7 +132,6 @@ export default function ImportBillsPage() {
       alert("Validation failed: " + error.message);
     },
   });
-
   // Confirm import
   const confirmMutation = useMutation({
     mutationFn: async () => {
@@ -163,7 +141,6 @@ export default function ImportBillsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ batchId: preview.batchId }),
       });
-
       if (!response.ok) throw new Error("Import failed");
       return response.json();
     },
@@ -173,30 +150,24 @@ export default function ImportBillsPage() {
       queryClient.invalidateQueries(["view-bills"]);
     },
   });
-
   const handleFileChange = (selectedFile) => {
     if (!selectedFile) return;
-
     if (!selectedFile.name.match(/\.(xlsx|xls)$/)) {
       alert("Only Excel files (.xlsx, .xls) are allowed");
       return;
     }
-
     if (selectedFile.size > 10 * 1024 * 1024) {
       alert("File size must be less than 10MB");
       return;
     }
-
     setFile(selectedFile);
   };
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>📥 Import Bills</h1>
         <p>Bulk import bills using Excel template with dynamic columns</p>
       </div>
-
       {/* Step 1: Upload */}
       {step === 1 && (
         <div className={styles.uploadSection}>
@@ -213,7 +184,6 @@ export default function ImportBillsPage() {
               <li>System validates duplicates and calculates totals</li>
               <li>Import up to 1000 bills at once</li>
             </ul>
-
             <button
               onClick={downloadTemplate}
               className="btn btn-primary btn-lg"
@@ -221,7 +191,6 @@ export default function ImportBillsPage() {
               📥 Download Dynamic Template
             </button>
           </div>
-
           <div className={styles.uploadCard}>
             <DropZone
               accept=".xlsx,.xls"
@@ -232,7 +201,6 @@ export default function ImportBillsPage() {
               hint=".xlsx or .xls — max 10MB"
               style={{ marginBottom: "1rem" }}
             />
-
             <button
               onClick={() => validateMutation.mutate(file)}
               disabled={!file || validateMutation.isPending}
@@ -245,7 +213,6 @@ export default function ImportBillsPage() {
           </div>
         </div>
       )}
-
       {/* Step 2: Preview & Validation */}
       {step === 2 && preview && (
         <div className={styles.previewSection}>
@@ -267,7 +234,6 @@ export default function ImportBillsPage() {
               <div className={styles.statLabel}>🔁 Duplicates</div>
             </div>
           </div>
-
           {/* Errors */}
           {preview.errors > 0 && (
             <div
@@ -287,7 +253,6 @@ export default function ImportBillsPage() {
               </p>
             </div>
           )}
-
           {/* Duplicates */}
           {preview.duplicates > 0 && (
             <div
@@ -305,7 +270,6 @@ export default function ImportBillsPage() {
               </ul>
             </div>
           )}
-
           {/* Preview Table */}
           <div className={styles.tableCard}>
             <h3>📊 Preview (First 20 rows)</h3>
@@ -351,7 +315,6 @@ export default function ImportBillsPage() {
               </table>
             </div>
           </div>
-
           {/* Actions */}
           <div className={styles.actionButtons}>
             <button
@@ -376,14 +339,12 @@ export default function ImportBillsPage() {
           </div>
         </div>
       )}
-
       {/* Step 3: Success */}
       {step === 3 && (
         <div className={styles.successSection}>
           <div className={styles.successIcon}>🎉</div>
           <h2>Import Successful!</h2>
           <p>{preview?.valid} bills imported successfully</p>
-
           <div className={styles.successActions}>
             <button
               onClick={() => (window.location.href = "/admin/view-bills")}

@@ -1,7 +1,6 @@
 // FILE: app/api/payments/late-list/route.js
 // COMPANION to Change 15 — provides data for Late Payments admin page
 // Returns all members whose oldest unpaid bill is past billPayFinalDate
-
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
@@ -9,29 +8,23 @@ import Member from "@/models/Member";
 import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { getBillPayFinalDate } from "../../../../utils/interestUtils";
-
 export async function GET(request) {
   try {
     await connectDB();
-
     const token = getTokenFromRequest(request);
     if (!token)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
     // Must be Admin or Secretary
     if (!["Admin", "Secretary"].includes(decoded.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
     const society = await Society.findById(decoded.societyId)
       .select("config")
       .lean();
     const billPayFinalDay = society?.config?.billPayFinalDay || 0;
-
     if (billPayFinalDay === 0) {
       // No final day configured — no late payments concept
       return NextResponse.json({
@@ -39,10 +32,8 @@ export async function GET(request) {
         message: "billPayFinalDay not configured",
       });
     }
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     // All unpaid bills sorted oldest-first per member
     const unpaidBills = await Bill.find({
       societyId: decoded.societyId,
@@ -51,7 +42,6 @@ export async function GET(request) {
     })
       .sort({ memberId: 1, billYear: 1, billMonth: 1 })
       .lean();
-
     // Group by member
     const byMember = {};
     for (const bill of unpaidBills) {
@@ -59,10 +49,8 @@ export async function GET(request) {
       if (!byMember[mid]) byMember[mid] = [];
       byMember[mid].push(bill);
     }
-
     // Filter members where oldest bill is past billPayFinalDate
     const lateMembers = [];
-
     for (const [memberId, bills] of Object.entries(byMember)) {
       const oldest = bills[0]; // already sorted oldest-first
       const billMonth1based = oldest.billMonth + 1; // billMonth is 0-based
@@ -71,9 +59,7 @@ export async function GET(request) {
         billMonth1based,
         billPayFinalDay,
       );
-
       if (!finalDate || today <= finalDate) continue; // not late
-
       // Sum balances from all unpaid bills
       const principalOutstanding = bills.reduce(
         (s, b) => s + (b.principalBalance || 0),
@@ -86,7 +72,6 @@ export async function GET(request) {
       const totalOutstanding = parseFloat(
         (principalOutstanding + interestOutstanding).toFixed(2),
       );
-
       lateMembers.push({
         memberId,
         // Member info fetched below
@@ -106,7 +91,6 @@ export async function GET(request) {
         })),
       });
     }
-
     // Enrich with member details
     if (lateMembers.length > 0) {
       const memberIds = lateMembers.map((m) => m.memberId);
@@ -115,12 +99,10 @@ export async function GET(request) {
           "_id wing flatNo ownerName contactNumber emailPrimary advanceCredit",
         )
         .lean();
-
       const memberMap = {};
       members.forEach((m) => {
         memberMap[m._id.toString()] = m;
       });
-
       for (const lm of lateMembers) {
         const m = memberMap[lm.memberId] || {};
         lm.wing = m.wing || "";
@@ -131,10 +113,8 @@ export async function GET(request) {
         lm.advanceCredit = m.advanceCredit || 0;
       }
     }
-
     // Sort by total outstanding desc (worst offenders first)
     lateMembers.sort((a, b) => b.totalOutstanding - a.totalOutstanding);
-
     return NextResponse.json({
       members: lateMembers,
       totalMembers: lateMembers.length,

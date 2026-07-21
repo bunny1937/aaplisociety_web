@@ -3,17 +3,14 @@ import { NextResponse } from "next/server";
 import { getAdminModels } from "@/lib/admin-models";
 import jwt from "jsonwebtoken";
 import { checkRateLimit, clearRateLimit } from "@/lib/admin-middleware";
-
 export async function POST(request) {
   try {
     const { email, password, adminKey } = await request.json();
-
     // ✅ SECURITY 1: Require admin secret key in request body
     if (!adminKey || adminKey !== process.env.ADMIN_SECRET_KEY) {
       console.warn("🚨 Admin login attempt without valid admin key");
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
     // ✅ SECURITY 2: Rate limiting
     const rateLimit = checkRateLimit(email);
     if (rateLimit.blocked) {
@@ -26,7 +23,6 @@ export async function POST(request) {
         { status: 429 },
       );
     }
-
     // ✅ SECURITY 3: Validate credentials
     if (!email || !password) {
       return NextResponse.json(
@@ -34,12 +30,9 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-
     const { SuperAdmin, AdminLog } = await getAdminModels();
-
     // Find admin in ADMIN database
     const admin = await SuperAdmin.findOne({ email, isActive: true });
-
     if (!admin) {
       console.warn(`🚨 Failed admin login attempt: ${email}`);
       return NextResponse.json(
@@ -47,10 +40,8 @@ export async function POST(request) {
         { status: 401 },
       );
     }
-
     // ✅ SECURITY 4: Verify password
     const isMatch = await admin.comparePassword(password);
-
     if (!isMatch) {
       console.warn(`🚨 Wrong password for admin: ${email}`);
       return NextResponse.json(
@@ -58,17 +49,14 @@ export async function POST(request) {
         { status: 401 },
       );
     }
-
     // ✅ SUCCESS: Clear rate limit
     clearRateLimit(email);
-
     // Update login info
     const ipAddress =
       request.headers.get("x-forwarded-for") ||
       request.headers.get("x-real-ip") ||
       "unknown";
     const userAgent = request.headers.get("user-agent") || "unknown";
-
     admin.lastLogin = new Date();
     admin.loginHistory.push({
       timestamp: new Date(),
@@ -76,7 +64,6 @@ export async function POST(request) {
       userAgent,
     });
     await admin.save();
-
     // Log login
     await AdminLog.create({
       adminId: admin._id,
@@ -86,7 +73,6 @@ export async function POST(request) {
       userAgent,
       timestamp: new Date(),
     });
-
     // ✅ SECURITY 5: Generate token with ADMIN-specific secret
     const token = jwt.sign(
       {
@@ -97,9 +83,7 @@ export async function POST(request) {
       process.env.ADMIN_JWT_SECRET,
       { expiresIn: "8h" },
     );
-
     console.log(`✅ Admin logged in: ${email}`);
-
     const response = NextResponse.json({
       success: true,
       token,
@@ -110,7 +94,6 @@ export async function POST(request) {
         role: admin.role,
       },
     });
-
     response.cookies.set("admin_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -118,17 +101,14 @@ export async function POST(request) {
       path: "/",
       maxAge: 60 * 60 * 8,
     });
-
     return response;
   } catch (error) {
     console.error("❌ Admin login error:", error);
-
     const isDbUnavailable =
       error?.code === "ECONNREFUSED" ||
       error?.message?.includes("querySrv") ||
       error?.name === "MongooseServerSelectionError" ||
       error?.message?.includes("MongoServerSelectionError");
-
     return NextResponse.json(
       {
         error: isDbUnavailable

@@ -16,7 +16,6 @@ export function safeConfigDate(year, month, day, hh = 0, mm = 0, ss = 0) {
   const clamped = Math.min(Math.max(1, day || 1), lastDay);
   return new Date(year, month - 1, clamped, hh, mm, ss, 0);
 }
-
 export function getFinancialYear(date) {
   const d = date instanceof Date ? date : new Date(date);
   const y = d.getFullYear();

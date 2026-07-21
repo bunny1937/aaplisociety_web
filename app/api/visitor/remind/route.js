@@ -15,9 +15,7 @@ import { requireSecurity } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { notifyVisitorApproval } from "@/lib/visitor-notify";
 import { APPROVAL_WINDOW_MS } from "@/lib/visitor-config";
-
 const REMINDABLE = ["Pending", "Expired"];
-
 const CHANNEL_LABEL = {
   in_app: "app",
   push: "push",
@@ -25,30 +23,25 @@ const CHANNEL_LABEL = {
   sms: "SMS",
   email: "email",
 };
-
 export async function PATCH(request) {
   const auth = requireSecurity(request);
   if (!auth.valid) return auth;
-
   try {
     await connectDB();
     const { visitorId } = await request.json();
     if (!visitorId || !mongoose.Types.ObjectId.isValid(visitorId))
       return NextResponse.json({ error: "Valid visitorId required" }, { status: 400 });
-
     const visitor = await Visitor.findOne({
       _id: visitorId,
       societyId: auth.user.societyId,
     });
     if (!visitor)
       return NextResponse.json({ error: "Visitor not found" }, { status: 404 });
-
     if (!REMINDABLE.includes(visitor.status))
       return NextResponse.json(
         { error: `This visitor is already ${visitor.status} — nothing to remind.` },
         { status: 409 },
       );
-
     // Keep the request alive: refresh the approval window and reset the
     // escalation ladder so the resident gets a clean, full notification wave.
     const newExpiry = new Date(Date.now() + APPROVAL_WINDOW_MS);
@@ -60,7 +53,6 @@ export async function PATCH(request) {
       lastNotifiedAt: new Date(),
       history: visitor.escalation?.history || [],
     };
-
     const [member, society] = await Promise.all([
       Member.findById(visitor.memberId).lean(),
       Society.findById(auth.user.societyId).select("name").lean(),
@@ -70,7 +62,6 @@ export async function PATCH(request) {
         { error: "Flat not found for this visitor" },
         { status: 404 },
       );
-
     // Fire all channels. notifyVisitorApproval never throws — failed channels
     // simply fall through, so the guard always gets a usable result.
     const result = await notifyVisitorApproval({
@@ -79,10 +70,8 @@ export async function PATCH(request) {
       visitor,
       guard: { name: auth.user.name || "Security", phone: auth.user.phone || "" },
     });
-
     if (result.steps?.length) visitor.escalation.history.push(...result.steps);
     await visitor.save();
-
     // De-duplicated list of channels that actually delivered — drives the toast.
     const delivered = [
       ...new Set(
@@ -91,12 +80,10 @@ export async function PATCH(request) {
           .map((s) => CHANNEL_LABEL[s.channel]),
       ),
     ];
-
     await logAudit(auth.user.userId, auth.user.societyId, "VISITOR_REMINDED", null, {
       visitorId: visitor._id.toString(),
       delivered,
     });
-
     return NextResponse.json({
       success: true,
       reachable: result.anyReachable,

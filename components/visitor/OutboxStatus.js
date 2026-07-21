@@ -10,7 +10,6 @@ import {
   startAutoSync,
   isOnline,
 } from "@/lib/visitor-outbox";
-
 const S = {
   wrap: {
     display: "flex",
@@ -37,12 +36,10 @@ const S = {
     whiteSpace: "nowrap",
   },
 };
-
 export default function OutboxStatus() {
   const [queued, setQueued] = useState([]);
   const [online, setOnline] = useState(true);
   const [busy, setBusy] = useState(false);
-
   useEffect(() => {
     startAutoSync();
     setQueued(getQueued());
@@ -58,15 +55,11 @@ export default function OutboxStatus() {
       window.removeEventListener("offline", off);
     };
   }, []);
-
   const pending = queued.length;
   const needFix = queued.filter((e) => e.status === "needs_flat").length;
-
   if (online && pending === 0) return null;
-
   const tone = online ? S.pending : S.offline;
   const style = Object.assign({}, S.wrap, tone);
-
   const retry = async () => {
     setBusy(true);
     try {
@@ -75,13 +68,11 @@ export default function OutboxStatus() {
       setBusy(false);
     }
   };
-
   const fixNote = needFix ? " · " + needFix + " need a flat fix" : "";
   const word = pending === 1 ? "entry" : "entries";
   const onlineMsg = "⏳ " + pending + " offline " + word + " waiting to sync" + fixNote + ".";
   const offlineMsg =
     "\uD83D\uDCF4 You’re offline — entries are saved on this device and will send automatically when the network returns.";
-
   return (
     <div style={style}>
       <span>{online ? onlineMsg : offlineMsg}</span>
