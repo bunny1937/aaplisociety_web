@@ -127,6 +127,7 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
   const members = [];
   const errors = [];
   const seenFlats = new Set();
+  const seenEmails = new Set();
   for (let i = 0; i < basicInfoRows.length; i++) {
     const row = basicInfoRows[i];
     // The template separates real data from the trailing instructions/notes
@@ -168,6 +169,13 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
       rowErrors.push(`Duplicate flat ${wing}-${flatNo} in member sheet`);
     } else {
       seenFlats.add(flatKey);
+    }
+    if (emailRaw) {
+      if (seenEmails.has(emailRaw)) {
+        rowErrors.push(`Duplicate email "${emailRaw}" in member sheet`);
+      } else {
+        seenEmails.add(emailRaw);
+      }
     }
     if (rowErrors.length) {
       errors.push({ label, errors: rowErrors });
@@ -343,6 +351,35 @@ export async function POST(request) {
       },
       { status: 422 },
     );
+  }
+  // Member email uniqueness — checked here (read-only, no writes yet) so a
+  // clash aborts the whole import instead of silently merging into an
+  // existing account during Phase 3.
+  const memberEmails = [
+    ...new Set(validMembers.filter((m) => m.emailPrimary).map((m) => m.emailPrimary)),
+  ];
+  if (memberEmails.length > 0) {
+    const existingUsers = await User.find({
+      email: { $in: memberEmails },
+    }).select("email");
+    if (existingUsers.length > 0) {
+      const existingEmailSet = new Set(existingUsers.map((u) => u.email));
+      const emailErrors = validMembers
+        .filter((m) => m.emailPrimary && existingEmailSet.has(m.emailPrimary))
+        .map(
+          (m) =>
+            `${m.wing}-${m.flatNo}: email "${m.emailPrimary}" is already registered to another account — choose a different email or remove this row`,
+        );
+      return NextResponse.json(
+        {
+          validationFailed: true,
+          phase: "members",
+          errors: emailErrors,
+          warnings,
+        },
+        { status: 422 },
+      );
+    }
   }
   // ── PHASE 3: CREATE ───────────────────────────────────────────────
   let societyId,
