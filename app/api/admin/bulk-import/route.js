@@ -247,6 +247,21 @@ export async function POST(request) {
       { status: 422 },
     );
   }
+  if (societyRows.length > 1) {
+    return NextResponse.json(
+      {
+        validationFailed: true,
+        phase: "society",
+        errors: [
+          `Sheet 'Society' has ${societyRows.length} data rows — it must have exactly 1. ` +
+            `The template ships with a pre-filled SAMPLE row (Godbole Heights / admin@godboleheights.com) as an example. ` +
+            `Edit that row in place with your real data — do NOT add a new row below it, ` +
+            `the system always reads row 1 and would silently use the sample instead of yours.`,
+        ],
+      },
+      { status: 422 },
+    );
+  }
   const societyPayload = rowToSocietyPayload(societyRows[0]);
   // Member sheet (index 1 = "1. Basic Info (Required)")
   const basicInfoSheetName = wb.SheetNames[1];
@@ -438,6 +453,12 @@ export async function POST(request) {
   const createdMemberUserIds = [];
   const appendedProfiles = [];
   const usernameBloom = await buildUsernameBloomFilter();
+  const noEmailMembers = validMembers.filter((m) => !m.emailPrimary);
+  if (noEmailMembers.length > 0) {
+    warnings.push(
+      `${noEmailMembers.length} member(s) had no emailPrimary — no login account or onboarding email created for: ${noEmailMembers.map((m) => `${m.wing}-${m.flatNo}`).join(", ")}`,
+    );
+  }
   for (const memberData of validMembers) {
     try {
       const member = await Member.create({

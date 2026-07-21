@@ -2403,6 +2403,33 @@ export default function AdminSocietiesPage() {
                     ))}
                   </div>
                 )}
+                {bulkResult?.onboardingEmailErrors?.length > 0 && (
+                  <div
+                    style={{
+                      background: "#450a0a",
+                      border: "1px solid #ef4444",
+                      borderRadius: 8,
+                      padding: "1rem",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: "#fca5a5",
+                        fontWeight: 700,
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      ⚠ {bulkResult.onboardingEmailErrors.length} onboarding email(s) failed to send
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "#fca5a5", marginBottom: 8 }}>
+                      Society/members were created, but these members won't get their setup link by mail — share credentials manually (download button below).
+                    </div>
+                    {bulkResult.onboardingEmailErrors.map((e, i) => (
+                      <div key={i} style={{ fontSize: "0.8rem", color: "#fca5a5" }}>• {e}</div>
+                    ))}
+                  </div>
+                )}
                 {bulkResult?.memberCredentials?.length > 0 && (
                   <button
                     onClick={async () => {
