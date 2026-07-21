@@ -1,12 +1,10 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { io } from "socket.io-client";
+import { useState, useEffect, useCallback } from "react";
 export function useNotifications() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState([]);
-  const socketRef = useRef(null);
   // Fetch from DB (persistent)
   const fetchNotifications = useCallback(async () => {
     try {
@@ -15,47 +13,31 @@ export function useNotifications() {
       });
       const data = await res.json();
       if (res.ok) {
-        setNotifications(data.notifications);
+        setNotifications((prev) => {
+          // Toast any notification that's new since the last poll.
+          const prevIds = new Set(prev.map((n) => n._id));
+          const fresh = data.notifications.filter((n) => !prevIds.has(n._id));
+          if (fresh.length && prev.length) {
+            setToasts((t) => [
+              ...t,
+              ...fresh.map((n) => ({ ...n, id: Date.now() + Math.random() })),
+            ]);
+          }
+          return data.notifications;
+        });
         setUnreadCount(data.unreadCount);
       }
     } finally {
       setLoading(false);
     }
   }, []);
-  // Connect Socket.IO for realtime
+  // No realtime push server (socket.io needs a persistent Node server, which
+  // Vercel's serverless deployment doesn't run) — poll instead. Cheap, and
+  // avoids an infinite reconnect loop hitting a route that never exists there.
   useEffect(() => {
     fetchNotifications();
-    // Get token from cookie via document.cookie (readable since not httpOnly for socket)
-    // We pass token from a meta tag or dedicated endpoint
-    fetch("/api/auth/token", { credentials: "include" })
-      .then((r) => r.json())
-      .then(({ token }) => {
-        if (!token) return;
-        const socket = io({
-          path: "/api/socket",
-          auth: { token },
-        });
-        socket.on("connect", () => {
-          // Emit wing to join wing room
-          const wing = localStorage.getItem("userWing");
-          if (wing) socket.emit("join:wing", wing);
-        });
-        socket.on("notification:new", (notification) => {
-          // Add to list at top
-          setNotifications((prev) => [
-            { ...notification, isRead: false },
-            ...prev,
-          ]);
-          setUnreadCount((c) => c + 1);
-          // Show toast
-          setToasts((prev) => [...prev, { ...notification, id: Date.now() }]);
-        });
-        socketRef.current = socket;
-      })
-      .catch(() => {});
-    return () => {
-      socketRef.current?.disconnect();
-    };
+    const interval = setInterval(fetchNotifications, 20000);
+    return () => clearInterval(interval);
   }, [fetchNotifications]);
   const markRead = useCallback(async (notificationId) => {
     setNotifications((prev) =>

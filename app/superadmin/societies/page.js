@@ -2337,6 +2337,9 @@ export default function AdminSocietiesPage() {
                     }}
                   >
                     <div>
+                      <strong>Name:</strong> {bulkResult.admin?.name}
+                    </div>
+                    <div>
                       <strong>Email:</strong> {bulkResult.admin?.email}
                     </div>
                     <div>
@@ -2353,6 +2356,37 @@ export default function AdminSocietiesPage() {
                     </div>
                   </div>
                 </div>
+                {bulkResult.memberCredentials?.length > 0 && (
+                  <div style={{ background: "#1e1b4b", borderRadius: 8, padding: "1.25rem", marginBottom: "1rem" }}>
+                    <div style={{ color: "#a5b4fc", fontWeight: 700, marginBottom: "0.5rem" }}>
+                      Members ({bulkResult.memberCredentials.length})
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", fontSize: "0.8rem", color: "#c7d2fe", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ textAlign: "left", color: "#a5b4fc" }}>
+                            <th style={{ padding: "4px 8px" }}>Flat</th>
+                            <th style={{ padding: "4px 8px" }}>Name</th>
+                            <th style={{ padding: "4px 8px" }}>Email</th>
+                            <th style={{ padding: "4px 8px" }}>Account</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bulkResult.memberCredentials.map((c, i) => (
+                            <tr key={i} style={{ borderTop: "1px solid #312e81" }}>
+                              <td style={{ padding: "4px 8px" }}>{c.wing}-{c.flatNo}</td>
+                              <td style={{ padding: "4px 8px" }}>{c.ownerName}</td>
+                              <td style={{ padding: "4px 8px" }}>{c.email || <span style={{ color: "#6b7280" }}>none</span>}</td>
+                              <td style={{ padding: "4px 8px" }}>
+                                {c.isNewUser ? <span style={{ color: "#4ade80" }}>new login created</span> : <span style={{ color: "#fbbf24" }}>existing account linked</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 {bulkResult.warnings?.length > 0 && (
                   <div style={{ background: "#451a03", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}>
                     <div style={{ color: "#fbbf24", fontWeight: 600, marginBottom: "0.5rem" }}>

@@ -820,6 +820,7 @@ export async function POST(request) {
       chargesSummary: activeCharges.map((c) => `${c.label}: ₹${c.value}`),
     },
     admin: {
+      name: societyPayload.fullName,
       email: societyPayload.email,
       password: plainPassword,
     },
