@@ -3,6 +3,7 @@ import { withRoute, ApiError, json, zodError } from "@/lib/v1/http";
 import { getClaims } from "@/lib/v1/auth";
 import { changePasswordSchema } from "@/lib/v1/schemas";
 import { User, RefreshToken } from "@/lib/v1/models";
+import { reissueTokens } from "@/lib/v1/authService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,5 +29,11 @@ export const POST = withRoute(async (req) => {
   // Invalidate all existing sessions after a password change.
   await RefreshToken.updateMany({ userId: user._id, revoked: false }, { $set: { revoked: true } });
 
-  return json({ ok: true });
+  // The token used to make THIS request still carries mustChangePassword:true
+  // by signature and would keep getting 403'd everywhere else until it
+  // naturally expires. Issue a fresh pair now so the client can swap
+  // immediately instead of being stuck until TTL/refresh.
+  const fresh = await reissueTokens(claims, user);
+
+  return json({ ok: true, ...fresh });
 });

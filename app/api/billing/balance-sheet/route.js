@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
+import Expense from "@/models/Expense";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import mongoose from "mongoose";
 // billMonth is 0-indexed: 0=Jan, 3=Apr, 11=Dec
@@ -59,6 +60,20 @@ export async function GET(request) {
       { billYear: fy, billMonth: { $lt: 3 } },
     ],
   }).lean();
+  // Society expenditure for this FY, bucketed by "YYYY-MM" period.
+  const fyStart = new Date(Date.UTC(fy, 3, 1, 0, 0, 0));
+  const fyEnd = new Date(Date.UTC(fy + 1, 3, 1, 0, 0, 0));
+  const expenses = await Expense.find({
+    societyId: sid,
+    isDeleted: { $ne: true },
+    date: { $gte: fyStart, $lt: fyEnd },
+  }).lean();
+  const expenseByPeriod = {};
+  const expenseByCategory = {};
+  for (const e of expenses) {
+    expenseByPeriod[e.periodId] = (expenseByPeriod[e.periodId] || 0) + (e.amount || 0);
+    expenseByCategory[e.category] = (expenseByCategory[e.category] || 0) + (e.amount || 0);
+  }
   // Group current FY bills by periodId
   const byPeriod = {};
   for (const b of bills) {
@@ -92,6 +107,7 @@ export async function GET(request) {
     const openingPrincipal = periodBills.reduce((s, b) => s + (b.openingPrincipal || 0), 0);
     const openingInterest = periodBills.reduce((s, b) => s + (b.openingInterest || 0), 0);
     const openingTotal = openingPrincipal + openingInterest;
+    const totalExpenditure = +(expenseByPeriod[pid] || 0).toFixed(2);
     return {
       year, month0, label, periodId: pid,
       generated, billCount: periodBills.length,
@@ -107,11 +123,13 @@ export async function GET(request) {
       openingTotal: +openingTotal.toFixed(2),
       allPaid, partial, allUnpaid,
       paidCount, unpaidCount,
+      totalExpenditure,
+      netCollected: +(totalPaid - totalExpenditure).toFixed(2),
       isMarch: month0 === 2,
     };
   });
   // FY-wide aggregates
-  let totalBilled = 0, totalCollected = 0, totalPending = 0, totalInterest = 0, totalSinking = 0, totalRepair = 0;
+  let totalBilled = 0, totalCollected = 0, totalPending = 0, totalInterest = 0, totalSinking = 0, totalRepair = 0, totalExpenditure = 0;
   for (const row of timeline) {
     totalBilled += row.totalBilled;
     totalCollected += row.totalPaid;
@@ -119,6 +137,7 @@ export async function GET(request) {
     totalInterest += row.totalInterest;
     totalSinking += row.totalSinking;
     totalRepair += row.totalRepair;
+    totalExpenditure += row.totalExpenditure;
   }
   const priorPending = priorBills.reduce((s, b) => s + (b.balanceAmount || 0), 0);
   // Interest still outstanding = unpaid interest on bills not yet fully cleared
@@ -181,6 +200,10 @@ export async function GET(request) {
       interestOutstanding: +interestOutstanding.toFixed(2),
       totalSinking: +totalSinking.toFixed(2),
       totalRepair: +totalRepair.toFixed(2),
+      totalExpenditure: +totalExpenditure.toFixed(2),
+      netPosition: +(totalCollected - totalExpenditure).toFixed(2),
+      expenseCount: expenses.length,
+      expenseByCategory,
       billCount: bills.length,
     },
     timeline,

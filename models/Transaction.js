@@ -115,6 +115,8 @@ const TransactionSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    // Bulk-import provenance — see Society.importRunId
+    importRunId: { type: String, default: null, index: true },
   },
   {
     timestamps: true,

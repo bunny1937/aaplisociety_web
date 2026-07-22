@@ -10,6 +10,8 @@ out/
 build/
 dist/
 docs/
+scripts/
+*.xlsx
 .vscode
 # BillHistory_*.xlsx
 # BulkImport_Template.xlsx

@@ -1,7 +1,18 @@
 /**
  * POST /api/admin/bulk-import
  * Phase 1: validate everything — return errors without touching DB.
- * Phase 2: create society → admin user → members.
+ * Phase 2: create society → admin user → members, atomically, tagged with
+ *          an importRunId so a crash/retry can be detected and compensated
+ *          instead of leaving partial data or double-importing.
+ *
+ * State machine (see BulkImportRun.status):
+ *   VALIDATING → IMPORTING → FINALIZING → COMMITTED → EMAIL_QUEUED → COMPLETED
+ *   terminal failure states: FAILED / ROLLED_BACK
+ *
+ * The client sends a stable importRunId (generated once, kept across
+ * refresh/retry in sessionStorage — see admin UI). Duplicate submits with the
+ * same key are rejected while a run is in flight, and a COMPLETED run replays
+ * its cached result instead of re-importing.
  */
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
@@ -11,6 +22,8 @@ import Member from "@/models/Member";
 import BillingHead from "@/models/BillingHead";
 import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
+import BulkImportRun from "@/models/BulkImportRun";
+import EmailOutbox from "@/models/EmailOutbox";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import * as XLSX from "xlsx";
@@ -22,7 +35,10 @@ import { generateUniqueSocietyCode } from "@/lib/society-code";
 import { generatePassword } from "@/lib/password-generator";
 import { sendEmail, onboardingEmailHtml } from "@/lib/brevo-email";
 import { signToken } from "@/lib/jwt";
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const STALE_RUN_MS = 3 * 60 * 1000; // an in-flight run with no update in 3 min is presumed crashed
+
 function generateSocietyId(name) {
   const parts = name.trim().split(" ");
   const first = parts[0]?.slice(0, 4).toLowerCase() || "soc";
@@ -31,6 +47,7 @@ function generateSocietyId(name) {
   const rand = String(Math.floor(10 + Math.random() * 90));
   return `${first}_${last}_${year}_${rand}`;
 }
+
 function rowToSocietyPayload(row) {
   const charges = [
     {
@@ -123,6 +140,7 @@ function rowToSocietyPayload(row) {
     },
   };
 }
+
 function parseMemberRows(basicInfoRows, parkingByFlat) {
   const members = [];
   const errors = [];
@@ -212,23 +230,112 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
   }
   return { members, errors };
 }
+
+// Single rollback path for the whole import, regardless of which phase
+// failed — every document created by an import carries importRunId (Bill
+// uses the pre-existing importBatchId field for the same purpose), so
+// compensation never has to be kept in sync with a second, hand-maintained
+// list of "what this phase created".
+async function compensateImportRun(importRunId) {
+  if (!importRunId) return;
+  try {
+    await Promise.all([
+      Bill.deleteMany({ importBatchId: importRunId }),
+      Transaction.deleteMany({ importRunId }),
+      BillingHead.deleteMany({ importRunId }),
+      Member.deleteMany({ importRunId }),
+      User.deleteMany({ importRunId }),
+      Society.deleteMany({ importRunId }),
+      EmailOutbox.deleteMany({ importRunId }),
+    ]);
+  } catch (cleanupErr) {
+    console.error(
+      `[bulk-import] compensation cleanup failed for run ${importRunId}:`,
+      cleanupErr.message,
+    );
+  }
+}
+
+async function markRun(importRunId, patch) {
+  try {
+    await BulkImportRun.updateOne({ importRunId }, { $set: patch });
+  } catch (err) {
+    console.error("[bulk-import] status update failed:", err.message);
+  }
+}
+
 export async function POST(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
   await connectDB();
   const formData = await request.formData();
   const file = formData.get("file");
+  const importRunId =
+    String(formData.get("importRunId") || "").trim() ||
+    new mongoose.Types.ObjectId().toString();
   if (!file)
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+
+  // ── IDEMPOTENCY / DUPLICATE-SUBMIT GUARD ─────────────────────────────
+  const existingRun = await BulkImportRun.findOne({ importRunId });
+  if (existingRun) {
+    if (existingRun.status === "COMPLETED") {
+      return NextResponse.json({ ...existingRun.result, replay: true, importRunId });
+    }
+    if (existingRun.status !== "FAILED" && existingRun.status !== "ROLLED_BACK") {
+      const ageMs = Date.now() - new Date(existingRun.updatedAt).getTime();
+      if (ageMs < STALE_RUN_MS) {
+        return NextResponse.json(
+          {
+            error:
+              "An import with this key is already running — wait for it to finish before retrying.",
+            importRunId,
+            status: existingRun.status,
+          },
+          { status: 409 },
+        );
+      }
+      // Presumed-crashed run (no progress for 3+ min). Anything it actually
+      // wrote is tagged with this importRunId and gets swept here before we
+      // let a fresh attempt reuse the key.
+      await compensateImportRun(importRunId);
+    }
+  }
+  await BulkImportRun.findOneAndUpdate(
+    { importRunId },
+    {
+      importRunId,
+      status: "VALIDATING",
+      stage: "Parsing workbook",
+      processedCount: 0,
+      totalCount: 0,
+      warnings: [],
+      errorMessages: [],
+      result: null,
+      startedAt: new Date(),
+      finishedAt: null,
+    },
+    { upsert: true },
+  );
+
+  const fail = async (body, status) => {
+    await markRun(importRunId, {
+      status: "FAILED",
+      errorMessages: body.errors || [body.error].filter(Boolean),
+      finishedAt: new Date(),
+    });
+    return NextResponse.json({ ...body, importRunId }, { status });
+  };
+
   const bytes = await file.arrayBuffer();
   const wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
   if (wb.SheetNames.length < 1) {
-    return NextResponse.json(
+    return fail(
       {
         error:
           "File must have at least 1 sheet (Society data in Sheet 'Society')",
       },
-      { status: 400 },
+      400,
     );
   }
   // ── PHASE 1: PARSE ────────────────────────────────────────────────
@@ -236,7 +343,7 @@ export async function POST(request) {
   const societySheet = wb.Sheets[wb.SheetNames[0]];
   const societyRows = XLSX.utils.sheet_to_json(societySheet, { defval: "" });
   if (!societyRows.length) {
-    return NextResponse.json(
+    return fail(
       {
         validationFailed: true,
         phase: "society",
@@ -244,11 +351,11 @@ export async function POST(request) {
           "Sheet 'Society' has no data rows. Fill in the first row with society details.",
         ],
       },
-      { status: 422 },
+      422,
     );
   }
   if (societyRows.length > 1) {
-    return NextResponse.json(
+    return fail(
       {
         validationFailed: true,
         phase: "society",
@@ -259,7 +366,7 @@ export async function POST(request) {
             `the system always reads row 1 and would silently use the sample instead of yours.`,
         ],
       },
-      { status: 422 },
+      422,
     );
   }
   const societyPayload = rowToSocietyPayload(societyRows[0]);
@@ -323,15 +430,7 @@ export async function POST(request) {
     );
   }
   if (societyErrors.length) {
-    return NextResponse.json(
-      {
-        validationFailed: true,
-        phase: "society",
-        errors: societyErrors,
-        warnings,
-      },
-      { status: 422 },
-    );
+    return fail({ validationFailed: true, phase: "society", errors: societyErrors, warnings }, 422);
   }
   // Member validation
   const { members: validMembers, errors: memberErrors } = parseMemberRows(
@@ -339,7 +438,7 @@ export async function POST(request) {
     parkingByFlat,
   );
   if (memberErrors.length) {
-    return NextResponse.json(
+    return fail(
       {
         validationFailed: true,
         phase: "members",
@@ -349,7 +448,7 @@ export async function POST(request) {
         memberRowsValid: validMembers.length,
         memberRowsFailed: memberErrors.length,
       },
-      { status: 422 },
+      422,
     );
   }
   if (validMembers.length === 0) {
@@ -357,15 +456,7 @@ export async function POST(request) {
       basicInfoRows.length > 0
         ? `Sheet has ${basicInfoRows.length} data rows but none could be parsed — check that the 'flatNo*' column is filled and not renamed.`
         : "Sheet '1. Basic Info (Required)' is empty.";
-    return NextResponse.json(
-      {
-        validationFailed: true,
-        phase: "members",
-        errors: [hint],
-        warnings,
-      },
-      { status: 422 },
-    );
+    return fail({ validationFailed: true, phase: "members", errors: [hint], warnings }, 422);
   }
   // Member email uniqueness — checked here (read-only, no writes yet) so a
   // clash aborts the whole import instead of silently merging into an
@@ -373,10 +464,9 @@ export async function POST(request) {
   const memberEmails = [
     ...new Set(validMembers.filter((m) => m.emailPrimary).map((m) => m.emailPrimary)),
   ];
+  const existingUsersByEmail = new Map();
   if (memberEmails.length > 0) {
-    const existingUsers = await User.find({
-      email: { $in: memberEmails },
-    }).select("email");
+    const existingUsers = await User.find({ email: { $in: memberEmails } });
     if (existingUsers.length > 0) {
       const existingEmailSet = new Set(existingUsers.map((u) => u.email));
       const emailErrors = validMembers
@@ -385,18 +475,20 @@ export async function POST(request) {
           (m) =>
             `${m.wing}-${m.flatNo}: email "${m.emailPrimary}" is already registered to another account — choose a different email or remove this row`,
         );
-      return NextResponse.json(
-        {
-          validationFailed: true,
-          phase: "members",
-          errors: emailErrors,
-          warnings,
-        },
-        { status: 422 },
-      );
+      return fail({ validationFailed: true, phase: "members", errors: emailErrors, warnings }, 422);
     }
+    // (Left in place for defense-in-depth: the check above currently rejects
+    // the whole import on any collision, so this map is always empty here —
+    // but if that policy ever relaxes to "merge into existing account",
+    // this one bulk lookup avoids re-introducing an N+1 findOne per member.)
+    for (const u of existingUsers) existingUsersByEmail.set(u.email, u);
   }
-  // ── PHASE 3: CREATE ───────────────────────────────────────────────
+  await markRun(importRunId, {
+    status: "IMPORTING",
+    stage: "Creating society, users, and members",
+    totalCount: validMembers.length,
+  });
+  // ── PHASE 3: CREATE (society + admin + members + member users + billing heads), ATOMIC ──
   let societyId,
     attempts = 0;
   do {
@@ -405,53 +497,6 @@ export async function POST(request) {
   } while (++attempts < 10);
   const societyCode = await generateUniqueSocietyCode();
   const plainPassword = generatePassword();
-  const hashedPassword = await bcrypt.hash(plainPassword, 10);
-  let society;
-  try {
-    society = await Society.create({
-      name: societyPayload.societyName,
-      societyId,
-      societyCode,
-      registrationNo: societyPayload.registrationNo,
-      address: societyPayload.address,
-      panNo: societyPayload.panNo,
-      tanNo: societyPayload.tanNo,
-      config: societyPayload.config,
-      credentials: {
-        adminEmail: societyPayload.email,
-        plainPassword,
-      },
-      subscription: { status: "Trial", startDate: new Date() },
-      isDeleted: false,
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { error: `Failed to create society: ${err.message}` },
-      { status: 500 },
-    );
-  }
-  try {
-    await User.create({
-      name: societyPayload.fullName,
-      email: societyPayload.email,
-      password: hashedPassword,
-      role: "Admin",
-      societyId: society._id,
-      profiles: [],
-      isActive: true,
-    });
-  } catch (err) {
-    await Society.findByIdAndDelete(society._id);
-    return NextResponse.json(
-      { error: `Failed to create admin user: ${err.message}` },
-      { status: 500 },
-    );
-  }
-  let membersCreated = 0;
-  const memberCreateErrors = [];
-  const memberCredentials = [];
-  const createdMemberUserIds = [];
-  const appendedProfiles = [];
   const usernameBloom = await buildUsernameBloomFilter();
   const noEmailMembers = validMembers.filter((m) => !m.emailPrimary);
   if (noEmailMembers.length > 0) {
@@ -459,147 +504,202 @@ export async function POST(request) {
       `${noEmailMembers.length} member(s) had no emailPrimary — no login account or onboarding email created for: ${noEmailMembers.map((m) => `${m.wing}-${m.flatNo}`).join(", ")}`,
     );
   }
-  for (const memberData of validMembers) {
-    try {
-      const member = await Member.create({
-        ...memberData,
-        societyId: society._id,
-      });
-      if (memberData.emailPrimary) {
+  // Do the CPU-bound work (bcrypt, username generation) BEFORE opening the
+  // transaction, in parallel — this is what was blowing the import out to
+  // 2-4 minutes (sequential bcrypt.hash + a findOne round-trip per member,
+  // one member at a time, all inside a single request). Mongo transactions
+  // also have a bounded lifetime, so keeping only fast DB ops inside
+  // session.withTransaction matters, not just speed.
+  const [adminHash, memberPrep] = await Promise.all([
+    bcrypt.hash(plainPassword, 10),
+    Promise.all(
+      validMembers.map(async (memberData) => {
+        if (!memberData.emailPrimary) return { memberData };
         const memberPwd = generatePassword();
         const memberHash = await bcrypt.hash(memberPwd, 10);
-        const existingUser = await User.findOne({
-          email: memberData.emailPrimary,
-        });
-        if (existingUser) {
-          const profileId = new mongoose.Types.ObjectId();
-          existingUser.profiles = existingUser.profiles || [];
-          existingUser.profiles.push({
-            profileId,
-            societyId: society._id,
-            memberId: member._id,
-            flatNo: memberData.flatNo,
-            wing: memberData.wing,
-            isPrimary: false,
-            status: "Active",
-            joinedAt: new Date(),
-          });
-          await existingUser.save();
-          appendedProfiles.push({
-            userId: existingUser._id,
-            profileId,
-          });
-          memberCredentials.push({
-            flatNo: memberData.flatNo,
-            wing: memberData.wing,
-            ownerName: memberData.ownerName,
-            email: memberData.emailPrimary,
-            password: "(existing account — original password unchanged)",
-            isNewUser: false,
-          });
-        } else {
-          const username = await generateSimpleUsername(societyCode, memberData.flatNo, usernameBloom);
-          const newUser = await User.create({
-            name: memberData.ownerName,
-            email: memberData.emailPrimary,
-            username,
-            phone: memberData.contactNumber || null,
-            password: memberHash,
-            role: "Member",
-            societyId: society._id,
-            mustChangePassword: true,
-            profiles: [
-              {
-                profileId: new mongoose.Types.ObjectId(),
-                societyId: society._id,
-                memberId: member._id,
-                flatNo: memberData.flatNo,
-                wing: memberData.wing,
-                isPrimary: true,
-                status: "Active",
-                joinedAt: new Date(),
-              },
-            ],
-            isActive: true,
-          });
-          createdMemberUserIds.push(newUser._id);
-          memberCredentials.push({
-            userId: newUser._id,
-            flatNo: memberData.flatNo,
-            wing: memberData.wing,
-            ownerName: memberData.ownerName,
-            username,
-            email: memberData.emailPrimary,
-            password: memberPwd,
-            isNewUser: true,
-          });
-        }
-      }
-      membersCreated++;
-    } catch (err) {
-      memberCreateErrors.push(
-        `${memberData.wing}-${memberData.flatNo}: ${err.message}`,
+        // Username generation shares one Bloom filter across the batch, so
+        // it must stay sequential (each call may add to the filter) even
+        // though bcrypt hashing above runs in parallel across members.
+        const username = await generateSimpleUsername(societyCode, memberData.flatNo, usernameBloom);
+        return { memberData, memberPwd, memberHash, username };
+      }),
+    ),
+  ]);
+
+  let society;
+  let billingHeads = [];
+  const memberCredentials = [];
+  const memberCreateErrors = [];
+  let membersCreated = 0;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const [createdSociety] = await Society.create(
+        [
+          {
+            name: societyPayload.societyName,
+            societyId,
+            societyCode,
+            registrationNo: societyPayload.registrationNo || undefined,
+            address: societyPayload.address,
+            panNo: societyPayload.panNo,
+            tanNo: societyPayload.tanNo,
+            config: societyPayload.config,
+            credentials: { adminEmail: societyPayload.email, plainPassword },
+            subscription: { status: "Trial", startDate: new Date() },
+            isDeleted: false,
+            importRunId,
+            importStatus: "importing",
+          },
+        ],
+        { session },
       );
-    }
-  }
-  // If any member failed to create → rollback and return error
-  if (memberCreateErrors.length > 0) {
-    try {
-      await Member.deleteMany({ societyId: society._id });
-      if (createdMemberUserIds.length > 0) {
-        await User.deleteMany({ _id: { $in: createdMemberUserIds } });
+      society = createdSociety;
+
+      await User.create(
+        [
+          {
+            name: societyPayload.fullName,
+            email: societyPayload.email,
+            password: adminHash,
+            role: "Admin",
+            societyId: society._id,
+            profiles: [],
+            isActive: true,
+            importRunId,
+          },
+        ],
+        { session },
+      );
+
+      for (const prep of memberPrep) {
+        const memberData = prep.memberData;
+        const [member] = await Member.create(
+          [{ ...memberData, societyId: society._id, importRunId }],
+          { session },
+        );
+        if (memberData.emailPrimary) {
+          const existingUser = existingUsersByEmail.get(memberData.emailPrimary);
+          if (existingUser) {
+            const profileId = new mongoose.Types.ObjectId();
+            await User.updateOne(
+              { _id: existingUser._id },
+              {
+                $push: {
+                  profiles: {
+                    profileId,
+                    societyId: society._id,
+                    memberId: member._id,
+                    flatNo: memberData.flatNo,
+                    wing: memberData.wing,
+                    isPrimary: false,
+                    status: "Active",
+                    joinedAt: new Date(),
+                  },
+                },
+              },
+              { session },
+            );
+            memberCredentials.push({
+              flatNo: memberData.flatNo,
+              wing: memberData.wing,
+              ownerName: memberData.ownerName,
+              email: memberData.emailPrimary,
+              password: "(existing account — original password unchanged)",
+              isNewUser: false,
+            });
+          } else {
+            const [newUser] = await User.create(
+              [
+                {
+                  name: memberData.ownerName,
+                  email: memberData.emailPrimary,
+                  username: prep.username,
+                  phone: memberData.contactNumber || null,
+                  password: prep.memberHash,
+                  role: "Member",
+                  societyId: society._id,
+                  mustChangePassword: true,
+                  profiles: [
+                    {
+                      profileId: new mongoose.Types.ObjectId(),
+                      societyId: society._id,
+                      memberId: member._id,
+                      flatNo: memberData.flatNo,
+                      wing: memberData.wing,
+                      isPrimary: true,
+                      status: "Active",
+                      joinedAt: new Date(),
+                    },
+                  ],
+                  isActive: true,
+                  importRunId,
+                },
+              ],
+              { session },
+            );
+            memberCredentials.push({
+              userId: newUser._id,
+              flatNo: memberData.flatNo,
+              wing: memberData.wing,
+              ownerName: memberData.ownerName,
+              username: prep.username,
+              email: memberData.emailPrimary,
+              password: prep.memberPwd,
+              isNewUser: true,
+            });
+          }
+        }
+        membersCreated++;
       }
-      for (const { userId, profileId } of appendedProfiles) {
-        await User.updateOne(
-          { _id: userId },
-          { $pull: { profiles: { profileId } } },
+
+      const headsToCreate = societyPayload.config.charges
+        .filter((c) => (c.label || c.name)?.trim() && c.isActive !== false)
+        .map((c, i) => ({
+          headName: (c.label || c.name || "").trim(),
+          calculationType: c.type === "Per Sq Ft" ? "Per Sq Ft" : "Fixed",
+          defaultAmount: Number(c.value) || 0,
+          isActive: true,
+          isDeleted: false,
+          order: i + 1,
+          societyId: society._id,
+          importRunId,
+        }));
+      if (headsToCreate.length > 0) {
+        billingHeads = await BillingHead.create(headsToCreate, { session, ordered: true });
+      } else {
+        warnings.push(
+          "No billing heads created — all charge values were 0 in the Society sheet.",
         );
       }
-      await User.deleteOne({ email: societyPayload.email });
-      await Society.findByIdAndDelete(society._id);
-    } catch (cleanupErr) {
-      console.error("Rollback error:", cleanupErr.message);
-    }
-    return NextResponse.json(
+    });
+  } catch (err) {
+    session.endSession();
+    await compensateImportRun(importRunId);
+    return fail(
       {
         validationFailed: true,
-        phase: "members",
-        errors: memberCreateErrors,
+        phase: memberCreateErrors.length ? "members" : "society",
+        errors: [err.message],
         warnings,
         rollback: true,
-        membersAttempted: validMembers.length,
-        membersCreated,
       },
-      { status: 500 },
+      500,
     );
   }
-  // ── PHASE 4: SYNC BILLING HEADS from config.charges ─────────────
-  let billingHeads = [];
-  let billingHeadError = null;
-  try {
-    const headsToCreate = societyPayload.config.charges
-      .filter((c) => (c.label || c.name)?.trim() && c.isActive !== false)
-      .map((c, i) => ({
-        headName: (c.label || c.name || "").trim(),
-        calculationType: c.type === "Per Sq Ft" ? "Per Sq Ft" : "Fixed",
-        defaultAmount: Number(c.value) || 0,
-        isActive: true,
-        isDeleted: false,
-        order: i + 1,
-        societyId: society._id,
-      }));
-    if (headsToCreate.length > 0) {
-      billingHeads = await BillingHead.insertMany(headsToCreate);
-    } else {
-      warnings.push(
-        "No billing heads created — all charge values were 0 in the Society sheet.",
-      );
-    }
-  } catch (err) {
-    billingHeadError = err.message;
-    warnings.push(`Billing heads sync failed: ${err.message}`);
-  }
+  session.endSession();
+  await markRun(importRunId, {
+    status: "FINALIZING",
+    stage: "Generating current-month bills",
+    societyId: society._id,
+    processedCount: membersCreated,
+  });
+
   // ── PHASE 5: GENERATE CURRENT MONTH BILLS ────────────────────────
+  // generateBill/applyPaymentToBill each manage their own internal
+  // transaction, so this phase runs after Phase 3 commits rather than nested
+  // inside it. Any failure here is compensated the same way as a Phase 3
+  // failure: delete everything tagged with this importRunId.
   const now = new Date();
   const billYear = now.getFullYear();
   const billMonth = now.getMonth() + 1; // 1-indexed
@@ -629,6 +729,10 @@ export async function POST(request) {
           month: billMonth,
           performedBy: "System",
         });
+        await Bill.updateOne(
+          { _id: bill._id },
+          { $set: { importBatchId: importRunId, importedFrom: "BulkImport" } },
+        );
         if (bill.status !== "Scheduled" && (member.advanceCredit || 0) > 0) {
           const applied = Math.min(
             parseFloat(member.advanceCredit.toFixed(2)),
@@ -655,6 +759,7 @@ export async function POST(request) {
           paymentMode: "System",
           billPeriodId: billPeriod,
           financialYear,
+          importRunId,
         });
         // Do NOT zero Member.openingPrincipal/openingInterest here.
         // They are the member's original seed values — zeroing them means if
@@ -676,18 +781,12 @@ export async function POST(request) {
   }
   // ── ROLLBACK if bills failed for any member that was expected ────────
   if (billErrors.length > 0) {
-    // At least one bill failed — roll back everything
-    try {
-      await Bill.deleteMany({ societyId: society._id });
-      await Transaction.deleteMany({ societyId: society._id });
-      await BillingHead.deleteMany({ societyId: society._id });
-      await Member.deleteMany({ societyId: society._id });
-      await User.deleteMany({ societyId: society._id });
-      await Society.findByIdAndDelete(society._id);
-    } catch (cleanupErr) {
-      // best-effort cleanup; log but don't mask the real error
-      console.error("Rollback error:", cleanupErr.message);
-    }
+    await compensateImportRun(importRunId);
+    await markRun(importRunId, {
+      status: "ROLLED_BACK",
+      errorMessages: billErrors,
+      finishedAt: new Date(),
+    });
     return NextResponse.json(
       {
         validationFailed: true,
@@ -695,22 +794,33 @@ export async function POST(request) {
         errors: billErrors,
         warnings,
         rollback: true,
+        importRunId,
       },
       { status: 500 },
     );
   }
-  // Send onboarding emails only now that every rollback checkpoint above has
-  // passed — sending earlier risked emailing a member whose account then got
-  // deleted by a later rollback (e.g. a billing-setup failure). Best-effort:
-  // a failed send doesn't undo the real DB writes, since the admin still has
-  // memberCredentials in this response to share manually as a fallback.
-  const onboardingEmailErrors = [];
-  for (const cred of memberCredentials) {
-    if (!cred.isNewUser || !cred.email) continue;
-    try {
+
+  // ── COMMIT: society is now safe to expose to normal queries ──────────
+  await Society.updateOne({ _id: society._id }, { $set: { importStatus: "active" } });
+  await markRun(importRunId, {
+    status: "COMMITTED",
+    stage: "Queueing onboarding emails",
+    processedCount: billsGenerated,
+  });
+
+  // ── EMAIL OUTBOX — created only now, after every rollback checkpoint has
+  // passed. Durable + idempotent: a retry of this same importRunId can never
+  // queue a duplicate email (unique importRunId+userId+type index), and a
+  // send failure here cannot undo the DB writes above.
+  const outboxDocs = memberCredentials
+    .filter((c) => c.isNewUser && c.email)
+    .map((cred) => {
       const onboardingToken = signToken({ userId: cred.userId, purpose: "onboarding" }, { expiresIn: "7d" });
       const setCredentialsUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/onboarding/set-credentials?token=${onboardingToken}`;
-      await sendEmail({
+      return {
+        importRunId,
+        userId: cred.userId,
+        type: "onboarding",
         to: cred.email,
         subject: `Set up your account — ${societyPayload.societyName}`,
         html: onboardingEmailHtml({
@@ -718,14 +828,43 @@ export async function POST(request) {
           societyName: societyPayload.societyName,
           setCredentialsUrl,
         }),
-      });
+      };
+    });
+  if (outboxDocs.length > 0) {
+    try {
+      await EmailOutbox.insertMany(outboxDocs, { ordered: false });
     } catch (err) {
-      console.error(`Onboarding email failed for ${cred.email}:`, err.message);
-      onboardingEmailErrors.push(`${cred.wing}-${cred.flatNo}: ${err.message}`);
+      // Duplicate-key errors here just mean a prior crashed attempt already
+      // queued these rows — safe to ignore; anything else is logged.
+      if (err.code !== 11000) {
+        console.error("[bulk-import] outbox insert error:", err.message);
+      }
     }
   }
-  return NextResponse.json({
+  await markRun(importRunId, { status: "EMAIL_QUEUED", stage: "Sending onboarding emails" });
+
+  // ── SEND — best-effort, never re-runs a row already marked sent ──────
+  const onboardingEmailErrors = [];
+  const pending = await EmailOutbox.find({ importRunId, status: "pending" });
+  for (const row of pending) {
+    try {
+      await sendEmail({ to: row.to, subject: row.subject, html: row.html });
+      row.status = "sent";
+      row.sentAt = new Date();
+      await row.save();
+    } catch (err) {
+      row.attempts += 1;
+      row.lastError = err.message;
+      row.status = "failed";
+      await row.save();
+      console.error(`Onboarding email failed for ${row.to}:`, err.message);
+      onboardingEmailErrors.push(row.to);
+    }
+  }
+
+  const result = {
     success: true,
+    importRunId,
     society: {
       id: society._id,
       name: society.name,
@@ -749,5 +888,13 @@ export async function POST(request) {
     billPeriod,
     billErrors,
     warnings,
+  };
+  await markRun(importRunId, {
+    status: "COMPLETED",
+    stage: "Done",
+    processedCount: validMembers.length,
+    result,
+    finishedAt: new Date(),
   });
+  return NextResponse.json(result);
 }

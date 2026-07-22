@@ -857,16 +857,66 @@ export default function AdminSocietiesPage() {
     setCreationProgress({ current: 0, total: 0 });
     queryClient.invalidateQueries(["admin-societies"]);
   };
+  // Real, server-backed progress → animation step index. Replaces the old
+  // fake fixed-duration setTimeout chain, which advanced only after the
+  // whole import had already finished (so it never reflected what was
+  // actually happening during the 2-4 minute wait).
+  const stageToAnimStep = (status) => {
+    switch (status) {
+      case "VALIDATING":
+        return 1;
+      case "IMPORTING":
+        return 3;
+      case "FINALIZING":
+        return 4;
+      case "COMMITTED":
+      case "EMAIL_QUEUED":
+      case "COMPLETED":
+        return 5;
+      default:
+        return 0;
+    }
+  };
+  const pollImportStatus = (importRunId, stopRef) => {
+    const tick = async () => {
+      if (stopRef.stopped) return;
+      try {
+        const res = await fetch(
+          `/api/admin/bulk-import/status?importRunId=${encodeURIComponent(importRunId)}`,
+          { credentials: "include", headers: { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY } },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setBulkAnimStep(stageToAnimStep(data.status));
+        }
+      } catch {
+        // transient poll failure — the POST response below is still authoritative
+      }
+      if (!stopRef.stopped) stopRef.timer = setTimeout(tick, 1500);
+    };
+    tick();
+  };
   const handleBulkImport = async () => {
     if (!bulkFile) return;
+    // Stable key across a refresh/retry so a duplicate click or a re-submit
+    // after a dropped connection replays the same server-side run instead of
+    // starting a second import.
+    let importRunId = sessionStorage.getItem("bulkImportRunId");
+    if (!importRunId) {
+      importRunId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      sessionStorage.setItem("bulkImportRunId", importRunId);
+    }
     setBulkStep("uploading");
     setBulkAnimStep(0);
     setBulkError(null);
     setBulkResult(null);
     setBulkValidation(null);
+    const stopRef = { stopped: false, timer: null };
+    pollImportStatus(importRunId, stopRef);
     try {
       const fd = new FormData();
       fd.append("file", bulkFile);
+      fd.append("importRunId", importRunId);
       const res = await fetch("/api/admin/bulk-import", {
         method: "POST",
         credentials: "include",
@@ -874,28 +924,26 @@ export default function AdminSocietiesPage() {
         body: fd,
       });
       const data = await res.json();
-      // Validation failed or rollback — show errors immediately, no animation
-      if (data.validationFailed) {
+      stopRef.stopped = true;
+      clearTimeout(stopRef.timer);
+      // Validation failed or rollback — show errors immediately, no animation.
+      // The key is cleared so the admin can fix the sheet and retry cleanly.
+      if (data.validationFailed || res.status === 409) {
+        sessionStorage.removeItem("bulkImportRunId");
         setBulkValidation(data);
         setBulkStep("validation-failed");
         return;
       }
       if (!res.ok) throw new Error(data.error || "Import failed");
-      // API succeeded — animate steps so admin sees what happened
-      setBulkAnimStep(1);
-      await new Promise((r) => setTimeout(r, 1000));
-      setBulkAnimStep(2);
-      await new Promise((r) => setTimeout(r, 900));
-      setBulkAnimStep(3);
-      await new Promise((r) => setTimeout(r, 1000));
-      setBulkAnimStep(4);
-      await new Promise((r) => setTimeout(r, 1000));
       setBulkAnimStep(5);
-      await new Promise((r) => setTimeout(r, 700));
       setBulkResult(data);
       setBulkStep("done");
+      sessionStorage.removeItem("bulkImportRunId");
       queryClient.invalidateQueries(["admin-societies"]);
     } catch (err) {
+      stopRef.stopped = true;
+      clearTimeout(stopRef.timer);
+      sessionStorage.removeItem("bulkImportRunId");
       setBulkError(err.message);
       setBulkStep("error");
     }

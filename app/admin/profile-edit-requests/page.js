@@ -28,6 +28,7 @@ const SECTION_LABELS = {
   Contact: "Contact",
   FamilyMember: "Family member",
   EmergencyContact: "Emergency contact",
+  Parking: "Parking",
 };
 function describePayload(item) {
   const { section, action, payload = {} } = item;
@@ -38,6 +39,12 @@ function describePayload(item) {
   }
   if (section === "EmergencyContact") {
     return `${payload.name || "—"} (${payload.relation || "—"}) · ${payload.phoneNumber || "—"}${payload.address ? ` · ${payload.address}` : ""}`;
+  }
+  if (section === "Parking") {
+    if (action === "Remove") return `Remove parking slot ${payload.slotNumber || payload.slotId || ""}`.trim();
+    return [payload.slotNumber && `Slot ${payload.slotNumber}`, payload.type, payload.vehicleType]
+      .filter(Boolean)
+      .join(" · ") || "—";
   }
   // FamilyMember
   if (action === "Remove") return "Remove this family member";

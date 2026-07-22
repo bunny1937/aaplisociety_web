@@ -3,7 +3,7 @@ const SocietySchema = new mongoose.Schema(
   {
     // Basic Information
     name: { type: String, required: true, trim: true },
-    registrationNo: { type: String, unique: true, trim: true, minlength: 4 },
+    registrationNo: { type: String, unique: true, sparse: true, trim: true, minlength: 4 },
     dateOfRegistration: { type: Date },
     address: { type: String, trim: true },
     panNo: { type: String, trim: true },
@@ -15,6 +15,20 @@ const SocietySchema = new mongoose.Schema(
     // Carpet Area
     carpetAreaSqft: { type: Number, default: 0 },
     // Bill Template - UPDATED STRUCTURE
+    // Separate designer template for payment / advance receipts. Mirrors the
+    // bill template design shape so the same designer UI can edit both.
+    receiptTemplate: {
+      type: {
+        type: String,
+        enum: ["default", "custom"],
+        default: "default",
+      },
+      design: { type: mongoose.Schema.Types.Mixed, default: null },
+      logoUrl: { type: String },
+      signatureUrl: { type: String },
+      updatedAt: { type: Date },
+      updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    },
     billTemplate: {
       type: {
         type: String,
@@ -210,6 +224,15 @@ const SocietySchema = new mongoose.Schema(
       L: { type: Number, default: 0 },
       R: { type: Number, default: 0 },
     },
+    // Bulk-import provenance — lets a failed/partial import be compensated by
+    // deleting every document tagged with the same run, and lets normal
+    // queries exclude a society still mid-import if ever needed.
+    importRunId: { type: String, default: null, index: true },
+    importStatus: {
+      type: String,
+      enum: ["importing", "active"],
+      default: "active",
+    },
     // ❌ FIX #2: REMOVED billingHeads[] array
     // Use BillingHead model as SINGLE SOURCE OF TRUTH:
     // Query: BillingHead.find({ societyId })
@@ -256,5 +279,6 @@ SocietySchema.pre("save", function (next) {
 // Indexes
 SocietySchema.index({ isDeleted: 1 });
 SocietySchema.index({ "subscription.status": 1 });
+SocietySchema.index({ importStatus: 1 });
 export default mongoose.models.Society ||
   mongoose.model("Society", SocietySchema);

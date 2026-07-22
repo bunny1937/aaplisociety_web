@@ -36,6 +36,9 @@ export async function POST(request, { params }) {
       if (err.code === "FAMILY_MEMBER_NOT_FOUND") {
         return NextResponse.json({ error: "That family member no longer exists on this flat" }, { status: 409 });
       }
+      if (err.code === "PARKING_SLOT_NOT_FOUND") {
+        return NextResponse.json({ error: "That parking slot no longer exists on this flat" }, { status: 409 });
+      }
       throw err;
     }
     await member.save();

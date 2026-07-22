@@ -482,9 +482,9 @@ export default function GenerateBillsPage() {
   const [autoGenState, setAutoGenState] = useState(null); // null | { status: "running"|"done"|"error", label, count, error }
   const diffIssues =
     excelValidation?.issues?.filter((i) => i.type === "diff") || [];
-  const allDiffsApproved =
-    diffIssues.length === 0 ||
-    diffIssues.every((d) => approvedDiffs.has(d.memberId));
+  // Conflicts can no longer be "approved" — they must be fixed in the Excel and
+  // re-uploaded. Any mismatch hard-blocks generation.
+  const allDiffsApproved = diffIssues.length === 0;
   const canGenerate = !excelImporting && allDiffsApproved;
   const runValidation = async (file) => {
     if (!file || billMonth === null || billYear === null) return;
@@ -1481,7 +1481,7 @@ ${
           </div>
         </div>
       )}
-      {/* ── TEST CONFIG PANEL (temporary) ──────────────────────────────── */}
+      {/* ── TEST CONFIG PANEL (temporary) ─────────────────���������────────────── */}
       <TestConfigPanel
         members={allMembers}
         periodLabel={periodLabel}
@@ -1847,7 +1847,8 @@ ${
                       }}
                     >
                       {diffIssues.length} Amount Mismatch
-                      {diffIssues.length > 1 ? "es" : ""} - Must Approve Each
+                      {diffIssues.length > 1 ? "es" : ""} — Fix in Excel &amp;
+                      Re-upload
                     </h4>
                     {diffIssues.map((issue, i) => (
                       <div
@@ -1949,49 +1950,23 @@ ${
                               {issue.why} - {issue.fix}
                             </div>
                           </div>
-                          <label
+                          <div
                             style={{
                               display: "flex",
-                              flexDirection: "column",
                               alignItems: "center",
-                              gap: "0.35rem",
-                              cursor: "pointer",
-                              minWidth: 60,
+                              justifyContent: "center",
+                              textAlign: "center",
+                              minWidth: 90,
+                              fontSize: "0.7rem",
+                              fontWeight: 800,
+                              color: "#dc2626",
+                              lineHeight: 1.3,
                             }}
                           >
-                            <input
-                              type="checkbox"
-                              checked={approvedDiffs.has(issue.memberId)}
-                              onChange={(e) =>
-                                setApprovedDiffs((prev) => {
-                                  const next = new Set(prev);
-                                  e.target.checked
-                                    ? next.add(issue.memberId)
-                                    : next.delete(issue.memberId);
-                                  return next;
-                                })
-                              }
-                              style={{
-                                width: 20,
-                                height: 20,
-                                cursor: "pointer",
-                                accentColor: "#059669",
-                              }}
-                            />
-                            <span
-                              style={{
-                                fontSize: "0.7rem",
-                                fontWeight: 700,
-                                color: approvedDiffs.has(issue.memberId)
-                                  ? "#059669"
-                                  : "#dc2626",
-                              }}
-                            >
-                              {approvedDiffs.has(issue.memberId)
-                                ? "APPROVED"
-                                : "APPROVE?"}
-                            </span>
-                          </label>
+                            FIX &amp;
+                            <br />
+                            RE-UPLOAD
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -2009,13 +1984,12 @@ ${
                           textAlign: "center",
                         }}
                       >
-                        Generate blocked - approve all{" "}
-                        {diffIssues.length - approvedDiffs.size} remaining
-                        mismatch
-                        {diffIssues.length - approvedDiffs.size > 1
-                          ? "es"
-                          : ""}{" "}
-                        to unlock
+                        Generation blocked. {diffIssues.length} flat
+                        {diffIssues.length > 1 ? "s have" : " has"} an Excel
+                        amount that doesn&apos;t match the system calculation.
+                        Correct those charge amounts in your Excel (or clear the
+                        amount to accept the system value), then re-upload the
+                        file. Nothing is generated until every row matches.
                       </div>
                     )}
                   </div>
@@ -2292,7 +2266,7 @@ ${
                             {excelImporting
                               ? "Generating..."
                               : !canGenerate
-                                ? `Approve ${diffIssues.length - approvedDiffs.size} diff(s) first`
+                                ? `Fix ${diffIssues.length} conflict(s) & re-upload`
                                 : `Generate ${excelValidation.validCount} Bills`}
                           </button>
                           {hasPayments && canGenerate && (

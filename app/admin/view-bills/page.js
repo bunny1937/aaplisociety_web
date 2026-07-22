@@ -71,11 +71,13 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 function BillPdfTab({ bill }) {
-  const [html, setHtml] = useState(bill.billHtml || null);
-  const [loading, setLoading] = useState(!bill.billHtml);
+  // Always fetch from the server so the CURRENT saved template is applied
+  // (the server re-renders live for non-locked bills). Stored billHtml is only
+  // used as an offline fallback if the request fails.
+  const [html, setHtml] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   useEffect(() => {
-    if (bill.billHtml) { setHtml(bill.billHtml); setLoading(false); return; }
     setLoading(true);
     fetch(`/api/bills/download?id=${bill._id}`, { credentials: "include" })
       .then(async (res) => {
@@ -84,7 +86,10 @@ function BillPdfTab({ bill }) {
         throw new Error("PDF template — use Print button to download");
       })
       .then((h) => { setHtml(h); setLoading(false); })
-      .catch((e) => { setError(e.message); setLoading(false); });
+      .catch((e) => {
+        if (bill.billHtml) { setHtml(bill.billHtml); setLoading(false); return; }
+        setError(e.message); setLoading(false);
+      });
   }, [bill._id]);
   // Must run unconditionally, before any early return below - a hook called
   // only on some renders (e.g. skipped while `loading` is true on first

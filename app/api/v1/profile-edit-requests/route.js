@@ -30,7 +30,30 @@ export const POST = withRoute(async (req) => {
   if (!claims.memberId) throw new ApiError(403, "Only residents can request profile edits");
   const body = await req.json().catch(() => ({}));
   const parsed = profileEditRequestCreateSchema.safeParse(body);
-  if (!parsed.success) throw zodError(parsed);
+  if (!parsed.success) {
+    // Verbose diagnostics: a 400 here must never again be a blind "Invalid
+    // input". We echo exactly what the server received + which fields failed,
+    // plus a _build stamp so we can confirm THIS code is actually deployed.
+    const flat = parsed.error.flatten();
+    console.error("[v1] profile-edit-requests validation failed", {
+      received: body,
+      issues: parsed.error.issues,
+    });
+    return json(
+      {
+        error: flat,
+        _build: "2026-07-22-parking-diag-1",
+        received: {
+          section: body?.section ?? null,
+          action: body?.action ?? null,
+          payloadKeys: body?.payload ? Object.keys(body.payload) : null,
+          payload: body?.payload ?? null,
+        },
+        issues: parsed.error.issues,
+      },
+      { status: 400 },
+    );
+  }
   const data = parsed.data;
 
   const member = await Member.findOne({ _id: claims.memberId, societyId }).select("_id");

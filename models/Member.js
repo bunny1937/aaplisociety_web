@@ -268,6 +268,8 @@ const MemberSchema = new mongoose.Schema(
     contactInvalid: { type: Boolean, default: false },
     contactInvalidReason: { type: String, trim: true, default: "" },
     contactInvalidAt: { type: Date, default: null },
+    // Bulk-import provenance — see Society.importRunId
+    importRunId: { type: String, default: null, index: true },
   },
   {
     timestamps: true,

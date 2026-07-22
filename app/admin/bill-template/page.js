@@ -86,6 +86,7 @@ const DEFAULT_TEMPLATES = {
 export default function BillTemplateDesigner() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("select"); // select, design, upload
+  const [scope, setScope] = useState("bill"); // bill | receipt (which template is being edited)
   const [selectedTemplate, setSelectedTemplate] = useState("modern");
   const [template, setTemplate] = useState(DEFAULT_TEMPLATES.modern.design);
   // Upload states
@@ -114,34 +115,49 @@ export default function BillTemplateDesigner() {
     queryKey: ["bill-template-full"],
     queryFn: () => apiClient.get("/api/bill-template/get-full"),
   });
-  const { data: templateData } = useQuery({
-    queryKey: ["bill-template"],
-    queryFn: () => apiClient.get("/api/bill-template"),
-  });
   // Use billingHeadsData.heads to render live charge rows in template preview
   // Save template mutation
   useEffect(() => {
-    if (savedTemplateData?.template) {
-      const saved = savedTemplateData.template;
-      if (saved.type === "custom" && saved.design) {
-        setActiveTab("design");
-        setTemplate(saved.design);
-      } else if (saved.type === "uploaded-pdf" && saved.pdfUrl) {
-        setActiveTab("upload");
-        setUploadedPDF(saved.pdfUrl);
-        setPdfHasFormFields(saved.hasFormFields || false);
-        setDetectedFields(saved.detectedFields || []);
-      } else if (saved.type === "uploaded-image" && saved.imageUrl) {
-        setActiveTab("upload");
-        setUploadedImage(saved.imageUrl);
-      }
+    const saved =
+      scope === "receipt"
+        ? savedTemplateData?.receiptTemplate
+        : savedTemplateData?.template;
+    if (!saved) return;
+    if (scope === "receipt") {
+      // Receipts only support the custom designer (no uploaded PDF/image).
+      setActiveTab("design");
+      if (saved.type === "custom" && saved.design) setTemplate(saved.design);
       setUploadedLogo(saved.logoUrl);
       setUploadedSignature(saved.signatureUrl);
+      return;
     }
-  }, [savedTemplateData]);
+    if (saved.type === "custom" && saved.design) {
+      setActiveTab("design");
+      setTemplate(saved.design);
+    } else if (saved.type === "uploaded-pdf" && saved.pdfUrl) {
+      setActiveTab("upload");
+      setUploadedPDF(saved.pdfUrl);
+      setPdfHasFormFields(saved.hasFormFields || false);
+      setDetectedFields(saved.detectedFields || []);
+    } else if (saved.type === "uploaded-image" && saved.imageUrl) {
+      setActiveTab("upload");
+      setUploadedImage(saved.imageUrl);
+    }
+    setUploadedLogo(saved.logoUrl);
+    setUploadedSignature(saved.signatureUrl);
+  }, [savedTemplateData, scope]);
   // Save template mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (scope === "receipt") {
+        return apiClient.post("/api/bill-template/save-full", {
+          type: "custom",
+          design: template,
+          logoUrl: uploadedLogo,
+          signatureUrl: uploadedSignature,
+          scope: "receipt",
+        });
+      }
       let templateData = {};
       if (activeTab === "select" || activeTab === "design") {
         templateData = {
@@ -169,7 +185,10 @@ export default function BillTemplateDesigner() {
           };
         }
       }
-      return apiClient.post("/api/bill-template/save-full", templateData);
+      return apiClient.post("/api/bill-template/save-full", {
+        ...templateData,
+        scope: "bill",
+      });
     },
     onSuccess: () => {
       alert("✅ Template saved successfully!");
@@ -549,9 +568,53 @@ export default function BillTemplateDesigner() {
           disabled={saveMutation.isPending}
           className="btn btn-primary"
         >
-          {saveMutation.isPending ? "⏳ Saving..." : "💾 Save Template"}
+          {saveMutation.isPending
+            ? "⏳ Saving..."
+            : `💾 Save ${scope === "receipt" ? "Receipt" : "Bill"} Template`}
         </button>
       </div>
+      {/* Bill vs Receipt scope */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {[
+          ["bill", "🧾 Bill Template"],
+          ["receipt", "🧾 Receipt Template"],
+        ].map(([s, label]) => (
+          <button
+            key={s}
+            onClick={() => {
+              setScope(s);
+              if (s === "receipt") setActiveTab("design");
+            }}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              border: scope === s ? "2px solid #4f46e5" : "1px solid #d1d5db",
+              background: scope === s ? "#eef2ff" : "#fff",
+              fontWeight: scope === s ? 700 : 500,
+              cursor: "pointer",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {scope === "receipt" && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 14px",
+            background: "#eef2ff",
+            border: "1px solid #c7d2fe",
+            borderRadius: 8,
+            fontSize: 13,
+            color: "#3730a3",
+          }}
+        >
+          Designing the <strong>receipt</strong> template (used for payment &amp;
+          advance receipts). Colours, logo, signature and footer apply to
+          generated receipts. Uploaded PDF/image is only available for bills.
+        </div>
+      )}
       {/* Tabs */}
       <div className={styles.tabs}>
         <button

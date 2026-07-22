@@ -26,7 +26,11 @@ export async function GET(request) {
   try {
     await connectDB();
     const user = await User.findById(decoded.userId).select("name email mustChangePassword profiles").lean();
-    if (!user) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    if (!user)
+      return NextResponse.json(
+        { error: "This account no longer exists. Contact your society admin for a new invite." },
+        { status: 404 },
+      );
     if (!user.mustChangePassword) {
       return NextResponse.json({ error: "This account has already been set up — please log in." }, { status: 400 });
     }

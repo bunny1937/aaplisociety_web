@@ -36,6 +36,8 @@ lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       required: true,
       index: true,
     },
+    // Bulk-import provenance — see Society.importRunId
+    importRunId: { type: String, default: null, index: true },
   },
   {
     timestamps: true,
