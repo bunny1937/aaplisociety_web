@@ -44,9 +44,10 @@ const BillSchema = new mongoose.Schema(
     // totalBillDue = billPrincipalBalance + billInterestBalance (immutable)
     totalBillDue: { type: Number, default: 0 },
     // ── Closing-state fields (set after payment, separate from bill state) ──
-    closingPrincipal: { type: Number, default: null },
-    closingInterest: { type: Number, default: null },
-    closingTotal: { type: Number, default: null },
+   // Ledger V2: no-null closing values. Generation sets these = opening+current.
+closingPrincipal: { type: Number, default: 0 },
+closingInterest: { type: Number, default: 0 },
+closingTotal: { type: Number, default: 0 },
     paymentUploadedAt: { type: Date, default: null },
     paymentImportId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -150,9 +151,15 @@ const BillSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    interestOverrideReason: { type: String, trim: true, default: null },
-    interestOverridden: { type: Boolean, default: false },
-    billPdfUrl: String,
+   interestOverrideReason: { type: String, trim: true, default: null },
+interestOverridden: { type: Boolean, default: false },
+// ── Ledger V2 canonical audit/version fields (§12) ──
+interestRateApplied: { type: Number, default: 0 },
+schemaVersion: { type: Number, default: 2 },
+calculationVersion: { type: Number, default: 1 },
+rendererVersion: { type: Number, default: 1 },
+engineVersion: { type: String, default: "Ledger V2" },
+billPdfUrl: String,
     billHtml: String, // Stored HTML for preview and print
     renderedHtml: { type: String, select: false }, // stored but not returned by default
     // Soft delete - NO INDEX HERE
@@ -174,20 +181,8 @@ BillSchema.index({ status: 1, scheduledPushDate: 1 }); // for cron job query
 BillSchema.index({ importBatchId: 1 }); // ✅ Defined here only
 BillSchema.index({ "importMetadata.validationStatus": 1 });
 BillSchema.index({ isDeleted: 1 }); // ✅ Defined here only
-BillSchema.pre("save", function (next) {
-  // Only auto-compute balanceAmount on fresh bills (no payments yet).
-  // Once amountPaid > 0, the payment engine owns balanceAmount — don't clobber it.
-  if ((this.amountPaid || 0) === 0) {
-    this.balanceAmount = parseFloat(
-      Math.max(
-        0,
-        (this.principalBalance || 0) +
-          (this.interestBalance || 0) -
-          (this.advanceApplied || 0),
-      ).toFixed(2),
-    );
-  }
-  this.interestAmount = this.monthInterest || this.interestAmount || 0;
-  next();
-});
+// Ledger V2 (§1, §5): balanceAmount is written explicitly by GenerationService /
+// AllocationEngine as (closingPrincipal + closingInterest) and is NEVER
+// recomputed on save. The former pre('save') hook was removed because silent
+// recomputation is exactly what the immutability guarantee forbids.
 export default mongoose.models.Bill || mongoose.model("Bill", BillSchema);

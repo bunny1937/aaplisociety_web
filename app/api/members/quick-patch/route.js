@@ -6,6 +6,8 @@ import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import cache from "@/lib/cache";
 import { calculateMemberCharges } from "@/lib/calculate-member-bill";
+import { validateBillInvariants } from "@/lib/billing/invariants";
+import { correctBillHistorical } from "@/lib/billing/correctionService";
 export async function POST(request) {
   try {
     await connectDB();
@@ -35,6 +37,15 @@ export async function POST(request) {
         billPeriodId: recalcBillPeriodId,
         isDeleted: { $ne: true },
       });
+      if (existingBill && (existingBill.amountPaid || 0) > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "This bill already has a payment recorded — recalculating charges now would overwrite the payment's effect on the closing balance. Use the audited bill-correction workflow instead.",
+          },
+          { status: 409 },
+        );
+      }
       if (existingBill) {
         const heads = await BillingHead.find({
           societyId: decoded.societyId,
@@ -43,18 +54,41 @@ export async function POST(request) {
         }).sort({ order: 1 }).lean();
         const { subtotal, breakdown } = calculateMemberCharges(member.toObject(), heads);
         const newCurrentCharges = parseFloat(subtotal.toFixed(2));
-        const prevPrincipal = parseFloat((existingBill.openingPrincipal || 0).toFixed(2));
-        const prevInterest = parseFloat((existingBill.openingInterest || 0).toFixed(2));
-        const currInt = parseFloat((existingBill.currentInterest ?? existingBill.interestAmount ?? 0).toFixed(2));
-        const newBillPrincipal = parseFloat((prevPrincipal + newCurrentCharges).toFixed(2));
-        const newBillInterest = parseFloat((prevInterest + currInt).toFixed(2));
+        const openingPrincipal = parseFloat((existingBill.openingPrincipal || 0).toFixed(2));
+        const openingInterest = parseFloat((existingBill.openingInterest || 0).toFixed(2));
+        // currentInterest is NOT recomputed here — a member data edit (area/
+        // parking) changes currentCharges only, never interest (§10: interest
+        // depends solely on openingPrincipal, which this edit doesn't touch).
+        const currentInterest = parseFloat((existingBill.currentInterest ?? 0).toFixed(2));
+        const newBillPrincipal = parseFloat((openingPrincipal + newCurrentCharges).toFixed(2));
+        const newBillInterest = parseFloat((openingInterest + currentInterest).toFixed(2));
         const newTotalBillDue = parseFloat((newBillPrincipal + newBillInterest).toFixed(2));
         const alreadyPaid = parseFloat((existingBill.amountPaid || 0).toFixed(2));
         const advApplied = parseFloat((existingBill.advanceApplied || 0).toFixed(2));
         const newBalance = parseFloat(Math.max(0, newTotalBillDue - alreadyPaid - advApplied).toFixed(2));
         const newStatus = newBalance <= 0.005 ? "Paid" : alreadyPaid > 0 || advApplied > 0 ? "Partial" : "Unpaid";
-        await Bill.findByIdAndUpdate(existingBill._id, {
-          $set: {
+        const chargesObj = Object.fromEntries(
+          Object.entries(breakdown).map(([k, v]) => [k, parseFloat(v) || 0]),
+        );
+
+        // Ledger V2 (§6/§8): validate before writing, and go through the
+        // audited correction workflow — never a bare $set on a generated
+        // bill's monetary fields.
+        validateBillInvariants({
+          openingPrincipal,
+          openingInterest,
+          currentCharges: newCurrentCharges,
+          currentInterest,
+          totalBillDue: newTotalBillDue,
+          closingPrincipal: newBillPrincipal,
+          closingInterest: newBillInterest,
+          balanceAmount: newBalance,
+          charges: chargesObj,
+        });
+
+        await correctBillHistorical({
+          bill: existingBill,
+          corrected: {
             currentCharges: newCurrentCharges,
             subtotal: newCurrentCharges,
             currentBillTotal: newCurrentCharges,
@@ -62,10 +96,15 @@ export async function POST(request) {
             billInterestBalance: newBillInterest,
             totalBillDue: newTotalBillDue,
             totalAmount: newTotalBillDue,
+            closingPrincipal: newBillPrincipal,
+            closingInterest: newBillInterest,
+            closingTotal: newTotalBillDue,
             balanceAmount: newBalance,
             status: newStatus,
-            charges: new Map(Object.entries(breakdown).map(([k, v]) => [k, parseFloat(v) || 0])),
+            charges: new Map(Object.entries(chargesObj)),
           },
+          reason: `Member data corrected (carpetAreaSqft/parkingSlots) — bill charges recalculated from BillingHeads for period ${recalcBillPeriodId}`,
+          performedBy: decoded.userId,
         });
         billRecalculated = true;
       }

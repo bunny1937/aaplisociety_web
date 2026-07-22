@@ -21,10 +21,11 @@ export const POST = withRoute(async (req) => {
   const body = await req.json().catch(() => ({}));
   const parsed = loginSchema.safeParse(body);
   if (!parsed.success) throw zodError(parsed);
-  const { identifier, password } = parsed.data;
+  const identifier = parsed.data.identifier.trim().toLowerCase();
+  const { password } = parsed.data;
 
   const user = await User.findOne({
-    $or: [{ username: identifier }, { email: identifier.toLowerCase() }],
+    $or: [{ username: identifier }, { email: identifier }],
   });
   if (!user || !(await verifyPassword(password, user))) {
     throw new ApiError(401, "Invalid credentials");

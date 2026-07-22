@@ -7,10 +7,12 @@ import Receipt from "@/models/Receipt";
 import Society from "@/models/Society";
 import PaymentImport from "@/models/PaymentImport";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-import { allocatePaymentInterestFirst } from "../../../../utils/interestUtils";
 import { validatePaymentRows } from "../../../../utils/excelValidator";
 import { getFinancialYear } from "@/lib/date-utils";
 import * as XLSX from "xlsx";
+import crypto from "node:crypto";
+import cache from "@/lib/cache";
+import { applyPaymentToBill } from "@/lib/billing/allocationService";
 function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
 }
@@ -278,16 +280,63 @@ export async function POST(request) {
           { error: "No valid rows to process" },
           { status: 400 },
         );
-      const society = await Society.findById(dec.societyId)
-        .select("config")
-        .lean();
-      const allocationMode =
-        society?.config?.adjustmentApplicationMode || "INTEREST_FIRST";
-      const financialYearFn = getFinancialYear;
-      // Group rows by month/year to determine billPeriodId for import record
+
       const periodId = validRows[0].billPeriodId;
       const importMonth = validRows[0].month;
       const importYear = validRows[0].year;
+
+      // ── Import-level idempotency ───────────────────────────────────────────
+      // A content signature (society + each row's member/period/amount/date) is
+      // stored with a unique index. Re-uploading the same file — even in a brand
+      // new request — is rejected, so a payment can never be applied twice.
+      const contentHash = crypto
+        .createHash("sha256")
+        .update(
+          JSON.stringify([
+            String(dec.societyId),
+            ...validRows.map((r) => [
+              String(r.memberId),
+              r.billPeriodId,
+              twoDp(r.amountPaid),
+              r.paymentDate,
+            ]),
+          ]),
+        )
+        .digest("hex");
+
+      let importRecord;
+      try {
+        importRecord = await PaymentImport.create({
+          societyId: dec.societyId,
+          importMonth,
+          importYear,
+          billPeriodId: periodId,
+          uploadedFileName: fileName,
+          uploadedBy: dec.userId,
+          contentHash,
+          totalRows: validRows.length,
+          status: "Processing",
+        });
+      } catch (e) {
+        const isDup =
+          e &&
+          (e.code === 11000 ||
+            /E11000/.test(e.message || "") ||
+            (Array.isArray(e.writeErrors) &&
+              e.writeErrors.some((w) => w?.code === 11000)));
+        if (isDup) {
+          delete staged[batchKey];
+          return NextResponse.json(
+            {
+              error:
+                "This payment file was already imported. Duplicate uploads are blocked to prevent double payments.",
+            },
+            { status: 409 },
+          );
+        }
+        throw e;
+      }
+
       const importResults = [];
       let totalInterestCleared = 0;
       let totalPrincipalCleared = 0;
@@ -295,121 +344,55 @@ export async function POST(request) {
       let totalAmountProcessed = 0;
       let successCount = 0;
       let failCount = 0;
+      let skippedCount = 0;
+
       for (const row of validRows) {
         try {
           const member = await Member.findById(row.memberId).lean();
           if (!member) throw new Error("Member not found");
-          const unpaidBills = await Bill.find({
+
+          // The single canonical bill for this member + period (Ledger V2).
+          const bill = await Bill.findOne({
             memberId: row.memberId,
             societyId: dec.societyId,
             billPeriodId: row.billPeriodId,
-            status: { $in: ["Unpaid", "Partial", "Overdue"] },
-            isHistoricalArchive: { $ne: true }, // never touch historical audit records
+            isHistoricalArchive: { $ne: true },
             importedFrom: { $ne: "BulkImport" },
             isLocked: { $ne: true },
             isDeleted: { $ne: true },
-          }).sort({ billYear: 1, billMonth: 1 });
-          const billsForAlloc = unpaidBills.map((b) => {
-            const intBal = twoDp(b.interestBalance || 0);
-            const prinBal = twoDp(b.principalBalance || 0);
-            const bal = twoDp(b.balanceAmount || 0);
-            // If principal+interest don't add up to balanceAmount (legacy bills),
-            // treat the entire balanceAmount as principal so allocation can clear it.
-            const effectivePrincipal =
-              prinBal + intBal < bal - 0.005 ? bal - intBal : prinBal;
-            return {
-              _id: b._id,
-              principalBalance: effectivePrincipal,
-              interestBalance: intBal,
-              balanceAmount: bal,
-              amountPaid: twoDp(b.amountPaid || 0),
-              totalAmount: twoDp(b.totalBillDue || b.totalAmount || 0),
-            };
+          }).select("_id balanceAmount status billPeriodId");
+          if (!bill) throw new Error(`No live bill found for ${row.billPeriodId}`);
+
+          const balanceBefore = twoDp(bill.balanceAmount);
+
+          // ALL allocation math + audit + advance credit happen inside the
+          // engine, atomically and idempotently (keyed on billId + importId).
+          const result = await applyPaymentToBill({
+            billId: bill._id,
+            payment: twoDp(row.amountPaid),
+            paymentImportId: importRecord._id,
+            performedBy: dec.userId,
           });
-          const {
-            billUpdates,
-            totalInterestCleared: intClr,
-            totalPrincipalCleared: prinClr,
-            advanceCredit,
-          } = allocatePaymentInterestFirst(
-            row.amountPaid,
-            billsForAlloc,
-            allocationMode,
-          );
-          // Persist bill updates
-          let primaryBillId = null;
-          const preMutationBalance = new Map(); // billId → balanceAmount before payment
-          for (const upd of billUpdates) {
-            const bill = unpaidBills.find(
-              (b) => String(b._id) === String(upd.billId),
-            );
-            if (!bill) continue;
-            if (!primaryBillId) primaryBillId = bill._id;
-            preMutationBalance.set(String(bill._id), twoDp(bill.balanceAmount));
-            const eps = 0.005;
-            const newClosingPrincipal =
-              twoDp(upd.newPrincipalBalance) < eps
-                ? 0
-                : twoDp(upd.newPrincipalBalance);
-            const newClosingInterest =
-              twoDp(upd.newInterestBalance) < eps
-                ? 0
-                : twoDp(upd.newInterestBalance);
-            const newBalanceAmount =
-              twoDp(upd.newBalanceAmount) < eps
-                ? 0
-                : twoDp(upd.newBalanceAmount);
-            // TO:
-            bill.interestBalance = newClosingInterest;
-            bill.principalBalance = twoDp(
-              Math.max(0, newBalanceAmount - newClosingInterest),
-            ); // principal = whatever is left after interest portion
-            bill.balanceAmount = newBalanceAmount;
-            bill.amountPaid = twoDp(upd.newAmountPaid);
-            bill.status = upd.newStatus;
-            // Write immutable closing state
-            bill.closingPrincipal = newClosingPrincipal;
-            bill.closingInterest = newClosingInterest;
-            bill.closingTotal = newBalanceAmount;
-            bill.paymentUploadedAt = new Date();
-            bill.lastModifiedAt = new Date();
-            bill.lastModifiedBy = dec.userId;
-            await bill.save();
-            // Zero out historical BulkImport bills absorbed into openingPrincipal.
-            // Only target importedFrom=BulkImport — live Partial bills are real receivables.
-            if (upd.newStatus === "Paid" && (bill.openingPrincipal > 0 || bill.openingInterest > 0)) {
-              await Bill.updateMany(
-                {
-                  memberId: row.memberId,
-                  societyId: dec.societyId,
-                  billPeriodId: { $lt: bill.billPeriodId },
-                  balanceAmount: { $gt: 0.005 },
-                  importedFrom: "BulkImport",
-                  isDeleted: { $ne: true },
-                },
-                {
-                  $set: {
-                    balanceAmount: 0,
-                    principalBalance: 0,
-                    interestBalance: 0,
-                    status: "Paid",
-                    closingPrincipal: 0,
-                    closingInterest: 0,
-                    closingTotal: 0,
-                    lastModifiedAt: new Date(),
-                    lastModifiedBy: dec.userId,
-                  },
-                },
-              );
-            }
-          }
-          // Advance credit
-          if (advanceCredit > 0) {
-            await Member.findByIdAndUpdate(row.memberId, {
-              $inc: { advanceCredit },
+
+          if (result.skipped) {
+            skippedCount++;
+            importResults.push({
+              memberId: row.memberId,
+              flat: row.flat,
+              memberName: row.memberName,
+              amountPaid: row.amountPaid,
+              status: "Skipped",
+              errorMessage: `Skipped (${result.skipped})`,
             });
+            continue;
           }
-          // Ledger transaction
+
+          const intClr = twoDp(result.interestPaid);
+          const prinClr = twoDp(result.principalPaid);
+          const advanceCredit = twoDp(result.advanceCredit);
+
+          // Ledger transaction — created ONLY when a payment was actually
+          // applied, so duplicates/retries never create duplicate transactions.
           const lastTxn = await Transaction.findOne({
             memberId: row.memberId,
             societyId: dec.societyId,
@@ -429,10 +412,10 @@ export async function POST(request) {
             societyId: dec.societyId,
             type: "Credit",
             category: "Payment",
-            description: `Payment uploaded via Excel for ${row.billPeriodId}${row.remarks ? ` - ${row.remarks}` : ""}`,
+            description: `Payment via Excel for ${row.billPeriodId}${row.remarks ? ` - ${row.remarks}` : ""}`,
             amount: row.amountPaid,
-            interestCleared: twoDp(intClr),
-            principalCleared: twoDp(prinClr),
+            interestCleared: intClr,
+            principalCleared: prinClr,
             balanceAfterTransaction: newBal,
             paymentMode: row.paymentMethod || "Cash",
             chequeNo: row.chequeNo,
@@ -441,39 +424,26 @@ export async function POST(request) {
             notes: row.remarks,
             createdBy: dec.userId,
             billPeriodId: row.billPeriodId,
-            financialYear: financialYearFn(new Date(row.paymentDate)),
-            paymentBreakdown: {
-              interestCleared: twoDp(intClr),
-              principalCleared: twoDp(prinClr),
-              advanceCredit: twoDp(advanceCredit),
-            },
+            financialYear: getFinancialYear(new Date(row.paymentDate)),
+            paymentImportId: importRecord._id,
+            paymentBreakdown: { interestCleared: intClr, principalCleared: prinClr, advanceCredit },
           });
-          // Create receipt for each bill touched in this payment — amount = what was applied to that bill
+
+          // Receipt for the bill touched.
+          const amountApplied = twoDp(intClr + prinClr);
           const receiptNos = [];
-          for (const upd of billUpdates) {
-            const bill = unpaidBills.find(
-              (b) => String(b._id) === String(upd.billId),
-            );
-            if (!bill) continue;
-            const amountApplied = twoDp(
-              parseFloat(upd.principalCleared) +
-                parseFloat(upd.interestCleared),
-            );
-            if (amountApplied <= 0) continue; // skip bills that received nothing
-            const receiptNo = `RCP-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-            const nameParts = (member.ownerName || "member")
-              .trim()
-              .split(/\s+/);
+          if (amountApplied > 0) {
+            const nameParts = (member.ownerName || "member").trim().split(/\s+/);
             const nameSlug =
               nameParts.length > 1
                 ? `${nameParts[0]}_${nameParts[nameParts.length - 1]}`
                 : nameParts[0];
             const flatSlug = `${member.wing || ""}-${member.flatNo || ""}`;
-            const filename =
-              `${nameSlug}_${flatSlug}_${bill.billPeriodId}_receipt`.replace(
-                /[^a-zA-Z0-9_\-]/g,
-                "_",
-              );
+            const filename = `${nameSlug}_${flatSlug}_${bill.billPeriodId}_receipt`.replace(
+              /[^a-zA-Z0-9_\-]/g,
+              "_",
+            );
+            const receiptNo = `RCP-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
             await Receipt.create({
               receiptNo,
               filename,
@@ -482,8 +452,7 @@ export async function POST(request) {
               memberId: row.memberId,
               societyId: dec.societyId,
               amount: amountApplied,
-              previousBalanceSnapshot:
-                preMutationBalance.get(String(bill._id)) ?? 0,
+              previousBalanceSnapshot: balanceBefore,
               paymentMode: row.paymentMethod || "Cash",
               paidAt: new Date(row.paymentDate),
               transactionId: txnId,
@@ -492,6 +461,7 @@ export async function POST(request) {
             });
             receiptNos.push(receiptNo);
           }
+
           totalInterestCleared += intClr;
           totalPrincipalCleared += prinClr;
           totalAdvanceCredit += advanceCredit;
@@ -502,10 +472,10 @@ export async function POST(request) {
             flat: row.flat,
             memberName: row.memberName,
             amountPaid: row.amountPaid,
-            interestCleared: twoDp(intClr),
-            principalCleared: twoDp(prinClr),
-            advanceCredit: twoDp(advanceCredit),
-            billId: primaryBillId,
+            interestCleared: intClr,
+            principalCleared: prinClr,
+            advanceCredit,
+            billId: bill._id,
             receiptNos,
             status: "Success",
           });
@@ -521,37 +491,45 @@ export async function POST(request) {
           });
         }
       }
-      // Create PaymentImport record
-      const importRecord = await PaymentImport.create({
-        societyId: dec.societyId,
-        importMonth,
-        importYear,
-        billPeriodId: periodId,
-        uploadedFileName: fileName,
-        uploadedBy: dec.userId,
-        totalRows: validRows.length,
-        successRows: successCount,
-        failedRows: failCount,
-        totalAmountUploaded: twoDp(totalAmountProcessed),
-        totalInterestCleared: twoDp(totalInterestCleared),
-        totalPrincipalCleared: twoDp(totalPrincipalCleared),
-        totalAdvanceCredit: twoDp(totalAdvanceCredit),
-        rows: importResults.map((r) => ({
-          memberId: r.memberId,
-          flatNo: r.flat?.split("-")[1],
-          wing: r.flat?.split("-")[0],
-          ownerName: r.memberName,
-          amountPaid: r.amountPaid,
-          interestCleared: r.interestCleared || 0,
-          principalCleared: r.principalCleared || 0,
-          advanceCredit: r.advanceCredit || 0,
-          billId: r.billId,
-          status: r.status,
-          errorMessage: r.errorMessage,
-        })),
-        notes,
-        status: "Completed",
-      });
+
+      await PaymentImport.updateOne(
+        { _id: importRecord._id },
+        {
+          $set: {
+            successRows: successCount,
+            failedRows: failCount,
+            skippedRows: skippedCount,
+            totalAmountUploaded: twoDp(totalAmountProcessed),
+            totalInterestCleared: twoDp(totalInterestCleared),
+            totalPrincipalCleared: twoDp(totalPrincipalCleared),
+            totalAdvanceCredit: twoDp(totalAdvanceCredit),
+            rows: importResults.map((r) => ({
+              memberId: r.memberId,
+              flatNo: r.flat?.split("-")[1],
+              wing: r.flat?.split("-")[0],
+              ownerName: r.memberName,
+              amountPaid: r.amountPaid,
+              interestCleared: r.interestCleared || 0,
+              principalCleared: r.principalCleared || 0,
+              advanceCredit: r.advanceCredit || 0,
+              billId: r.billId,
+              status: r.status,
+              errorMessage: r.errorMessage,
+            })),
+            notes,
+            status: "Completed",
+          },
+        },
+      );
+
+      // NOTE (behaviour change): the previous silent `Bill.updateMany(...)` that
+      // zeroed historical BulkImport bills has been REMOVED (§17(2) forbids
+      // silent recompute-overwrites). History corrections now go exclusively
+      // through the audited /superadmin/fix-history-bills workflow.
+
+      await cache.delPattern(`billing:list:${dec.societyId}:*`);
+      await cache.del(`payments:outstanding:${dec.societyId}`);
+
       delete staged[batchKey];
       return NextResponse.json({
         success: true,
@@ -560,6 +538,7 @@ export async function POST(request) {
         totalRows: validRows.length,
         successRows: successCount,
         failedRows: failCount,
+        skippedRows: skippedCount,
         totalAmountProcessed: twoDp(totalAmountProcessed),
         totalInterestCleared: twoDp(totalInterestCleared),
         totalPrincipalCleared: twoDp(totalPrincipalCleared),

@@ -35,6 +35,10 @@ const PaymentImportSchema = new mongoose.Schema(
     uploadedFileName: String,
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     uploadedAt: { type: Date, default: Date.now },
+    // Ledger V2 §7/§9: content signature of the uploaded rows. A unique index on
+    // { societyId, contentHash } rejects re-uploads of the same file so payments
+    // can never be applied twice across separate upload requests.
+    contentHash: { type: String, default: null },
     totalRows: { type: Number, default: 0 },
     successRows: { type: Number, default: 0 },
     failedRows: { type: Number, default: 0 },
@@ -54,5 +58,14 @@ const PaymentImportSchema = new mongoose.Schema(
   { timestamps: true },
 );
 PaymentImportSchema.index({ societyId: 1, importYear: 1, importMonth: 1 });
+// Import-level idempotency: one completed/processing import per (society, file
+// signature). Partial index so legacy rows with a null contentHash are exempt.
+PaymentImportSchema.index(
+  { societyId: 1, contentHash: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { contentHash: { $type: "string" } },
+  },
+);
 export default mongoose.models.PaymentImport ||
   mongoose.model("PaymentImport", PaymentImportSchema);

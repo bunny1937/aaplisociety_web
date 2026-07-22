@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import {
-  calculateMonthlyInterest,
-  allocatePaymentInterestFirst,
-  roundInterest,
-} from "../../../utils/interestUtils";
+import { calculateMonthlyInterest, roundInterest } from "../../../utils/interestUtils";
+import { allocatePayment } from "@/lib/billing/allocation-math";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -153,26 +150,22 @@ function runSimulation(config, member, actions) {
         // No bill generated yet — ignore stray payment.
         continue;
       }
-      const billsForAlloc = [{
-        _id: currentBill.billPeriodId,
-        principalBalance: currentBill.remainingPrincipal,
-        interestBalance: currentBill.remainingInterest,
-        balanceAmount: twoDp(currentBill.remainingPrincipal + currentBill.remainingInterest),
-        amountPaid: twoDp(currentBill.totalBillDue - currentBill.remainingPrincipal - currentBill.remainingInterest),
-        totalAmount: currentBill.totalBillDue,
-      }];
-      const result = allocatePaymentInterestFirst(
-        amount,
-        billsForAlloc,
-        config.allocationMode
-      );
-      const { billUpdates, advanceCredit: advCredit, breakdown } = result;
-      // Apply allocation result to currentBill's mutable remaining fields.
-      const upd = billUpdates[0];
-      if (upd) {
-        currentBill.remainingPrincipal = twoDp(upd.newPrincipalBalance);
-        currentBill.remainingInterest = twoDp(upd.newInterestBalance);
-      }
+      // Ledger V2: single-bill allocation via the shared pure function — this
+      // simulator already assumes at most one active bill (per its own
+      // "currentBill" design), so it's a direct fit, not a reimplementation.
+      const result = allocatePayment({
+        closingPrincipal: currentBill.remainingPrincipal,
+        closingInterest: currentBill.remainingInterest,
+        payment: amount,
+      });
+      const advCredit = result.advanceCredit;
+      const breakdown = {
+        interestCleared: result.interestPaid,
+        principalCleared: result.principalPaid,
+        advanceCredit: result.advanceCredit,
+      };
+      currentBill.remainingPrincipal = result.closingPrincipal;
+      currentBill.remainingInterest = result.closingInterest;
       carry.advanceCredit = twoDp(carry.advanceCredit + advCredit);
       // Zero-normalize to prevent phantom balances from float residuals.
       const eps = 0.005;
@@ -191,15 +184,15 @@ function runSimulation(config, member, actions) {
         billPeriodId,
         paymentDate: isoDate(paymentDate),
         amount,
-        interestCleared: twoDp(result.totalInterestCleared),
-        principalCleared: twoDp(result.totalPrincipalCleared),
+        interestCleared: twoDp(result.interestPaid),
+        principalCleared: twoDp(result.principalPaid),
         advanceCredit: twoDp(advCredit),
         breakdown,
       };
       const closingSnapshot = {
         paymentAmount: amount,
-        interestCleared: twoDp(result.totalInterestCleared),
-        principalCleared: twoDp(result.totalPrincipalCleared),
+        interestCleared: twoDp(result.interestPaid),
+        principalCleared: twoDp(result.principalPaid),
         closingPrincipal,
         closingInterest,
         closingTotal,

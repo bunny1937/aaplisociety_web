@@ -1,12 +1,31 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-export function useNotifications() {
+
+// Poll cadence (ms) while the tab is visible.
+const DEFAULT_POLL_INTERVAL = 20000;
+
+/**
+ * Notification polling hook.
+ *
+ * @param {Object}  [options]
+ * @param {boolean} [options.enabled=true]  When false the hook does NO fetching
+ *   and holds NO interval at all. Callers gate this to "needful" pages so
+ *   unrelated screens (superadmin console, gate terminal, etc.) never poll.
+ * @param {number}  [options.pollInterval]  Poll cadence in ms while visible.
+ */
+export function useNotifications({
+  enabled = true,
+  pollInterval = DEFAULT_POLL_INTERVAL,
+} = {}) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [toasts, setToasts] = useState([]);
+
   // Fetch from DB (persistent)
   const fetchNotifications = useCallback(async () => {
+    // Never hit the network on a page that doesn't need notifications.
+    if (!enabled) return;
     try {
       const res = await fetch("/api/notifications?limit=20", {
         credentials: "include",
@@ -30,15 +49,56 @@ export function useNotifications() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
+
   // No realtime push server (socket.io needs a persistent Node server, which
-  // Vercel's serverless deployment doesn't run) — poll instead. Cheap, and
-  // avoids an infinite reconnect loop hitting a route that never exists there.
+  // Vercel's serverless deployment doesn't run) — poll instead. But poll ONLY
+  // when (a) this page needs notifications AND (b) the tab is actually
+  // visible. A hidden/background tab holds no interval; polling resumes with
+  // an immediate catch-up fetch when the tab is foregrounded again. This kills
+  // the old "every open page polls forever in the background" waste.
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 20000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
+    if (!enabled) {
+      // Disabled page: make sure nothing lingers from a previous enabled state.
+      setNotifications([]);
+      setUnreadCount(0);
+      setToasts([]);
+      setLoading(false);
+      return;
+    }
+
+    let intervalId = null;
+
+    const startPolling = () => {
+      if (intervalId != null) return; // already running
+      fetchNotifications(); // immediate catch-up
+      intervalId = setInterval(fetchNotifications, pollInterval);
+    };
+
+    const stopPolling = () => {
+      if (intervalId != null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) stopPolling();
+      else startPolling();
+    };
+
+    // Start immediately unless the tab was opened in the background.
+    if (typeof document === "undefined" || !document.hidden) {
+      startPolling();
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      stopPolling();
+    };
+  }, [enabled, pollInterval, fetchNotifications]);
+
   const markRead = useCallback(async (notificationId) => {
     setNotifications((prev) =>
       prev.map((n) => (n._id === notificationId ? { ...n, isRead: true } : n)),
@@ -51,6 +111,7 @@ export function useNotifications() {
       body: JSON.stringify({ notificationId }),
     });
   }, []);
+
   const markAllRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setUnreadCount(0);
@@ -59,9 +120,11 @@ export function useNotifications() {
       credentials: "include",
     });
   }, []);
+
   const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
   return {
     notifications,
     unreadCount,

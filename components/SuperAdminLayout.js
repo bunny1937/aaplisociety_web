@@ -6,7 +6,6 @@ import {
   LogOut, LayoutDashboard, Building2, ClipboardList,
   DatabaseZap, ScrollText, PackageOpen, Search, Bell, Shield,
 } from "lucide-react";
-import NotificationBell from "./NotificationBell";
 import RouteLoadingBar from "./RouteLoadingBar";
 import styles from "@/styles/SuperAdminLayout.module.css";
 const NAV = [
@@ -177,7 +176,6 @@ export default function SuperAdminLayout({ children }) {
               <span className={styles.searchKbd}>⌘K</span>
             </div>
             <div className={styles.topHeaderRight}>
-              <NotificationBell />
               <div className={styles.headerUser}>
                 <div className={styles.headerAvatar}>
                   {user.name?.charAt(0)?.toUpperCase()}

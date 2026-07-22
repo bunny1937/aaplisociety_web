@@ -7,11 +7,8 @@ import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { getFinancialYear } from "@/lib/date-utils";
 import AuditLog from "@/models/AuditLog";
-import { calculateBillStatusAfterPayment } from "@/lib/bill-status-manager";
-import {
-  allocatePaymentInterestFirst,
-  getBillPayFinalDate,
-} from "../../../../utils/interestUtils";
+import { getBillPayFinalDate } from "../../../../utils/interestUtils";
+import { applyPaymentToBill } from "@/lib/billing/allocationService";
 export async function POST(request) {
   try {
     await connectDB();
@@ -132,28 +129,31 @@ export async function POST(request) {
     //     }
     //   }
     // }
-    // ... (keep auth, member fetch, billPayFinalDate guard unchanged) ...
-    // ✅ Get unpaid bills oldest-first
-    const unpaidBills = await Bill.find({
+    // Ledger V2 (§14): a member has at most ONE bill carrying a nonzero
+    // balance at any time — every generated bill absorbs the previous one's
+    // full closing balance into its own opening balance. So we just need the
+    // single latest unpaid/partial bill, not a multi-bill scan + allocation.
+    const latestUnpaidBill = await Bill.findOne({
       memberId,
       societyId: decoded.societyId,
-      status: { $in: ["Unpaid", "Partial", "Overdue", "Scheduled"] },
+      status: { $in: ["Unpaid", "Partial", "Overdue"] },
       isDeleted: false,
-    }).sort({ billYear: 1, billMonth: 1 });
+    })
+      .sort({ billYear: -1, billMonth: -1 })
+      .select("_id");
     const hasOpeningBalance =
       (member.openingPrincipal || 0) + (member.openingInterest || 0) > 0;
-    const memberTotalPayable =
-      unpaidBills.reduce((s, b) => s + (b.balanceAmount || 0), 0) +
-      (member.openingPrincipal || 0) +
-      (member.openingInterest || 0);
-    if (memberTotalPayable <= 0 && unpaidBills.length === 0) {
+    if (!latestUnpaidBill && !hasOpeningBalance) {
       return NextResponse.json(
         { error: "No outstanding bills found for this member" },
         { status: 400 },
       );
     }
-    // If no bills but has opening balance, create a synthetic bill for allocation
-    if (unpaidBills.length === 0 && hasOpeningBalance) {
+    // Pre-first-bill edge case only: member has an opening-balance seed but
+    // has never had a bill generated yet, so there is no Bill row to apply a
+    // payment against. This does NOT calculate interest — it's a direct,
+    // one-time reduction of the seed values, not a duplicate billing engine.
+    if (!latestUnpaidBill && hasOpeningBalance) {
       // Allocate against opening balance using interest-first
       const openingInt = parseFloat((member.openingInterest || 0).toFixed(2));
       const openingPrin = parseFloat((member.openingPrincipal || 0).toFixed(2));
@@ -228,68 +228,42 @@ export async function POST(request) {
         { status: 201 },
       );
     }
-    // ✅ Migrate legacy bills that have balanceAmount but no principalBalance/interestBalance split
-    // This handles bills generated before the new engine was deployed
-    const normalizedBills = unpaidBills.map((b) => {
-      const bill = b.toObject ? b.toObject() : { ...b };
-      if (
-        (bill.principalBalance || 0) === 0 &&
-        (bill.interestBalance || 0) === 0 &&
-        (bill.balanceAmount || 0) > 0
-      ) {
-        // Use monthInterest as the interest basis (not interestAmount which may be stale)
-        const intBal = parseFloat(
-          (bill.monthInterest || bill.interestAmount || 0).toFixed(2),
-        );
-        const prinBal = parseFloat(
-          Math.max(0, bill.balanceAmount - intBal).toFixed(2),
-        );
-        bill.interestBalance = intBal;
-        bill.principalBalance = prinBal;
-      }
-      return bill;
-    });
-    // ✅ INTEREST-FIRST ALLOCATION (replaces FIFO)
-    const {
-      billUpdates,
-      totalInterestCleared,
-      totalPrincipalCleared,
-      advanceCredit,
-      breakdown,
-    } = allocatePaymentInterestFirst(
-      parseFloat(amount),
-      normalizedBills,
-      society?.config?.adjustmentApplicationMode || "INTEREST_FIRST",
-    );
-    // Persist bill updates
-    const billsUpdated = [];
-    for (const update of billUpdates) {
-      const bill = unpaidBills.find(
-        (b) => String(b._id) === String(update.billId),
+    // Ledger V2: all allocation math, invariant checks, and the audit event
+    // live inside applyPaymentToBill() — nothing computed independently here.
+    let result;
+    try {
+      result = await applyPaymentToBill({
+        billId: latestUnpaidBill._id,
+        payment: parseFloat(amount),
+        performedBy: decoded.userId,
+      });
+    } catch (err) {
+      if (err.code === "NEGATIVE_PAYMENT")
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      if (err.code && /^[BP]\d/.test(err.code))
+        return NextResponse.json({ error: `Invariant ${err.code}: ${err.message}` }, { status: 422 });
+      throw err;
+    }
+    if (result.skipped) {
+      return NextResponse.json(
+        { error: `Payment not applied (${result.skipped})` },
+        { status: 409 },
       );
-      if (!bill) continue;
-      bill.interestBalance = update.newInterestBalance;
-      bill.principalBalance = update.newPrincipalBalance;
-      bill.balanceAmount = update.newBalanceAmount;
-      bill.amountPaid = update.newAmountPaid;
-      bill.status = update.newStatus;
-      bill.lastModifiedAt = new Date();
-      bill.lastModifiedBy = decoded.userId;
-      await bill.save();
-      billsUpdated.push({
-        billId: bill._id,
-        billPeriod: bill.billPeriodId,
-        interestCleared: parseFloat(update.interestCleared),
-        principalCleared: parseFloat(update.principalCleared),
-        newStatus: bill.status,
-      });
     }
-    // ✅ Store advance credit on member if overpayment
-    if (advanceCredit > 0) {
-      await Member.findByIdAndUpdate(memberId, {
-        $inc: { advanceCredit },
-      });
-    }
+    const advanceCredit = result.advanceCredit;
+    const breakdown = {
+      interestCleared: result.interestPaid,
+      principalCleared: result.principalPaid,
+      advanceCredit: result.advanceCredit,
+    };
+    const billsUpdated = [
+      {
+        billId: result.billId,
+        interestCleared: result.interestPaid,
+        principalCleared: result.principalPaid,
+        newStatus: result.status,
+      },
+    ];
     // ✅ Get current ledger balance for transaction
     const lastTransaction = await Transaction.findOne({
       memberId,

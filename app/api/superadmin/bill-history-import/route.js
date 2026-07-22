@@ -13,6 +13,7 @@ import Society from "@/models/Society";
 import AuditReport from "@/models/AuditReport";
 import mongoose from "mongoose";
 import { validateAdminRequest } from "@/lib/admin-middleware";
+import { validateBillInvariants } from "@/lib/billing/invariants";
 export async function POST(request) {
   const authResult = validateAdminRequest(request);
   if (!authResult?.valid) return authResult;
@@ -98,6 +99,23 @@ export async function POST(request) {
     const closingPrincipal = 0;
     const closingInterest = 0;
     try {
+      // Ledger V2 §6: even a pre-validated client import must satisfy the same
+      // financial invariants as an engine-generated bill before it's trusted
+      // enough to persist. This is NOT routed through generateBill() — these
+      // are historical paper records with no BillingHeads/engine context, not
+      // a live generation — but the numbers still must reconcile.
+      const chargesObj = Object.fromEntries(charges);
+      validateBillInvariants({
+        openingPrincipal,
+        openingInterest,
+        currentCharges,
+        currentInterest,
+        totalBillDue,
+        closingPrincipal,
+        closingInterest,
+        balanceAmount: 0,
+        charges: chargesObj,
+      });
       const bill = new Bill({
         societyId: sid,
         memberId: member._id,
@@ -129,6 +147,11 @@ export async function POST(request) {
         status,
         dueDate,
         importedFrom: "BulkImport",
+        // Not produced by GenerationService — a pre-validated paper-record
+        // import, so it's explicitly marked outside the Ledger V2 engine
+        // versioning (which only describes engine-computed bills).
+        calculationVersion: 0,
+        engineVersion: "Legacy Import",
         isLocked: true,
         isHistoricalArchive: true,
         importedFinancialYear,

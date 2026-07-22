@@ -23,7 +23,12 @@ export async function middleware(request) {
   const method = request.method;
   // API routes: only do CSRF check, then pass through — never redirect to login page
   if (pathname.startsWith("/api/")) {
-    const isUnsafeMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+    // /api/v1/* is the bearer-token mobile API — no cookies involved, so
+    // there's nothing for a CSRF/Origin check to protect. Enforcing it here
+    // only blocks legitimate native-app requests, which don't send Origin.
+    const isUnsafeMethod =
+      !pathname.startsWith("/api/v1/") &&
+      ["POST", "PUT", "PATCH", "DELETE"].includes(method);
     if (isUnsafeMethod) {
       const origin = request.headers.get("origin");
       // Non-production only: allow Playwright APIRequestContext which sends no Origin.

@@ -310,11 +310,21 @@ export async function GET(request) {
       });
     }
     // ─── Case 3: No stored HTML, no PDF template — re-render ───
+    // Ledger V2: never recompute interest here — read the persisted canonical
+    // fields and hand them to the renderer as precomputed values (root cause
+    // of the ₹17.50-vs-₹21 divergence fixed by never letting this fall
+    // through to the renderer's own calculateMonthlyInterest fallback).
     if (!hasPdfTemplate) {
       const renderResult = renderBillHtml(null, society, member, {
         breakdown: bill.charges || {},
-        totalAmount: bill.totalAmount,
-        previousBalance: bill.previousBalance || 0,
+        totalAmount: bill.currentCharges ?? bill.totalAmount,
+        previousBalance: parseFloat(((bill.openingPrincipal || 0) + (bill.openingInterest || 0)).toFixed(2)),
+        prevRemPrincipal: bill.openingPrincipal || 0,
+        prevRemInt: bill.openingInterest || 0,
+        precomputedCurrInt: bill.currentInterest,
+        precomputedMonthInterest: bill.billInterestBalance,
+        balanceAmount: bill.balanceAmount,
+        status: bill.status,
         billPeriod: bill.billPeriodId,
         billDate: bill.generatedAt || bill.createdAt,
         dueDate: bill.dueDate,
@@ -329,23 +339,6 @@ export async function GET(request) {
         },
       });
     }
-    const renderResult = renderBillHtml(null, society, member, {
-      breakdown: bill.charges || {},
-      totalAmount: bill.totalAmount,
-      previousBalance: bill.previousBalance || 0,
-      billPeriod: bill.billPeriodId,
-      billDate: bill.generatedAt || bill.createdAt,
-      dueDate: bill.dueDate,
-      unpaidBills: bill.unpaidBills || [],
-      recentTransactions: bill.recentTransactions || [],
-      previousBillHtml: prevBill?.billHtml || null,
-    });
-    return new NextResponse(htmlWrapper(renderResult.html), {
-      headers: {
-        "Content-Type": "text/html",
-        "Content-Disposition": `inline; filename="${pdfTitle}.html"`,
-      },
-    });
   } catch (error) {
     console.error("❌ Download error:", error);
     return NextResponse.json(
@@ -354,224 +347,3 @@ export async function GET(request) {
     );
   }
 }
-// import { NextResponse } from "next/server";
-// import { PDFDocument } from "pdf-lib";
-// import { readFile } from "fs/promises";
-// import { join } from "path";
-// import connectDB from "@/lib/mongodb";
-// import Bill from "@/models/Bill";
-// import Society from "@/models/Society";
-// import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
-// import renderBillHtml from "@/lib/bill-renderer"; // default export — NOT named { renderBillHtml }
-// export async function GET(request) {
-//   try {
-//     await connectDB();
-//     const token = getTokenFromRequest(request);
-//     if (!token) {
-//       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-//     }
-//     const decoded = verifyToken(token);
-//     const { searchParams } = new URL(request.url);
-//     const billId = searchParams.get("id");
-//     if (!billId || billId === "undefined" || billId === "null") {
-//       return NextResponse.json({ error: "Bill ID required" }, { status: 400 });
-//     }
-//     // Get bill
-//     const memberIdFilter = decoded.memberId
-//       ? { memberId: decoded.memberId }
-//       : {};
-//     const bill = await Bill.findOne({
-//       _id: billId,
-//       societyId: decoded.societyId,
-//       ...memberIdFilter,
-//     })
-//       .populate(
-//         "memberId",
-//         "flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary",
-//       )
-//       .lean();
-//     if (!bill) {
-//       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
-//     }
-//     const society = await Society.findById(decoded.societyId).lean();
-//     // Helper — shared across all cases
-//     const ownerRaw = bill.memberId?.ownerName || "Member";
-//     const nameParts = ownerRaw.trim().split(/\s+/);
-//     const nameSlug =
-//       nameParts.length > 1
-//         ? `${nameParts[0]}_${nameParts[nameParts.length - 1]}`
-//         : nameParts[0];
-//     const pdfTitle =
-//       `${nameSlug}_${bill.memberId?.wing}-${bill.memberId?.flatNo}_${bill.billPeriodId}`
-//         .replace(/\s+/g, "_")
-//         .replace(/[^a-zA-Z0-9_\-\.]/g, "");
-//     // Case 1: Bill has stored HTML — serve directly, append previous bill as page 3
-//     if (bill.billHtml) {
-//       // Fetch previous bill for reference page
-//       const prevBill = await Bill.findOne({
-//         memberId: bill.memberId?._id || bill.memberId,
-//         societyId: decoded.societyId,
-//         billPeriodId: { $lt: bill.billPeriodId }, // strictly earlier period
-//         billHtml: { $exists: true, $ne: null },
-//       })
-//         .sort({ billYear: -1, billMonth: -1 })
-//         .lean();
-//       const prevBillPage = prevBill?.billHtml
-//         ? `<div style="page-break-before:always; padding:40px; background:#fff;">
-//             <div style="border-bottom:2px solid #e5e7eb; padding-bottom:12px; margin-bottom:24px;">
-//               <h2 style="margin:0; font-size:16px; color:#6b7280;">📎 Previous Month's Bill — ${prevBill.billPeriodId} (Reference Copy)</h2>
-//             </div>
-//             ${prevBill.billHtml}
-//            </div>`
-//         : "";
-//       const html = `<!DOCTYPE html><html><head><title>${pdfTitle}</title><meta charset="UTF-8">
-//   <style>
-//     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-//     body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 30px; color: #1a1a1a; }
-//     @media print { body { background: white; padding: 0; } .bill-wrapper { box-shadow: none !important; border-radius: 0 !important; } @page { margin: 8mm; size: A4; } }
-//   </style>
-// </head><body>
-//    ${bill.billHtml}
-//    ${prevBillPage}
-//   <div style="text-align:center; margin: 24px 0; padding-bottom: 16px;">
-//     <button onclick="window.print()" style="background:#0c4e54;color:white;border:none;padding:10px 32px;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;">
-//       🖨️ Print / Save as PDF
-//     </button>
-//   </div>
-// </body></html>`;
-//       return new NextResponse(html, {
-//         headers: {
-//           "Content-Type": "text/html",
-//           "Content-Disposition": `inline; filename="Bill-${bill.memberId?.wing}-${bill.memberId?.flatNo}-${bill.billPeriodId}.html"`,
-//         },
-//       });
-//     }
-//     // Case 2: No stored HTML — re-render using renderBillHtml
-//     if (!society?.billTemplate?.pdfUrl) {
-//       const member = bill.memberId; // already populated via .populate()
-//       const renderResult = renderBillHtml(null, society, member, {
-//         breakdown: bill.charges || {},
-//         totalAmount: bill.totalAmount,
-//         previousBalance: bill.previousBalance || 0,
-//         billPeriod: bill.billPeriodId,
-//         billDate: bill.generatedAt || bill.createdAt,
-//         dueDate: bill.dueDate,
-//         unpaidBills: bill.unpaidBills || [],
-//         recentTransactions: bill.recentTransactions || [],
-//       });
-//       const fullHtml = `<!DOCTYPE html>
-// <html>
-// <head>
-//   <title>${pdfTitle}</title>
-//   <meta charset="UTF-8"/>
-//   <style>
-//     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-//     body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f0f2f5; padding: 30px; color: #1a1a1a; }
-//     @media print {
-//       body { background: white; padding: 0; }
-//       @page { margin: 8mm; size: A4; }
-//       .page-break { page-break-before: always; }
-//     }
-//   </style>
-// </head>
-// <body>
-// ${renderResult.billHtml}
-//   <div style="text-align:center; margin: 24px 0; padding-bottom: 16px;">
-//     <button onclick="window.print()" style="background:#0c4e54;color:white;border:none;padding:10px 32px;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;">
-//       🖨️ Print / Save as PDF
-//     </button>
-//   </div>
-// </body>
-// </html>`;
-//       return new NextResponse(fullHtml, {
-//         headers: {
-//           "Content-Type": "text/html",
-//           "Content-Disposition": `inline; filename="${pdfTitle}.html"`,
-//         },
-//       });
-//     }
-//     // Case 3: PDF template exists — fill with pdf-lib
-//     const templatePath = join(
-//       process.cwd(),
-//       "public",
-//       society.billTemplate.pdfUrl,
-//     );
-//     const pdfBytes = await readFile(templatePath);
-//     const pdfDoc = await PDFDocument.load(pdfBytes);
-//     const form = pdfDoc.getForm();
-//     const fields = form.getFields();
-//     const formatDate = (date) => {
-//       return new Date(date).toLocaleDateString("en-IN", {
-//         day: "2-digit",
-//         month: "short",
-//         year: "numeric",
-//       });
-//     };
-//     const billData = {
-//       "Company name": society.name,
-//       Address: society.address,
-//       "GST number": society.gstNumber || "N/A",
-//       "Invoice number": `INV-${bill._id.toString().slice(-6).toUpperCase()}`,
-//       "Invoice date_af_date": formatDate(bill.generatedAt || bill.createdAt),
-//       "Bill date_af_date": formatDate(bill.generatedAt || bill.createdAt),
-//       "Due date_af_date": formatDate(bill.dueDate),
-//       "Customer name": bill.memberId?.ownerName || "N/A",
-//       "Customer address": `${bill.memberId?.wing || ""}-${bill.memberId?.flatNo || ""}`,
-//       "Customer phone": bill.memberId?.contactNumber || "",
-//       "Customer GST number": "N/A",
-//       "Sub Total": (bill.subtotal || bill.currentBillTotal || 0).toFixed(2),
-//       Discount: "0",
-//       "Tax Rate": "0",
-//       "Tax value": (bill.serviceTax || 0).toFixed(2),
-//       Shipping: "0",
-//       "Previous dues": (bill.previousBalance || 0).toFixed(2),
-//       "Grand total": bill.totalAmount.toFixed(2),
-//       "Account holder name": society.bankDetails?.accountHolderName || "",
-//       "Account number": society.bankDetails?.accountNumber || "",
-//       "Bank name": society.bankDetails?.bankName || "",
-//       "IFSC Code": society.bankDetails?.ifscCode || "",
-//     };
-//     if (bill.charges) {
-//       Object.entries(bill.charges).forEach(([chargeName, amount], index) => {
-//         const productNum = index + 1;
-//         if (productNum <= 6) {
-//           billData[`Product #${productNum}`] = chargeName;
-//           billData[`Product #${productNum} amount`] = amount.toFixed(2);
-//           billData[`Product #${productNum} Rate`] = amount.toFixed(2);
-//           billData[`Qty #${productNum}`] = "1";
-//           billData[`HSN code #${productNum}`] = "";
-//         }
-//       });
-//     }
-//     console.log(
-//       "📋 Filling PDF with data:",
-//       Object.keys(billData).filter((k) => billData[k]),
-//     );
-//     fields.forEach((field) => {
-//       const fieldName = field.getName();
-//       const value = billData[fieldName];
-//       if (value) {
-//         try {
-//           field.setText(String(value));
-//           console.log(`✅ Filled: ${fieldName} = ${value}`);
-//         } catch (err) {
-//           console.log(`⚠️ Skip: ${fieldName} - ${err.message}`);
-//         }
-//       }
-//     });
-//     form.flatten();
-//     const filledPdf = await pdfDoc.save();
-//     return new NextResponse(filledPdf, {
-//       headers: {
-//         "Content-Type": "application/pdf",
-//         "Content-Disposition": `attachment; filename="Bill-${bill.memberId?.wing}-${bill.memberId?.flatNo}-${bill.billPeriodId}.pdf"`,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("❌ Download error:", error);
-//     return NextResponse.json(
-//       { error: "Failed", details: error.message },
-//       { status: 500 },
-//     );
-//   }
-// }

@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import Bill from "@/models/Bill";
 import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
 import { safeConfigDate } from "../../../../utils/dateUtils";
-import { computePreviousBalances } from "../../../../utils/billingEngine";
+import { resolveOpeningBalances } from "@/lib/billing/generationService";
 export async function GET(request) {
   try {
     await connectDB();
@@ -116,40 +116,16 @@ export async function GET(request) {
         row["CurrentCharges"] = parseFloat(subtotal.toFixed(2)); // overwritten below if bill already exists
         const interestRate = parseFloat(society?.config?.interestRate || 0);
         const currentPeriodId = `${year}-${String(month).padStart(2, "0")}`;
-        // Fetch unpaid PRIOR bills only (exclude current period — it may already exist)
-        const [unpaidBills, anyPriorBill] = await Promise.all([
-          Bill.find({
+        // Ledger V2: same single-lookup carry-forward GenerationService uses,
+        // so this preview can never diverge from what generateBill() computes.
+        const { openingPrincipal: prevRemPrincipal, openingInterest: prevRemInt } =
+          await resolveOpeningBalances({
             memberId: m._id,
             societyId: decoded.societyId,
-            status: { $in: ["Unpaid", "Partial", "Overdue"] },
-            billPeriodId: { $ne: currentPeriodId },
-            isDeleted: { $ne: true },
-          })
-            .select(
-              "balanceAmount principalBalance interestBalance dueDate billYear billMonth amountPaid status",
-            )
-            .lean(),
-          Bill.findOne({
-            memberId: m._id,
-            societyId: decoded.societyId,
-            billPeriodId: { $ne: currentPeriodId },
-            isDeleted: { $ne: true },
-          })
-            .select("_id")
-            .lean(),
-        ]);
-        // Opening balances (used only when member has no prior bills ever — new member)
-        const openingPrincipal = parseFloat(
-          (m.openingPrincipal || 0).toFixed(2),
-        );
-        const openingInterest = parseFloat((m.openingInterest || 0).toFixed(2));
-        // Compute previous outstanding using centralized engine
-        const { principalOutstanding: prevRemPrincipal, interestOutstanding: prevRemInt } =
-          computePreviousBalances(
-            unpaidBills,
-            anyPriorBill,
-            { openingPrincipal, openingInterest },
-          );
+            year,
+            month,
+            member: m,
+          });
         // If bill already generated — use stored values exactly, never recalculate
         const existingBill = await Bill.findOne({
           memberId: m._id,

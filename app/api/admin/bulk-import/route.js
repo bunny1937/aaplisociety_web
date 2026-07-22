@@ -15,8 +15,8 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import * as XLSX from "xlsx";
 import { validateAdminRequest } from "@/lib/admin-middleware";
-import { calculateMemberCharges } from "@/lib/calculate-member-bill";
-import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
+import { generateBill } from "@/lib/billing/generationService";
+import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
 import { generateUniqueSocietyCode } from "@/lib/society-code";
 import { generatePassword } from "@/lib/password-generator";
@@ -618,53 +618,29 @@ export async function POST(request) {
     }).lean();
     for (const member of allMembers) {
       try {
-        const { breakdown, subtotal } = calculateMemberCharges(
-          member,
-          billingHeads,
-        );
-        // Opening balances as seeds (no prior bills, so openingPrincipal/openingInterest come from member)
-        const prevRemPrincipal = member.openingPrincipal || 0;
-        const prevRemInt = member.openingInterest || 0;
-        const interestRate = societyPayload.config.interestRate || 21;
-        let currInt = 0,
-          monthInterest = 0;
-        if (prevRemPrincipal > 0 || prevRemInt > 0) {
-          ({ currInt, monthInterest } = calculateMonthlyInterest({
-            remainingPrincipal: prevRemPrincipal,
-            remInt: prevRemInt,
-            annualRate: interestRate,
-            interestRounding: "TWO_DECIMAL",
-          }));
-        }
-        const _openingPrincipal = parseFloat(prevRemPrincipal.toFixed(2));
-        const _openingInterest = parseFloat(prevRemInt.toFixed(2));
-        const _currentCharges = parseFloat(subtotal.toFixed(2));
-        const _currentInterest = parseFloat((currInt || 0).toFixed(2));
-        const _billPrincipalBalance = parseFloat(
-          (_openingPrincipal + _currentCharges).toFixed(2),
-        );
-        const _billInterestBalance = parseFloat(
-          (_openingInterest + _currentInterest).toFixed(2),
-        );
-        const _totalBillDue = parseFloat(
-          (_billPrincipalBalance + _billInterestBalance).toFixed(2),
-        );
-        const _memberAdvance = parseFloat(
-          (member.advanceCredit || 0).toFixed(2),
-        );
-        const _advApplied = parseFloat(
-          Math.min(_memberAdvance, _totalBillDue).toFixed(2),
-        );
-        const _balance = parseFloat(
-          Math.max(0, _totalBillDue - _advApplied).toFixed(2),
-        );
-        if (_advApplied > 0) {
-          await Member.findByIdAndUpdate(member._id, {
-            $inc: { advanceCredit: -_advApplied },
-          });
+        // Ledger V2: the canonical GenerationService owns opening/current/
+        // interest math — no independent calculation here. First-ever bill
+        // for a member seeds openingPrincipal/openingInterest from the
+        // Member doc (set from the import sheet), same as before.
+        const bill = await generateBill({
+          societyId: society._id,
+          memberId: member._id,
+          year: billYear,
+          month: billMonth,
+          performedBy: "System",
+        });
+        if (bill.status !== "Scheduled" && (member.advanceCredit || 0) > 0) {
+          const applied = Math.min(
+            parseFloat(member.advanceCredit.toFixed(2)),
+            bill.totalBillDue,
+          );
+          if (applied > 0) {
+            await applyPaymentToBill({ billId: bill._id, payment: applied, performedBy: "System" });
+            await Member.updateOne({ _id: member._id }, { $inc: { advanceCredit: -applied } });
+          }
         }
         const transactionId = Transaction.generateTransactionId();
-        const newBalance = (member.openingBalance || 0) + subtotal;
+        const newBalance = (member.openingBalance || 0) + bill.currentCharges;
         await Transaction.create({
           transactionId,
           societyId: society._id,
@@ -674,74 +650,13 @@ export async function POST(request) {
           type: "Debit",
           category: "Maintenance",
           description: `Bill for ${billPeriod}`,
-          amount: subtotal,
+          amount: bill.currentCharges,
           balanceAfterTransaction: newBalance,
           paymentMode: "System",
           billPeriodId: billPeriod,
           financialYear,
         });
-        await Bill.findOneAndUpdate(
-          {
-            memberId: member._id,
-            societyId: society._id,
-            billPeriodId: billPeriod,
-          },
-          {
-            $set: {
-              billPeriodId: billPeriod,
-              billMonth: billMonth - 1, // 0-indexed
-              billYear,
-              memberId: member._id,
-              societyId: society._id,
-              openingPrincipal: _openingPrincipal,
-              openingInterest: _openingInterest,
-              currentCharges: _currentCharges,
-              currentInterest: _currentInterest,
-              billPrincipalBalance: _billPrincipalBalance,
-              billInterestBalance: _billInterestBalance,
-              totalBillDue: _totalBillDue,
-              previousBalance: member.openingBalance || 0,
-              previousPrincipal: _openingPrincipal,
-              previousInterest: _openingInterest,
-              currInt: currInt || 0,
-              monthInterest: monthInterest || 0,
-              interestAmount: monthInterest || 0,
-              subtotal,
-              charges: new Map(
-                Object.entries(breakdown).map(([k, v]) => [
-                  k,
-                  parseFloat(v) || 0,
-                ]),
-              ),
-              totalAmount: _totalBillDue,
-              amountPaid: _advApplied,
-              advanceApplied: _advApplied,
-              principalBalance: parseFloat(
-                Math.max(0, _balance - _billInterestBalance).toFixed(2),
-              ),
-              interestBalance: parseFloat(
-                Math.min(_billInterestBalance, _balance).toFixed(2),
-              ),
-              balanceAmount: _balance,
-              dueDate: new Date(
-                billYear,
-                billMonth - 1,
-                societyPayload.config.interestAfterDays || 15,
-              ),
-              status:
-                _balance <= 0.005
-                  ? "Paid"
-                  : _advApplied > 0
-                    ? "Partial"
-                    : "Unpaid",
-              generatedAt: new Date(),
-              importedFrom: "BulkImport",
-              isDeleted: false,
-            },
-          },
-          { upsert: true, new: true },
-        );
-        // Do NOT zero openingPrincipal/openingInterest here.
+        // Do NOT zero Member.openingPrincipal/openingInterest here.
         // They are the member's original seed values — zeroing them means if
         // the generated bill is later deleted, the system loses the opening balance forever.
         billsGenerated++;

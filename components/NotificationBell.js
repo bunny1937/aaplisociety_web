@@ -1,19 +1,29 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useNotifications } from "../hooks/useNotifications";
 import NotificationToast from "./NotificationToast";
 import styles from "@/styles/NotificationBell.module.css";
+
+// Only these route trees consume the billing / payment / notice / complaint
+// notification stream, so the bell AND its 20s polling are limited to them.
+// Everything else — the superadmin platform console (/superadmin/*), the
+// security gate terminal (/security/*), auth/login screens, etc. — renders no
+// bell and never hits /api/notifications.
+// Need live notifications on a new area later? Add its prefix here.
+const NEEDFUL_NOTIFICATION_ROUTES = ["/member", "/admin"];
+
 const TYPE_ICONS = {
-  BILL_GENERATED: "🧾",
-  PAYMENT_RECEIVED: "✅",
-  PAYMENT_FAILED: "❌",
-  DUE_REMINDER: "⏰",
-  NOTICE_POSTED: "📢",
-  COMPLAINT_APPROVED: "👍",
-  COMPLAINT_REJECTED: "👎",
-  MAINTENANCE_ALERT: "🔧",
-  ADMIN_MESSAGE: "📣",
-  CUSTOM: "🔔",
+  BILL_GENERATED: "\ud83e\uddfe",
+  PAYMENT_RECEIVED: "\u2705",
+  PAYMENT_FAILED: "\u274c",
+  DUE_REMINDER: "\u23f0",
+  NOTICE_POSTED: "\ud83d\udce2",
+  COMPLAINT_APPROVED: "\ud83d\udc4d",
+  COMPLAINT_REJECTED: "\ud83d\udc4e",
+  MAINTENANCE_ALERT: "\ud83d\udd27",
+  ADMIN_MESSAGE: "\ud83d\udce3",
+  CUSTOM: "\ud83d\udd14",
 };
 function timeAgo(date) {
   const diff = (Date.now() - new Date(date)) / 1000;
@@ -25,6 +35,13 @@ function timeAgo(date) {
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const pathname = usePathname();
+
+  // Is the current page one that actually needs notifications?
+  const isNeedful = NEEDFUL_NOTIFICATION_ROUTES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+
   const {
     notifications,
     unreadCount,
@@ -33,7 +50,7 @@ export default function NotificationBell() {
     markRead,
     markAllRead,
     dismissToast,
-  } = useNotifications();
+  } = useNotifications({ enabled: isNeedful });
   // Close on outside click
   useEffect(() => {
     function handleClick(e) {
@@ -42,6 +59,11 @@ export default function NotificationBell() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Not a notification-needful page — render nothing (and, per the hook above,
+  // nothing is ever polled here either).
+  if (!isNeedful) return null;
+
   const handleOpen = () => setOpen((o) => !o);
   const handleItemClick = (n) => {
     if (!n.isRead) markRead(n._id);

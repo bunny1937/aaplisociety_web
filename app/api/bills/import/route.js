@@ -7,6 +7,11 @@ import BillingHead from "@/models/BillingHead";
 import * as XLSX from "xlsx";
 import { v4 as uuidv4 } from "uuid";
 import { requireRoles, BILLING_WRITE_ROLES } from "@/lib/authz";
+import { calculateMonthlyInterest } from "@/utils/interestUtils";
+import { resolveOpeningBalances } from "@/lib/billing/generationService";
+import { validateBillInvariants } from "@/lib/billing/invariants";
+
+const twoDp = (n) => parseFloat((Number(n) || 0).toFixed(2));
 let tempStorage = {};
 export async function POST(request) {
   try {
@@ -187,67 +192,124 @@ export async function POST(request) {
         societyId: cachedSocietyId,
       }).lean();
       const memberMap = new Map(members.map((m) => [m._id.toString(), m]));
-      // Create bills
-      const billsToInsert = validRows.map((row) => {
-        const data = row.data;
-        const memberId = data["Member ID"].toString().trim();
-        const member = memberMap.get(memberId);
-        const billMonth = parseInt(data["Bill Month"]);
-        const billYear = parseInt(data["Bill Year"]);
-        const billPeriodId = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
-        // Build charges map
-        const charges = new Map();
-        Object.keys(data).forEach((key) => {
-          if (
-            ![
-              "Member ID",
-              "Wing",
-              "Room No",
-              "Bill Month",
-              "Bill Year",
-              "Due Date",
-              "Notes",
-              "Total Amount",
-            ].includes(key)
-          ) {
-            const value = parseFloat(data[key]);
-            if (!isNaN(value) && value > 0) {
-              charges.set(key, value);
+      const society = await Society.findById(cachedSocietyId).lean();
+      const interestRate = society?.config?.interestRate || 0;
+      const interestRounding = society?.config?.interestRounding || "TWO_DECIMAL";
+
+      // Ledger V2: admin-specified custom charge columns bypass BillingHeads
+      // (that's the point of this importer), so it can't call generateBill()
+      // directly — but opening-balance carry-forward and interest still use
+      // the SAME canonical formula/invariants as every other generation path.
+      const billsToInsert = [];
+      const errors = [];
+      for (const row of validRows) {
+        try {
+          const data = row.data;
+          const memberId = data["Member ID"].toString().trim();
+          const member = memberMap.get(memberId);
+          if (!member) throw new Error("Member not found");
+          const billMonth = parseInt(data["Bill Month"]);
+          const billYear = parseInt(data["Bill Year"]);
+          const billPeriodId = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
+
+          const chargesMap = new Map();
+          Object.keys(data).forEach((key) => {
+            if (
+              ![
+                "Member ID", "Wing", "Room No", "Bill Month", "Bill Year",
+                "Due Date", "Notes", "Total Amount",
+              ].includes(key)
+            ) {
+              const value = parseFloat(data[key]);
+              if (!isNaN(value) && value > 0) chargesMap.set(key, value);
             }
+          });
+          const currentCharges = twoDp(
+            Array.from(chargesMap.values()).reduce((sum, v) => sum + v, 0),
+          );
+
+          const { openingPrincipal, openingInterest } = await resolveOpeningBalances({
+            memberId,
+            societyId: cachedSocietyId,
+            year: billYear,
+            month: billMonth + 1,
+            member,
+          });
+
+          let currentInterest = 0;
+          if (openingPrincipal > 0) {
+            const { currInt } = calculateMonthlyInterest({
+              remainingPrincipal: openingPrincipal,
+              remInt: 0,
+              annualRate: interestRate,
+              interestRounding,
+            });
+            currentInterest = twoDp(currInt);
           }
-        });
-        const totalAmount = Array.from(charges.values()).reduce(
-          (sum, val) => sum + val,
-          0,
-        );
-        const dueDate = data["Due Date"]
-          ? new Date(data["Due Date"])
-          : new Date(billYear, billMonth, 10);
-        return {
-          billPeriodId,
-          billMonth,
-          billYear,
-          memberId,
-          societyId: cachedSocietyId,
-          charges: Object.fromEntries(charges),
-          totalAmount,
-          balanceAmount: totalAmount,
-          amountPaid: 0,
-          dueDate,
-          status: "Unpaid",
-          importedFrom: "Excel",
-          notes: data["Notes"] || "",
-          generatedBy: cachedUserId,
-          generatedAt: new Date(),
-        };
-      });
-      await Bill.insertMany(billsToInsert);
+
+          const billPrincipalBalance = twoDp(openingPrincipal + currentCharges);
+          const billInterestBalance = twoDp(openingInterest + currentInterest);
+          const totalBillDue = twoDp(billPrincipalBalance + billInterestBalance);
+          // No-payment-yet default (§1/§3): closing = opening + current.
+          const closingPrincipal = billPrincipalBalance;
+          const closingInterest = billInterestBalance;
+          const balanceAmount = twoDp(closingPrincipal + closingInterest);
+
+          const chargesObj = Object.fromEntries(chargesMap);
+          validateBillInvariants({
+            openingPrincipal, openingInterest, currentCharges, currentInterest,
+            totalBillDue, closingPrincipal, closingInterest, balanceAmount,
+            charges: chargesObj,
+          });
+
+          const dueDate = data["Due Date"]
+            ? new Date(data["Due Date"])
+            : new Date(billYear, billMonth, 10);
+
+          billsToInsert.push({
+            billPeriodId,
+            billMonth,
+            billYear,
+            memberId,
+            societyId: cachedSocietyId,
+            charges: chargesObj,
+            openingPrincipal,
+            openingInterest,
+            currentCharges,
+            currentInterest,
+            interestRateApplied: interestRate,
+            billPrincipalBalance,
+            billInterestBalance,
+            totalBillDue,
+            closingPrincipal,
+            closingInterest,
+            closingTotal: balanceAmount,
+            totalAmount: totalBillDue,
+            balanceAmount,
+            amountPaid: 0,
+            dueDate,
+            status: "Unpaid",
+            importedFrom: "Excel",
+            notes: data["Notes"] || "",
+            generatedBy: cachedUserId,
+            generatedAt: new Date(),
+            schemaVersion: 2,
+            calculationVersion: 1,
+            engineVersion: "Ledger V2",
+          });
+        } catch (err) {
+          errors.push({ rowNumber: row.rowNumber, error: err.message });
+        }
+      }
+      if (billsToInsert.length > 0) await Bill.insertMany(billsToInsert);
       // Clear cache
       delete tempStorage[batchId];
       return NextResponse.json({
         success: true,
         imported: billsToInsert.length,
-        message: `${billsToInsert.length} bills imported successfully`,
+        failed: errors.length,
+        errors: errors.length > 0 ? errors : undefined,
+        message: `${billsToInsert.length} bill(s) imported successfully`,
       });
     }
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

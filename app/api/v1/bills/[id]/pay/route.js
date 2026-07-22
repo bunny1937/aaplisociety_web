@@ -3,8 +3,8 @@ import { getClaims, requireRoles, requireTenant } from "@/lib/v1/auth";
 import { paymentSchema } from "@/lib/v1/schemas";
 import { Bill, Member, Payment, Transaction, Receipt } from "@/lib/v1/models";
 import { BILLING_WRITE_ROLES } from "@/lib/v1/constants";
-import { allocatePaymentInterestFirst } from "@/lib/v1/business";
-import { normalizeBill, newReceiptNo, newTransactionId, billBalances } from "@/lib/v1/billUtils";
+import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import { normalizeBill, newReceiptNo, newTransactionId } from "@/lib/v1/billUtils";
 import { periodLabelFrom } from "@/lib/v1/periodLabel";
 import { notifyPaymentReceived } from "@/lib/v1/notify";
 
@@ -30,25 +30,45 @@ export const POST = withRoute(async (req, ctx) => {
   if (!bill) throw new ApiError(404, "Bill not found");
   if (bill.status === "Paid") throw new ApiError(409, "Bill already paid");
 
-  const bal = billBalances(bill);
-  const { billUpdates, advanceCredit, breakdown } = allocatePaymentInterestFirst(amount, [
-    {
-      billId: String(bill._id),
-      interestBalance: bal.interestBalance,
-      principalBalance: bal.principalBalance,
-      balanceAmount: bal.balanceAmount,
-      totalAmount: bal.totalAmount,
-      amountPaid: bal.amountPaid,
-    },
-  ]);
-  const upd = billUpdates[0];
+  // Ledger V2 (§14): at most one bill carries the outstanding balance at a
+  // time — every generation absorbs the previous bill's full closing state
+  // into its own opening. Paying an OLDER bill after a newer one already
+  // exists would change that older bill's closingPrincipal/closingInterest
+  // without updating the newer bill's already-frozen opening — an instant
+  // P1 carry-forward break. Only the member's latest bill is payable.
+  const newerBillExists = await Bill.exists({
+    societyId,
+    memberId: bill.memberId,
+    billPeriodId: { $gt: bill.billPeriodId ?? bill.period },
+  });
+  if (newerBillExists) {
+    throw new ApiError(
+      409,
+      "This bill has been superseded by a newer one — only the current bill can be paid. Any remaining balance already carried forward.",
+    );
+  }
 
-  bill.amountPaid = upd.newAmountPaid;
-  bill.balanceAmount = upd.newBalanceAmount;
-  bill.principalBalance = upd.newPrincipalBalance;
-  bill.interestBalance = upd.newInterestBalance;
-  bill.status = upd.newStatus;
-  await bill.save();
+  // Ledger V2: all allocation math, invariant checks, and the audit event
+  // live inside applyPaymentToBill() — nothing computed independently here.
+  let result;
+  try {
+    result = await applyPaymentToBill({
+      billId: bill._id,
+      payment: amount,
+      performedBy: claims.userId,
+    });
+  } catch (err) {
+    if (err.code === "NEGATIVE_PAYMENT") throw new ApiError(400, err.message);
+    if (err.code && /^[BP]\d/.test(err.code)) throw new ApiError(422, `Invariant ${err.code}: ${err.message}`);
+    throw err;
+  }
+  if (result.skipped) throw new ApiError(409, `Payment not applied (${result.skipped})`);
+
+  const advanceCredit = result.advanceCredit;
+  const breakdown = { interestCleared: result.interestPaid, principalCleared: result.principalPaid };
+  // Re-fetch: applyPaymentToBill wrote through the canonical model, so this
+  // v1-shaped `bill` doc is stale on amountPaid/balanceAmount/status now.
+  const freshBill = await Bill.findById(bill._id);
 
   const receiptNo = newReceiptNo();
   const transactionId = newTransactionId();
@@ -96,7 +116,7 @@ export const POST = withRoute(async (req, ctx) => {
 
   const member = await Member.findById(bill.memberId).lean();
   return json({
-    bill: normalizeBill(bill, member),
+    bill: normalizeBill(freshBill, member),
     payment: { _id: String(payment._id), amount, paymentMode },
     receipt: { _id: String(receipt._id), receiptNo },
     advanceCredit,
