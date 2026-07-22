@@ -316,10 +316,18 @@ MemberSchema.virtual("currentOwnerFromHistory").get(function () {
 MemberSchema.pre("save", async function (next) {
   if (this.isNew && !this.membershipNumber) {
     try {
+      // Bind to this document's own session (if any). A bulk import creates
+      // every member inside ONE transaction — a read that isn't scoped to
+      // that session can't see the transaction's own uncommitted inserts, so
+      // every member in the batch would see "zero prior members" and all
+      // generate the same MEM-0001, colliding on the unique
+      // {societyId,membershipNumber} index at insert time.
+      const session = this.$session();
       // Get count of existing members in this society
       const lastMember = await this.constructor
         .findOne({ societyId: this.societyId })
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .session(session);
       let nextNumber = 1;
       if (lastMember && lastMember.membershipNumber) {
         const lastNum = parseInt(lastMember.membershipNumber.split("-")[1]);
@@ -331,10 +339,12 @@ MemberSchema.pre("save", async function (next) {
       while (attempts < maxAttempts) {
         this.membershipNumber = `MEM-${String(nextNumber).padStart(4, "0")}`;
         // Check if this number already exists
-        const existing = await this.constructor.findOne({
-          societyId: this.societyId,
-          membershipNumber: this.membershipNumber,
-        });
+        const existing = await this.constructor
+          .findOne({
+            societyId: this.societyId,
+            membershipNumber: this.membershipNumber,
+          })
+          .session(session);
         if (!existing) {
           break; // Found unique number
         }
