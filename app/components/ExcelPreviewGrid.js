@@ -81,19 +81,8 @@ export default function ExcelPreviewGrid({ columns, rows, title, onReupload, onC
       </div>
       {/* Footer Actions */}
       <div style={{ padding: "1rem 1.5rem", borderTop: "2px solid #e5e7eb", display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-        <button className="btn btn-secondary" onClick={onReupload}>↩ Re-upload</button>
-        <button
-          className="btn btn-success"
-          disabled={validRows.length === 0}
-          onClick={() => onContinue(validRows)}
-          style={{ opacity: validRows.length === 0 ? 0.5 : 1 }}
-        >
-          {errorRows.length > 0
-            ? `▶ Continue with ${validRows.length} Valid Row${validRows.length !== 1 ? "s" : ""} (skip ${errorRows.length} error${errorRows.length !== 1 ? "s" : ""})`
-            : `▶ Continue — All ${validRows.length} Rows Valid`}
-        </button>
-        <button className="btn btn-danger" style={{ marginLeft: "auto" }} onClick={onCancel}>✕ Cancel Upload</button>
-      </div>
+       <button className="btn btn-secondary" onClick={onReupload}>↩ Re-upload</button>
+<button className="btn btn-danger" style={{ marginLeft: "auto" }} onClick={onCancel}>✕ Cancel Upload</button></div>
     </div>
   );
 }

@@ -23,8 +23,8 @@ export async function GET(request) {
       isDeleted: { $ne: true },
     })
       .select(
-        "billPeriodId billMonth billYear memberId societyId previousBalance interestAmount currentBillTotal subtotal charges totalAmount balanceAmount amountPaid dueDate status billHtml generatedAt createdAt",
-      )
+  "billPeriodId billMonth billYear memberId societyId previousBalance interestAmount openingPrincipal openingInterest currentInterest currentCharges currentBillTotal subtotal charges totalAmount balanceAmount amountPaid dueDate status billHtml generatedAt createdAt",
+)
       .populate(
         "memberId",
         "flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary",

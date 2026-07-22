@@ -8,6 +8,7 @@ import renderBillHtml from "@/lib/bill-renderer";
 import cache from "@/lib/cache";
 import { generateBill } from "@/lib/billing/generationService";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import { notifyBillCreated } from "@/lib/v1/notify";
 
 // Ledger V2: THIN WRAPPER over the shared GenerationService. No billing math
 // of its own — charges/interest/totals come from generateBill(), which
@@ -96,8 +97,19 @@ export async function POST(request) {
           }
         }
 
-        created.push(bill._id);
-      } catch (err) {
+      created.push(bill._id);
+
+  // Tell the member their new bill is ready (in-app notification + FCM
+  // push). Skipped for Scheduled bills — they aren't due yet.
+  if (bill.status !== "Scheduled") {
+    await notifyBillCreated({
+      billId: bill._id,
+      societyId,
+      memberId: b.memberId,
+      amount: bill.totalBillDue,
+    });
+  }
+} catch (err) {
         if (err.code === "P4_DUPLICATE") {
           errors.push({ memberId: b.memberId, error: `Bill already exists for ${billPeriodId}` });
         } else if (err.code === "MEMBER_NOT_FOUND") {

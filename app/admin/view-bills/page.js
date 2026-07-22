@@ -15,12 +15,56 @@ function fmt(n) {
   return Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function chargesTotal(bill) {
+  // Current-month charges ONLY. Prefer the per-head charge map (exactly what the
+  // Charge Breakdown table renders) and the Ledger V2 canonical currentCharges.
+  // currentBillTotal / subtotal are legacy and on some rows were stored as the
+  // grand total (incl. carry-forward), which made "Current Bill" and
+  // "Current Month Total" show ₹3,580 instead of ₹2,362.50.
+  if (bill.charges && typeof bill.charges === "object") {
+    const keys = Object.keys(bill.charges);
+    if (keys.length) {
+      return Object.values(bill.charges).reduce((s, v) => s + Number(v || 0), 0);
+    }
+  }
+  if (bill.currentCharges != null) return bill.currentCharges;
   if (bill.currentBillTotal != null) return bill.currentBillTotal;
   if (bill.subtotal != null) return bill.subtotal;
-  if (bill.charges && typeof bill.charges === "object") {
-    return Object.values(bill.charges).reduce((s, v) => s + Number(v || 0), 0);
-  }
   return 0;
+}
+function prevBalance(bill) {
+  // Previous *principal* carried in, DERIVED so the summary cards always
+  // reconcile:  Total Due = Current Bill + Prev Balance + Interest.
+  // (openingPrincipal isn't returned by the bills-list API, which made this
+  // show "Clear" even when ₹1,000 was carried forward.)
+  const v =
+    Number(bill.totalAmount || 0) - chargesTotal(bill) - Number(bill.interestAmount || 0);
+  return Math.max(0, parseFloat(v.toFixed(2)));
+}
+function flatLabel(member) {
+  const wing = String(member?.wing || "").trim();
+  const flat = String(member?.flatNo || "").trim();
+  if (!wing) return flat;
+  // flatNo sometimes already carries the wing (e.g. "A-101"), which produced
+  // the doubled "A-A-101". Don't prepend the wing again in that case.
+  if (flat.toUpperCase().startsWith(wing.toUpperCase())) return flat;
+  return `${wing}-${flat}`;
+}
+function interestParts(bill) {
+  // Split the interest line so the summary is transparent AND reconciles:
+  //   carried   = interest brought forward from prior unpaid months (openingInterest)
+  //   thisMonth = interest accrued on this bill (currentInterest)
+  // Falls back to deriving from interestAmount for older bills missing the split.
+  const round = (n) => parseFloat((Number(n) || 0).toFixed(2));
+  const total = round(bill.interestAmount);
+  const thisMonth =
+    bill.currentInterest != null
+      ? round(bill.currentInterest)
+      : Math.max(0, round(total - (bill.openingInterest || 0)));
+  const carried =
+    bill.openingInterest != null
+      ? round(bill.openingInterest)
+      : Math.max(0, round(total - thisMonth));
+  return { carried, thisMonth, total };
 }
 function fmtDate(d) {
   if (!d) return "—";
@@ -218,8 +262,7 @@ export default function ViewBillsPage() {
                     style={isHistorical ? { background: "#fafaf7", opacity: 0.92 } : {}}
                     onClick={() => openBill(bill)}>
                     <td>
-                      <strong>{bill.memberId?.wing}-{bill.memberId?.flatNo}</strong>
-                      {isHistorical && (
+<strong>{flatLabel(bill.memberId)}</strong>                      {isHistorical && (
                         <span title="Historical imported record — immutable" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#e0e7ff", color: "#3730a3", borderRadius: 4, padding: "1px 5px", border: "1px solid #c7d2fe", verticalAlign: "middle" }}>
                           HIST
                         </span>
@@ -228,9 +271,9 @@ export default function ViewBillsPage() {
                     <td>{bill.memberId?.ownerName}</td>
                     <td><span className={styles.periodTag}>{bill.billPeriodId}</span></td>
                     <td>₹{fmt(chargesTotal(bill))}</td>
-                    <td style={{ color: (bill.previousBalance || 0) > 0 ? "#b91c1c" : "#15803d" }}>
-                      {(bill.previousBalance || 0) > 0 ? `₹${fmt(bill.previousBalance)}` : "Clear"}
-                    </td>
+                  <td style={{ color: prevBalance(bill) > 0 ? "#b91c1c" : "#15803d" }}>
+  {prevBalance(bill) > 0 ? `₹${fmt(prevBalance(bill))}` : "Clear"}
+</td>
                     <td style={{ color: (bill.interestAmount || 0) > 0 ? "#92400e" : "#9ca3af" }}>
                       {(bill.interestAmount || 0) > 0 ? `₹${fmt(bill.interestAmount)}` : "—"}
                     </td>
@@ -271,8 +314,7 @@ export default function ViewBillsPage() {
             <div className={styles.modalHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{ background: "#4f46e5", color: "white", borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>
-                  {viewingBill.memberId?.wing}-{viewingBill.memberId?.flatNo}
-                </div>
+{flatLabel(viewingBill.memberId)}                </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{viewingBill.memberId?.ownerName}</div>
                   <div style={{ color: "#6b7280", fontSize: 13 }}>
@@ -312,8 +354,13 @@ export default function ViewBillsPage() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
                     {[
                       { label: "Current Bill", value: `₹${fmt(chargesTotal(viewingBill))}`, color: "#1f2937" },
-                      { label: "Prev Balance", value: (viewingBill.previousBalance || 0) > 0 ? `₹${fmt(viewingBill.previousBalance)}` : "Clear", color: (viewingBill.previousBalance || 0) > 0 ? "#b91c1c" : "#15803d" },
-                      { label: "Interest", value: (viewingBill.interestAmount || 0) > 0 ? `₹${fmt(viewingBill.interestAmount)}` : "—", color: (viewingBill.interestAmount || 0) > 0 ? "#92400e" : "#9ca3af" },
+                      // Prev Balance = previous *principal* only. Carried-forward
+// interest is already shown in the separate "Interest" cards,
+// so using previousBalance (principal + interest) here
+// double-counted the ₹200 and broke parts → total.
+                      { label: "Prev Balance", value: prevBalance(viewingBill) > 0 ? `₹${fmt(prevBalance(viewingBill))}` : "Clear", color: prevBalance(viewingBill) > 0 ? "#b91c1c" : "#15803d" },
+                      { label: "Interest (carried)", value: interestParts(viewingBill).carried > 0 ? `₹${fmt(interestParts(viewingBill).carried)}` : "—", color: interestParts(viewingBill).carried > 0 ? "#92400e" : "#9ca3af" },
+                      { label: "Interest (this month)", value: interestParts(viewingBill).thisMonth > 0 ? `₹${fmt(interestParts(viewingBill).thisMonth)}` : "—", color: interestParts(viewingBill).thisMonth > 0 ? "#92400e" : "#9ca3af" },
                       { label: "Total Due", value: `₹${fmt(viewingBill.totalAmount)}`, color: "#4f46e5", large: true },
                       ...(viewingBill.amountPaid > 0 ? [{ label: "Paid", value: `₹${fmt(viewingBill.amountPaid)}`, color: "#15803d" }] : []),
                       ...((viewingBill.balanceAmount || 0) > 0.005 ? [{ label: "Balance Due", value: `₹${fmt(viewingBill.balanceAmount)}`, color: "#b91c1c", large: true }] : []),

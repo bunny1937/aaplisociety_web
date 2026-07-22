@@ -532,14 +532,19 @@ export default function GenerateBillsPage() {
       allPaid,
       nextPeriodId,
     } = latestPeriodData;
-    let targetPeriod;
-    if (!latestPeriodId) {
-      // No bills ever — generate current month
-      targetPeriod = currentPeriodId;
-    } else {
-      // Always move to next period after latest — partial payments carry as openingPrincipal
-      targetPeriod = nextPeriodId || currentPeriodId;
-    }
+   let targetPeriod;
+if (!latestPeriodId) {
+  // No bills ever — generate current month
+  targetPeriod = currentPeriodId;
+} else if (!allPaid) {
+  // Latest period still has UNPAID bills — stay on it so the template flow
+  // can COLLECT those payments. Generating the next month is a separate,
+  // explicit action via the "Next Month Generation" button below.
+  targetPeriod = latestPeriodId;
+} else {
+  // Everything for the latest period is collected — advance to generate next.
+  targetPeriod = nextPeriodId || currentPeriodId;
+}
     const [y, m] = targetPeriod.split("-").map(Number);
     setBillYear(y);
     setBillMonth(m - 1); // convert to 0-indexed

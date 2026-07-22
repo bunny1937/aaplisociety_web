@@ -186,14 +186,15 @@ export async function GET(request) {
           row["OpeningInterest"] = parseFloat(
             (existingBill.openingInterest ?? openingInterest).toFixed(2),
           );
-          row["CurrentCharges"] = parseFloat(
-            (
-              existingBill.currentBillTotal ??
-              existingBill.subtotal ??
-              existingBill.currentCharges ??
-              subtotal
-            ).toFixed(2),
-          );
+          // CurrentCharges = THIS MONTH's charge sum only. Never currentBillTotal
+// (that's the grand total incl. opening + interest — it was showing 3580).
+row["CurrentCharges"] = parseFloat(
+  (
+    existingBill.currentCharges ??
+    existingBill.subtotal ??
+    subtotal
+  ).toFixed(2),
+);
         } else {
           // Pre-generation preview — calculate fresh
           const { currInt: calcInt } = calculateMonthlyInterest({
@@ -243,17 +244,47 @@ export async function GET(request) {
         AlreadyPaid: "READ ONLY",
         AdvanceCredit: "READ ONLY",
         RemainingDue: "READ ONLY",
-        AmountPaid: "← FILL THIS",
-        PaymentMethod: "Cash / Cheque / Online / NEFT / UPI",
-        PaymentDate: "YYYY-MM-DD",
-        Remarks: "",
-      },
-    ];
-    const ws = XLSX.utils.json_to_sheet([...instructions, ...rows]);
-    const headerKeys = Object.keys(rows[0] || {});
-    ws["!cols"] = headerKeys.map((k) => {
-      return { wch: Math.max(k.length + 2, 16), hidden: false };
-    });
+          AmountPaid: "← FILL THIS",
+    PaymentMethod: "Cash / Cheque / Online / NEFT / UPI",
+    PaymentDate: "YYYY-MM-DD",
+    Remarks: "",
+    // charge-head breakdown columns (now at the end) — reference only
+    ...Object.fromEntries(heads.map((h) => [h.headName, "READ ONLY (breakdown)"])),
+  },
+];
+ // Explicit, deterministic column order so headers and data ALWAYS line up.
+// Previously json_to_sheet inferred columns from the first object (the
+// instructions row), which omitted the charge-head keys and pushed them to
+// the far right — misaligning every charge value by one column and injecting
+// phantom parking amounts into the system re-sum (the ₹400 mismatch).
+const chargeHeadCols = heads.map((h) => h.headName);
+const columns = [
+  "Wing-FlatNo",
+  "Period",
+  "CurrentCharges",
+  "OpeningPrincipal",
+  "OpeningInterest",
+  "CurrentInterest",
+  "BillPrincipal",
+  "BillInterest",
+  "TotalBillDue",
+  "AlreadyPaid",
+  "AdvanceCredit",
+  "RemainingDue",
+  "AmountPaid",
+  "PaymentMethod",
+  "PaymentDate",
+  "Remarks",
+    ...chargeHeadCols,
+
+];
+const ws = XLSX.utils.json_to_sheet([...instructions, ...rows], {
+  header: columns,
+});
+ws["!cols"] = columns.map((k) => ({
+  wch: Math.max(k.length + 2, 16),
+  hidden: false,
+}));
     // Note in instructions row already says "DO NOT EDIT" — PreviousBalance/InterestDue/GrandTotal are for reference only
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(

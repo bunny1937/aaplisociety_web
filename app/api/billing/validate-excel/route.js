@@ -166,8 +166,8 @@ export async function POST(request) {
         issues.push({
           row: rowNum,
           type: "error",
-          message: `Row period "${period}" doesn't match selected ${year}-${String(month).padStart(2, "0")}`,
-          fix: `Re-download the template for the correct period.`,
+          message: `This upload is set to ${year}-${String(month).padStart(2, "0")}, but the file is a "${period}" template.`,
+fix: `Set the Active Period to ${period} to collect its payments, or download a fresh ${year}-${String(month).padStart(2, "0")} template to generate that month.`,
         });
         continue;
       }

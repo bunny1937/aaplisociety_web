@@ -65,6 +65,15 @@ const MemberSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+       set: function (v) {
+    if (v == null) return v;
+    let s = String(v).trim();
+    const w = String(this.wing || "").trim();
+    if (w && s.toUpperCase().startsWith(w.toUpperCase())) {
+      s = s.slice(w.length).replace(/^[-\s]+/, "") || s;
+    }
+    return s;
+  },
       uppercase: true,
     },
     wing: {
