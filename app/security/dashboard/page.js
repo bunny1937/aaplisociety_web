@@ -20,7 +20,7 @@ import {
 } from "@/components/visitor/ui";
 import OfflineEntryForm from "@/components/visitor/OfflineEntryForm";
 import OutboxStatus from "@/components/visitor/OutboxStatus";
-const POLL_MS = 12000;
+const POLL_MS = 30000;
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -121,8 +121,24 @@ export default function SecurityDashboardPage() {
   }, []);
   useEffect(() => {
     load();
-    const t = setInterval(() => load(true), POLL_MS);
-    return () => clearInterval(t);
+    // Poll only while the tab is visible -- cuts background Vercel invocations.
+    let t = null;
+    const start = () => {
+      if (t == null) t = setInterval(() => load(true), POLL_MS);
+    };
+    const stop = () => {
+      if (t != null) { clearInterval(t); t = null; }
+    };
+    const onVis = () => {
+      if (document.hidden) stop();
+      else { load(true); start(); }
+    };
+    if (typeof document === "undefined" || !document.hidden) start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      stop();
+    };
   }, [load]);
   // Every action is one tap. The backend does the real work; the guard just
   // sees the result as a toast and the list refreshes.

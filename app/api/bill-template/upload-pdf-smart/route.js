@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
 import { PDFDocument } from 'pdf-lib';
 import connectDB from '@/lib/mongodb';
 import { requireRoles, SOCIETY_ADMIN_ROLES } from '@/lib/authz';
+import { storeUploadedFile } from '@/lib/file-store';
+
+export const runtime = 'nodejs';
 export async function POST(request) {
   try {
     await connectDB();
@@ -39,15 +39,17 @@ export async function POST(request) {
     const hasFormFields = fields.length > 0;
     const detectedFields = fields.map(field => field.getName());
     console.log(`✅ PDF Analysis: ${hasFormFields ? `${fields.length} form fields detected` : 'No form fields - will overlay'}`);
-    // Save PDF
-    const uploadsDir = join(process.cwd(), 'public', 'uploads', 'bills');
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
+    // Save PDF to MongoDB (Vercel serverless FS is read-only -> EROFS).
     const filename = `${decoded.societyId}-pdf-${Date.now()}.pdf`;
-    const filePath = join(uploadsDir, filename);
-    await writeFile(filePath, buffer);
-    const publicUrl = `/uploads/bills/${filename}`;
+    const stored = await storeUploadedFile({
+      societyId: decoded.societyId,
+      kind: 'bill-pdf',
+      filename,
+      contentType: 'application/pdf',
+      buffer,
+      createdBy: decoded.userId,
+    });
+    const publicUrl = stored.url;
     return NextResponse.json({
       success: true,
       url: publicUrl,

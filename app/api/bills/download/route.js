@@ -9,18 +9,12 @@ import Society from "@/models/Society";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import renderBillHtml from "@/lib/bill-renderer"; // ← default import NOT named { renderBillHtml }
 import { FlexiblePDFGenerator } from "@/lib/pdf-generator";
+import { extractFileId, loadUploadedFile } from "@/lib/file-store";
 function formatMoney(value) {
   return `Rs. ${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-}
-function hexToRgb(hex) {
-  if (!hex || typeof hex !== "string") return null;
-  const m = hex.trim().match(/^#?([0-9a-fA-F]{6})$/);
-  if (!m) return null;
-  const int = parseInt(m[1], 16);
-  return rgb(((int >> 16) & 255) / 255, ((int >> 8) & 255) / 255, (int & 255) / 255);
 }
 function formatDateForPdf(dateValue) {
   return new Date(dateValue).toLocaleDateString("en-IN", {
@@ -31,12 +25,6 @@ function formatDateForPdf(dateValue) {
 }
 async function appendReceiptPage(pdfDoc, receipt, bill, society, member) {
   if (!receipt) return;
-  // Apply the saved receipt template (designed in the Bill Template page under
-  // the Receipt scope). Falls back to the built-in blue receipt styling.
-  const rt = society?.receiptTemplate?.design || {};
-  const rtTitleColor =
-    hexToRgb(rt.tableHeaderBg || rt.headerColor) || rgb(0.12, 0.28, 0.6);
-  const rtFooter = Array.isArray(rt.footerText) ? rt.footerText : [];
   const page = pdfDoc.addPage([595.28, 841.89]);
   const { height } = page.getSize();
   const margin = 40;
@@ -63,7 +51,7 @@ async function appendReceiptPage(pdfDoc, receipt, bill, society, member) {
     y: height - 60,
     size: 18,
     font: titleFont,
-    color: rtTitleColor,
+    color: rgb(0.12, 0.28, 0.6),
   });
   page.drawText(society?.name || "", {
     x: margin,
@@ -126,17 +114,6 @@ async function appendReceiptPage(pdfDoc, receipt, bill, society, member) {
     font: bodyFont,
     color: rgb(0.25, 0.25, 0.25),
   });
-  if (rtFooter.length) {
-    rtFooter.forEach((line, i) => {
-      page.drawText(String(line), {
-        x: margin,
-        y: 70 - i * 14,
-        size: 9,
-        font: bodyFont,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-    });
-  }
 }
 export async function GET(request) {
   try {
@@ -170,15 +147,6 @@ export async function GET(request) {
     const society = await Society.findById(decoded.societyId).lean();
     const hasPdfTemplate = Boolean(society?.billTemplate?.pdfUrl);
     const member = bill.memberId;
-    // Custom saved design → apply it live to EVERY non-locked bill so a newly
-    // saved template instantly updates all view bills. Locked / historical /
-    // imported bills keep their frozen stored HTML (they are immutable records).
-    const savedDesign = society?.billTemplate?.design || null;
-    const isLockedBill = Boolean(
-      bill.isHistoricalArchive ||
-        bill.isLocked ||
-        bill.importedFrom === "BulkImport",
-    );
     const currentBillTotal = Number(
       bill.currentBillTotal ?? bill.totalAmount ?? 0,
     );
@@ -242,12 +210,24 @@ export async function GET(request) {
 </html>`;
     // ─── Case 1: Custom PDF template exists — keep the uploaded PDF format ───
     if (hasPdfTemplate) {
-      const templatePath = join(
-        process.cwd(),
-        "public",
-        society.billTemplate.pdfUrl,
-      );
-      const generator = new FlexiblePDFGenerator(templatePath);
+      // Templates now live in MongoDB (URL like /api/files/<id>). Load bytes
+      // from the DB when the stored URL points there; else fall back to the
+      // legacy on-disk path for old templates.
+      const storedUrl = society.billTemplate.pdfUrl;
+      let generator;
+      if (typeof storedUrl === "string" && storedUrl.includes("/api/files/")) {
+        const stored = await loadUploadedFile(extractFileId(storedUrl));
+        if (!stored) {
+          return NextResponse.json(
+            { error: "Bill template file not found" },
+            { status: 404 },
+          );
+        }
+        generator = new FlexiblePDFGenerator({ buffer: stored.buffer });
+      } else {
+        const templatePath = join(process.cwd(), "public", storedUrl);
+        generator = new FlexiblePDFGenerator(templatePath);
+      }
       const items = Object.entries(bill.charges || {}).map(
         ([description, amount]) => ({
           description,
@@ -330,19 +310,15 @@ export async function GET(request) {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `inline; filename="${pdfTitle}.pdf"`,
-          "Cache-Control": "private, no-store",
         },
       });
     }
-    // ─── Case 2: Bill has stored HTML — only serve the frozen copy for locked /
-    // historical bills, or when no custom template is set. Otherwise fall
-    // through to a live re-render so the current template is applied. ───
-    if (bill.billHtml && (isLockedBill || !savedDesign)) {
+    // ─── Case 2: Bill has stored HTML ───
+    if (bill.billHtml) {
       return new NextResponse(htmlWrapper(`${bill.billHtml}${prevBillPage}`), {
         headers: {
           "Content-Type": "text/html",
           "Content-Disposition": `inline; filename="${pdfTitle}.html"`,
-          "Cache-Control": "private, no-store",
         },
       });
     }
@@ -353,7 +329,6 @@ export async function GET(request) {
     // through to the renderer's own calculateMonthlyInterest fallback).
     if (!hasPdfTemplate) {
       const renderResult = renderBillHtml(null, society, member, {
-        template: savedDesign,
         breakdown: bill.charges || {},
         totalAmount: bill.currentCharges ?? bill.totalAmount,
         previousBalance: parseFloat(((bill.openingPrincipal || 0) + (bill.openingInterest || 0)).toFixed(2)),
@@ -374,7 +349,6 @@ export async function GET(request) {
         headers: {
           "Content-Type": "text/html",
           "Content-Disposition": `inline; filename="${pdfTitle}.html"`,
-          "Cache-Control": "private, no-store",
         },
       });
     }

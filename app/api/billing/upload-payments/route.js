@@ -304,19 +304,20 @@ export async function POST(request) {
         )
         .digest("hex");
 
+      const importPayload = {
+        societyId: dec.societyId,
+        importMonth,
+        importYear,
+        billPeriodId: periodId,
+        uploadedFileName: fileName,
+        uploadedBy: dec.userId,
+        contentHash,
+        totalRows: validRows.length,
+        status: "Processing",
+      };
       let importRecord;
       try {
-        importRecord = await PaymentImport.create({
-          societyId: dec.societyId,
-          importMonth,
-          importYear,
-          billPeriodId: periodId,
-          uploadedFileName: fileName,
-          uploadedBy: dec.userId,
-          contentHash,
-          totalRows: validRows.length,
-          status: "Processing",
-        });
+        importRecord = await PaymentImport.create(importPayload);
       } catch (e) {
         const isDup =
           e &&
@@ -324,17 +325,32 @@ export async function POST(request) {
             /E11000/.test(e.message || "") ||
             (Array.isArray(e.writeErrors) &&
               e.writeErrors.some((w) => w?.code === 11000)));
-        if (isDup) {
+        if (!isDup) throw e;
+        // A prior import with the same content signature exists. Only BLOCK the
+        // re-upload if that prior attempt actually applied money. If the first
+        // attempt failed before applying any payment (successRows=0 AND
+        // totalAmountUploaded=0 -- e.g. it errored on "No live bill found"), the
+        // stale record is deleted and we retry, so a failed upload is never a
+        // permanent dead end.
+        const prior = await PaymentImport.findOne({
+          societyId: dec.societyId,
+          contentHash,
+        });
+        const priorApplied =
+          prior &&
+          ((prior.successRows || 0) > 0 || (prior.totalAmountUploaded || 0) > 0);
+        if (priorApplied) {
           delete staged[batchKey];
           return NextResponse.json(
             {
               error:
-                "This payment file was already imported. Duplicate uploads are blocked to prevent double payments.",
+                "This payment file was already imported and payments were recorded. Duplicate uploads are blocked to prevent double payments.",
             },
             { status: 409 },
           );
         }
-        throw e;
+        if (prior) await PaymentImport.deleteOne({ _id: prior._id });
+        importRecord = await PaymentImport.create(importPayload);
       }
 
       const importResults = [];
@@ -352,15 +368,20 @@ export async function POST(request) {
           if (!member) throw new Error("Member not found");
 
           // The single canonical bill for this member + period (Ledger V2).
+          // Root-cause fix: bulk-onboarded societies' current bills ARE tagged
+          // importedFrom:"BulkImport", so the old confirm query (which excluded
+          // those + isLocked) found nothing and threw "No live bill found",
+          // even though the preview showed the bill as payable. Match the same
+          // bill the preview did: the latest non-archived, non-deleted bill.
           const bill = await Bill.findOne({
             memberId: row.memberId,
             societyId: dec.societyId,
             billPeriodId: row.billPeriodId,
             isHistoricalArchive: { $ne: true },
-            importedFrom: { $ne: "BulkImport" },
-            isLocked: { $ne: true },
             isDeleted: { $ne: true },
-          }).select("_id balanceAmount status billPeriodId");
+          })
+            .sort({ updatedAt: -1 })
+            .select("_id balanceAmount status billPeriodId");
           if (!bill) throw new Error(`No live bill found for ${row.billPeriodId}`);
 
           const balanceBefore = twoDp(bill.balanceAmount);
@@ -387,6 +408,10 @@ export async function POST(request) {
             continue;
           }
 
+          // The Excel confirmation is the finalization step: allocation just
+          // happened (status is now Paid/Partial), so clear any prior
+          // "Payment Done" acknowledgement marker on this bill.
+          await Bill.updateOne({ _id: bill._id }, { $set: { pendingPayment: null } });
           const intClr = twoDp(result.interestPaid);
           const prinClr = twoDp(result.principalPaid);
           const advanceCredit = twoDp(result.advanceCredit);

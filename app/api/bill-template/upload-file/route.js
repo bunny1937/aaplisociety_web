@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
 import connectDB from '@/lib/mongodb';
 import { requireRoles, SOCIETY_ADMIN_ROLES } from '@/lib/authz';
+import { storeUploadedFile } from '@/lib/file-store';
+
+export const runtime = 'nodejs';
 export async function POST(request) {
   try {
     await connectDB();
@@ -44,18 +44,18 @@ export async function POST(request) {
     if (!magicOk) {
       return NextResponse.json({ error: 'File content does not match declared type' }, { status: 400 });
     }
-    // Create directory
-    const uploadsDir = join(process.cwd(), 'public', 'uploads', 'bills');
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-    // Generate filename
+    // Store in MongoDB (Vercel serverless FS is read-only -> EROFS).
     const ext = file.name.split('.').pop();
     const filename = `${decoded.societyId}-${type}-${Date.now()}.${ext}`;
-    const filePath = join(uploadsDir, filename);
-    // Save file
-    await writeFile(filePath, buffer);
-    const publicUrl = `/uploads/bills/${filename}`;
+    const stored = await storeUploadedFile({
+      societyId: decoded.societyId,
+      kind: `bill-${type}`,
+      filename,
+      contentType: file.type,
+      buffer,
+      createdBy: decoded.userId,
+    });
+    const publicUrl = stored.url;
     console.log(`✅ Uploaded ${type}:`, publicUrl);
     return NextResponse.json({
       success: true,

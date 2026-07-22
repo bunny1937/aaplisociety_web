@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
 import { randomBytes } from "crypto";
 import connectDB from "@/lib/mongodb";
 import { requireAuth } from "@/lib/authz";
+import { storeUploadedFile } from "@/lib/file-store";
+
+export const runtime = "nodejs";
 // POST /api/visitor/upload-photo
 // Accepts a multipart/form-data image captured from the device camera (or chosen
 // from the gallery) and stores it on disk, returning a hosted path URL that
@@ -57,14 +57,20 @@ export async function POST(request) {
       );
     }
     const ext = isPng ? "png" : isWebp ? "webp" : "jpg";
-    const uploadsDir = join(process.cwd(), "public", "uploads", "visitors");
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
     const rand = randomBytes(4).toString("hex");
     const filename = `${auth.user.societyId}-${Date.now()}-${rand}.${ext}`;
-    await writeFile(join(uploadsDir, filename), buffer);
-    const url = `/uploads/visitors/${filename}`;
+    // Store in MongoDB (Vercel serverless FS is read-only -> EROFS). The short
+    // "/api/files/<id>" URL satisfies isSafePhotoValue (path, not data:, <600).
+    const stored = await storeUploadedFile({
+      societyId: auth.user.societyId,
+      kind: "visitor-photo",
+      filename,
+      contentType:
+        file.type || (isPng ? "image/png" : isWebp ? "image/webp" : "image/jpeg"),
+      buffer,
+      createdBy: auth.user.userId,
+    });
+    const url = stored.url;
     return NextResponse.json({ success: true, url });
   } catch (error) {
     console.error("\u274c Visitor photo upload error:", error);

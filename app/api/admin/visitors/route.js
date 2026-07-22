@@ -4,8 +4,15 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import Visitor from "@/models/Visitor";
+// Register the User model in this serverless bundle. The .populate("enteredBy")
+// below references the "User" model; if it isn't imported, Mongoose throws
+// MissingSchemaError and the route returns 500.
+import User from "@/models/User";
 import { requireRoles } from "@/lib/authz";
 import { VISITOR_STATUSES, VISITOR_PURPOSES } from "@/lib/visitor-config";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export async function GET(request) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
   if (!auth.valid) return auth;

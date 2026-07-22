@@ -16,7 +16,7 @@ import {
 } from "@/components/visitor/ui";
 import CallButton from "@/components/visitor/CallButton";
 // Auto-refresh so a resident sees a guard-logged visitor without reloading.
-const POLL_MS = 10000;
+const POLL_MS = 30000;
 async function api(url, opts) {
   const res = await fetch(url, {
     credentials: "include",
@@ -109,8 +109,24 @@ export default function MemberVisitorsPage() {
   }, []);
   useEffect(() => {
     load();
-    const timer = setInterval(() => load(true), POLL_MS);
-    return () => clearInterval(timer);
+    // Poll only while the tab is visible -- cuts background Vercel invocations.
+    let timer = null;
+    const start = () => {
+      if (timer == null) timer = setInterval(() => load(true), POLL_MS);
+    };
+    const stop = () => {
+      if (timer != null) { clearInterval(timer); timer = null; }
+    };
+    const onVis = () => {
+      if (document.hidden) stop();
+      else { load(true); start(); }
+    };
+    if (typeof document === "undefined" || !document.hidden) start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      stop();
+    };
   }, [load]);
   // One tap. The backend records the decision and notifies the guard instantly.
   const decide = async (id, action) => {

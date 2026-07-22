@@ -92,12 +92,24 @@ closingTotal: { type: Number, default: 0 },
     status: {
       type: String,
       // Scheduled: generated but not yet visible to member (pushDate not reached)
-      enum: ["Scheduled", "Unpaid", "Partial", "Paid", "Overdue"],
+      enum: ["Scheduled", "Unpaid", "Partial", "PaymentDone", "Paid", "Overdue"],
       default: "Unpaid",
       index: true,
     },
     // Set when bill is generated before billPushDay. Cron flips to 'Unpaid' on this date.
     scheduledPushDate: { type: Date, default: null },
+    // Cash / manual "Payment Done" acknowledgement recorded BEFORE the
+    // confirming payment Excel is uploaded. This does NOT touch the ledger or
+    // allocation — the Excel upload is what allocates the payment and flips the
+    // status to "Paid". Cleared automatically once that finalization happens.
+    pendingPayment: {
+      amount: { type: Number, default: null },
+      paymentMode: { type: String, default: null },
+      paymentDate: { type: Date, default: null },
+      notes: { type: String, default: null },
+      recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      recordedAt: { type: Date, default: null },
+    },
     importedFrom: {
       type: String,
       enum: ["Manual", "Excel", "API", "System", "BulkImport"],

@@ -255,10 +255,21 @@ export function validatePaymentRows(rows, { wingFlatMap, existingBillMap, today 
         : dateStr;
       if (!parsedDate || isNaN(parsedDate.getTime())) {
         markCell("PaymentDate", displayDate, "error", "Invalid date format — use YYYY-MM-DD or DD-MM-YYYY");
-      } else if (parsedDate > (today || new Date())) {
-        markCell("PaymentDate", displayDate, "error", "Future payment date not allowed");
       } else {
-        okCell("PaymentDate", displayDate);
+        // Timezone-tolerant future check. Payment dates are entered as date-only
+        // and parse to UTC midnight, but the Vercel server clock is UTC while
+        // users are in IST (+5:30). A date entered as "today" in IST -- e.g.
+        // 00:30 IST on the 23rd = 19:00 UTC on the 22nd -- parses to
+        // 2026-07-23T00:00Z, which is *ahead* of the real UTC "now" and was
+        // wrongly rejected as a future date. Allow up to +36h to absorb the
+        // date-only + timezone skew.
+        const nowMs = (today || new Date()).getTime();
+        const cutoffMs = nowMs + 36 * 60 * 60 * 1000;
+        if (parsedDate.getTime() > cutoffMs) {
+          markCell("PaymentDate", displayDate, "error", "Future payment date not allowed");
+        } else {
+          okCell("PaymentDate", displayDate);
+        }
       }
     }
     okCell("Remarks", raw["Remarks"] || "");

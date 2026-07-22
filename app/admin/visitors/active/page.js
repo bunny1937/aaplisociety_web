@@ -79,7 +79,10 @@ export default function AdminActiveVisitors() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(null);
-  const load = useCallback(async () => {
+  // `silent` polls do NOT toggle the full-page spinner, so background
+  // refreshes no longer visibly flash/reload the tiles.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [p, a, e] = await Promise.all([
         api("/api/admin/visitors?status=Pending&limit=50"),
@@ -92,15 +95,33 @@ export default function AdminActiveVisitors() {
         Entered: (e && e.visitors) || [],
       });
     } catch (err) {
-      setToast({ message: err.message || "Failed to load", type: "error" });
+      if (!silent) setToast({ message: err.message || "Failed to load", type: "error" });
     } finally {
       setLoading(false);
     }
   }, []);
   useEffect(() => {
     load();
-    const t = setInterval(load, 10000);
-    return () => clearInterval(t);
+    // Poll every 45s and ONLY while the tab is visible: slashes Vercel function
+    // invocations (was every 10s, even in background tabs) and stops the tiles
+    // from visibly reloading while the admin is looking.
+    let timer = null;
+    const start = () => {
+      if (timer == null) timer = setInterval(() => load(true), 45000);
+    };
+    const stop = () => {
+      if (timer != null) { clearInterval(timer); timer = null; }
+    };
+    const onVis = () => {
+      if (document.hidden) stop();
+      else { load(true); start(); }
+    };
+    if (typeof document === "undefined" || !document.hidden) start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      stop();
+    };
   }, [load]);
   const markExit = async (id) => {
     setBusy(id);

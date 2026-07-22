@@ -53,6 +53,36 @@ export default function AdvancedPaymentPage() {
       alert(`❌ Error: ${error.message}`);
     },
   });
+  // "Payment Done" (cash/manual acknowledgement, pending Excel confirmation).
+  const markDoneMutation = useMutation({
+    mutationFn: (data) => apiClient.post("/api/payments/mark-done", data),
+    onSuccess: () => {
+      alert("✅ Marked as Payment Done (pending Excel confirmation)");
+      queryClient.invalidateQueries(["outstanding"]);
+      queryClient.invalidateQueries(["pending-done"]);
+      resetForm();
+    },
+    onError: (error) => {
+      alert(`❌ Error: ${error.message}`);
+    },
+  });
+  const { data: pendingDoneData } = useQuery({
+    queryKey: ["pending-done"],
+    queryFn: () => apiClient.get("/api/payments/pending-done"),
+  });
+  const handleMarkDone = () => {
+    if (!selectedMemberId || !paymentAmount) {
+      alert("Please select member and enter amount");
+      return;
+    }
+    markDoneMutation.mutate({
+      memberId: selectedMemberId,
+      amount: parseFloat(paymentAmount),
+      paymentMode,
+      paymentDate,
+      notes,
+    });
+  };
   const resetForm = () => {
     setSelectedMemberId("");
     setPaymentAmount("");
@@ -136,6 +166,50 @@ export default function AdvancedPaymentPage() {
           </p>
         </div>
       </div>
+      {/* PAYMENT DONE — awaiting Excel confirmation */}
+      {pendingDoneData?.bills?.length > 0 && (
+        <div
+          className={styles.contentCard}
+          style={{ marginBottom: "1.5rem", borderLeft: "4px solid #F59E0B" }}
+        >
+          <div className={styles.cardHeader}>
+            <h2 className={styles.cardTitle}>
+              🕓 Payment Done — awaiting Excel confirmation ({pendingDoneData.bills.length})
+            </h2>
+          </div>
+          <div style={{ padding: "1rem 1.5rem", overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+              <thead>
+                <tr style={{ textAlign: "left", borderBottom: "1px solid #E5E7EB" }}>
+                  <th style={{ padding: "0.5rem" }}>Flat</th>
+                  <th style={{ padding: "0.5rem" }}>Member</th>
+                  <th style={{ padding: "0.5rem" }}>Period</th>
+                  <th style={{ padding: "0.5rem" }}>Amount</th>
+                  <th style={{ padding: "0.5rem" }}>Mode</th>
+                  <th style={{ padding: "0.5rem" }}>Date</th>
+                  <th style={{ padding: "0.5rem" }}>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingDoneData.bills.map((b) => (
+                  <tr key={b.billId} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                    <td style={{ padding: "0.5rem" }}>{b.flat}</td>
+                    <td style={{ padding: "0.5rem" }}>{b.memberName}</td>
+                    <td style={{ padding: "0.5rem" }}>{b.billPeriodId}</td>
+                    <td style={{ padding: "0.5rem", fontWeight: 600 }}>₹{Number(b.amount || 0).toFixed(2)}</td>
+                    <td style={{ padding: "0.5rem" }}>{b.paymentMode}</td>
+                    <td style={{ padding: "0.5rem" }}>{b.paymentDate ? new Date(b.paymentDate).toLocaleDateString("en-IN") : "—"}</td>
+                    <td style={{ padding: "0.5rem", color: "#6B7280" }}>{b.notes || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ fontSize: "0.8rem", color: "#92400E", marginTop: "0.75rem" }}>
+              These are acknowledged cash/manual payments. Upload the payment Excel to allocate them and mark the bills as <strong>Paid</strong>.
+            </p>
+          </div>
+        </div>
+      )}
       <div
         style={{
           display: "grid",
@@ -568,6 +642,16 @@ export default function AdvancedPaymentPage() {
                 )}
               </button>
             </div>
+            {/* CASH / MANUAL "PAYMENT DONE" (pending Excel confirmation) */}
+            <button
+              type="button"
+              onClick={handleMarkDone}
+              disabled={!selectedMemberId || !paymentAmount || markDoneMutation.isPending}
+              className="btn"
+              style={{ width: "100%", marginTop: "0.75rem", background: "#F59E0B", color: "white" }}
+            >
+              {markDoneMutation.isPending ? "Marking..." : "🕓 Mark Payment Done (cash — confirm later via Excel)"}
+            </button>
           </form>
         </div>
         {/* RIGHT PANEL: PAYMENT HISTORY */}
