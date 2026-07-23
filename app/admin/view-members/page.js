@@ -158,7 +158,7 @@ export default function ViewMembersPage() {
                   </div>
                   <div className={styles.field}>
                     <label>Floor</label>
-                    <div>{selectedMember.floor || 'N/A'}</div>
+                    <div>{selectedMember.floor ?? 'N/A'}</div>
                   </div>
                   <div className={styles.field}>
                     <label>Flat Type</label>
@@ -170,7 +170,7 @@ export default function ViewMembersPage() {
                   </div>
                   <div className={styles.field}>
                     <label>Built-up Area</label>
-                    <div>{selectedMember.builtUpAreaSqft || 'N/A'} sq.ft</div>
+                    <div>{selectedMember.builtUpAreaSqft ?? 'N/A'} sq.ft</div>
                   </div>
                   <div className={styles.field}>
                     <label>Ownership Type</label>

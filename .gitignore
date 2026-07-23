@@ -12,6 +12,7 @@ dist/
 docs/
 scripts/
 *.xlsx
+public/uploads/
 .vscode
 # BillHistory_*.xlsx
 # BulkImport_Template.xlsx

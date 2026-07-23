@@ -19,7 +19,8 @@ export async function GET(request) {
     }
     return NextResponse.json({
       success: true,
-      template: society.billTemplate || { type: 'default' }
+      template: society.billTemplate || { type: 'default' },
+      receiptTemplate: society.receiptTemplate || { type: 'default' }
     });
   } catch (error) {
     console.error('❌ Get template error:', error);

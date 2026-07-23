@@ -23,9 +23,12 @@ export const GET = withRoute(async (req) => {
   } else {
     if (!claims.memberId) return json({ bills: [] });
     query.memberId = claims.memberId;
+    // Future generated bills remain admin-only until the scheduled push job
+    // changes them to Unpaid. Residents must never see "Scheduled" bills.
+    query.status = { $ne: "Scheduled" };
   }
   const status = url.searchParams.get("status");
-  if (status) query.status = status;
+  if (status && BILLING_WRITE_ROLES.includes(claims.role)) query.status = status;
 
   const bills = await Bill.find(query).sort({ createdAt: -1 }).limit(200);
   const memberIds = [...new Set(bills.map((b) => String(b.memberId)))];

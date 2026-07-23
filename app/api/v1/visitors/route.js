@@ -38,6 +38,9 @@ export const GET = withRoute(async (req) => {
   await Promise.all(
     visitors.map(async (v) => {
       if (v.photoKey) v.photoUrl = await presignDownload(v.photoKey);
+      const guard = v.assignedGuardId || v.enteredBy;
+      v.guardPhone = guard?.phone || null;
+      v.guardName = guard?.name || guard?.username || null;
     }),
   );
 

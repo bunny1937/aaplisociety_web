@@ -141,7 +141,22 @@ function rowToSocietyPayload(row) {
   };
 }
 
-function parseMemberRows(basicInfoRows, parkingByFlat) {
+function parseDateOrNull(value) {
+  if (!value && value !== 0) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function yes(value) {
+  return ["yes", "true", "1", "y"].includes(String(value ?? "").trim().toLowerCase());
+}
+function parseMemberRows(
+  basicInfoRows,
+  parkingByFlat,
+  additionalByFlat = {},
+  familyByFlat = {},
+  ownersByFlat = {},
+  tenantsByFlat = {},
+) {
   const members = [];
   const errors = [];
   const seenFlats = new Set();
@@ -209,21 +224,62 @@ function parseMemberRows(basicInfoRows, parkingByFlat) {
         monthlyBilling: String(p["type"] || "").trim() !== "Stilt",
       }))
       .filter((s) => s.slotNumber);
+    const additional = additionalByFlat[flatNo] || {};
+    const familyMembers = (familyByFlat[flatNo] || []).map((f) => ({
+      name: String(f.name || "").trim(),
+      relation: String(f.relation || "").trim(),
+      age: f.age === "" || f.age == null ? undefined : Number(f.age),
+      contactNumber: String(f.contactNumber || "").trim(),
+      occupation: String(f.occupation || "").trim(),
+    })).filter((f) => f.name);
+    const ownerHistory = (ownersByFlat[flatNo] || []).map((o) => ({
+      ownerName: String(o.ownerName || "").trim(),
+      contactNumber: String(o.contactNumber || "").trim(),
+      emailPrimary: String(o.emailPrimary || "").trim().toLowerCase(),
+      panCard: String(o.panCard || "").trim(),
+      ownershipStartDate: parseDateOrNull(o.ownershipStartDate),
+      ownershipEndDate: parseDateOrNull(o.ownershipEndDate),
+      purchaseAmount: Number(o.purchaseAmount || 0),
+      saleAmount: Number(o.saleAmount || 0),
+      isCurrent: false,
+    })).filter((o) => o.ownerName && o.contactNumber && o.ownershipStartDate);
+    const allTenants = (tenantsByFlat[flatNo] || []).map((t) => ({
+      name: String(t.name || "").trim(),
+      contactNumber: String(t.contactNumber || "").trim(),
+      email: String(t.email || "").trim().toLowerCase(),
+      panCard: String(t.panCard || "").trim(),
+      startDate: parseDateOrNull(t.startDate),
+      endDate: parseDateOrNull(t.endDate),
+      depositAmount: Number(t.depositAmount || 0),
+      rentPerMonth: Number(t.rentPerMonth || 0),
+      isCurrent: yes(t.isCurrent),
+    })).filter((t) => t.name && t.contactNumber && t.startDate);
+    const currentTenant = allTenants.find((t) => t.isCurrent) || null;
     members.push({
       flatNo,
       wing,
+      floor: row.floor === "" || row.floor == null ? undefined : Number(row.floor),
       ownerName: String(row["ownerName*"] || row["ownerName"] || "").trim(),
       carpetAreaSqft: carpetArea,
-      contactNumber: String(
-        row["contactNumber*"] || row["contactNumber"] || "",
-      ).trim(),
+      builtUpAreaSqft: additional.builtUpAreaSqft === "" || additional.builtUpAreaSqft == null ? undefined : Number(additional.builtUpAreaSqft),
+      flatType: String(row.flatType || "2BHK").trim(),
+      ownershipType: String(row.ownershipType || "Owner-Occupied").trim(),
+      contactNumber: String(row["contactNumber*"] || row["contactNumber"] || "").trim(),
       emailPrimary: emailRaw || null,
+      alternateContact: String(additional.alternateContact || "").trim(),
+      whatsappNumber: String(additional.whatsappNumber || "").trim(),
+      emailSecondary: String(additional.emailSecondary || "").trim().toLowerCase(),
+      panCard: String(additional.panCard || "").trim(),
+      aadhaar: String(additional.aadhaar || "").trim(),
+      possessionDate: parseDateOrNull(additional.possessionDate),
       openingPrincipal,
       openingInterest,
-      openingBalance: parseFloat(
-        (openingPrincipal + openingInterest).toFixed(2),
-      ),
+      openingBalance: parseFloat((openingPrincipal + openingInterest).toFixed(2)),
       parkingSlots: slots,
+      familyMembers,
+      ownerHistory,
+      tenantHistory: allTenants,
+      currentTenant,
       isDeleted: false,
       advanceCredit: 0,
     });
@@ -392,6 +448,25 @@ export async function POST(request) {
       parkingByFlat[fn].push(p);
     }
   }
+  function rowsFor(prefix) {
+    const name = wb.SheetNames.find((n) => n.startsWith(prefix));
+    return name ? XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: "" }) : [];
+  }
+  function groupByFlat(rows) {
+    const out = {};
+    for (const r of rows) {
+      const flat = String(r["flatNo*"] || r.flatNo || "").trim();
+      if (!flat || flat.toUpperCase().startsWith("INSTRUCTION")) continue;
+      (out[flat] ||= []).push(r);
+    }
+    return out;
+  }
+  const additionalByFlat = Object.fromEntries(
+    rowsFor("2. Additional").map((r) => [String(r["flatNo*"] || r.flatNo || "").trim(), r]),
+  );
+  const familyByFlat = groupByFlat(rowsFor("4. Family"));
+  const ownersByFlat = groupByFlat(rowsFor("5. Owner"));
+  const tenantsByFlat = groupByFlat(rowsFor("6. Tenant"));
   // ── PHASE 2: VALIDATE (nothing written to DB yet) ─────────────────
   const societyErrors = [];
   if (!societyPayload.societyName)
@@ -436,6 +511,10 @@ export async function POST(request) {
   const { members: validMembers, errors: memberErrors } = parseMemberRows(
     basicInfoRows,
     parkingByFlat,
+    additionalByFlat,
+    familyByFlat,
+    ownersByFlat,
+    tenantsByFlat,
   );
   if (memberErrors.length) {
     return fail(

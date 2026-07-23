@@ -54,6 +54,7 @@ export async function POST(request) {
       success: true,
       url: publicUrl,
       filename,
+      storage: 'mongodb',
       hasFormFields,
       detectedFields,
       message: hasFormFields 

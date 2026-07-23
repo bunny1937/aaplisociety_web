@@ -24,12 +24,28 @@ export async function POST(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    const { billMonth, billYear, bills, forceRegenerate } = await request.json();
+    const {
+      billMonth,
+      billYear,
+      bills,
+      forceRegenerate,
+      publishMode = "config",
+      scheduledPushDate = null,
+    } = await request.json();
     if (billMonth === undefined || !billYear || !bills) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 },
       );
+    }
+    if (!["config", "now", "schedule"].includes(publishMode)) {
+      return NextResponse.json({ error: "publishMode must be config, now, or schedule" }, { status: 400 });
+    }
+    if (publishMode === "schedule") {
+      const d = new Date(scheduledPushDate);
+      if (!scheduledPushDate || Number.isNaN(d.getTime()) || d <= new Date()) {
+        return NextResponse.json({ error: "Choose a future scheduled push date" }, { status: 400 });
+      }
     }
     const month = billMonth + 1; // client sends 0-indexed month
     const billPeriodId = `${billYear}-${String(month).padStart(2, "0")}`;
@@ -88,6 +104,8 @@ export async function POST(request) {
           year: billYear,
           month,
           performedBy: decoded.userId,
+          publishMode,
+          scheduledFor: scheduledPushDate,
         });
 
         const member = await Member.findById(memberId)
@@ -183,6 +201,8 @@ export async function POST(request) {
       count: createdBills.length,
       failed: errors.length,
       errors: errors.length > 0 ? errors : undefined,
+      publishMode,
+      scheduledPushDate: publishMode === "schedule" ? scheduledPushDate : null,
     });
   } catch (error) {
     console.error("Generate final bills error:", error);

@@ -65,6 +65,7 @@ export async function POST(request, { params }) {
           societyId: member.societyId,
           memberId: member._id,
           role: "Member",
+          occupancyType: "Tenant",
           flatNo: member.flatNo,
           wing: member.wing,
           societyName: society?.name || "",
@@ -73,6 +74,7 @@ export async function POST(request, { params }) {
         },
       ],
       isActive: true,
+      mustChangePassword: true,
     });
     member.addNewTenant({
       name: tenantRequest.tenantName,

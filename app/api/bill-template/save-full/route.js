@@ -14,25 +14,39 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     const templateData = await request.json();
-    // Update society with new template
+    const scope = templateData.scope === 'receipt' ? 'receipt' : 'bill';
+    if (scope === 'receipt' && !['default', 'custom'].includes(templateData.type || 'custom')) {
+      return NextResponse.json(
+        { error: 'Receipt templates currently support the editable designer only' },
+        { status: 400 }
+      );
+    }
+    const templateValue = scope === 'receipt'
+      ? {
+          type: templateData.type || 'custom',
+          design: templateData.design || null,
+          logoUrl: templateData.logoUrl || null,
+          signatureUrl: templateData.signatureUrl || null,
+          updatedAt: new Date(),
+          updatedBy: decoded.userId
+        }
+      : {
+          type: templateData.type || 'default',
+          pdfUrl: templateData.pdfUrl || null,
+          hasFormFields: templateData.hasFormFields || false,
+          detectedFields: templateData.detectedFields || [],
+          imageUrl: templateData.imageUrl || null,
+          design: templateData.design || null,
+          logoUrl: templateData.logoUrl || null,
+          signatureUrl: templateData.signatureUrl || null,
+          uploadedAt: new Date(),
+          uploadedBy: decoded.userId
+        };
+    const targetField = scope === 'receipt' ? 'receiptTemplate' : 'billTemplate';
+    // Save only after the client has shown the live preview/editor.
     const society = await Society.findByIdAndUpdate(
       decoded.societyId,
-      {
-        $set: {
-          billTemplate: {
-            type: templateData.type || 'default',
-            pdfUrl: templateData.pdfUrl || null,
-            hasFormFields: templateData.hasFormFields || false,
-            detectedFields: templateData.detectedFields || [],
-            imageUrl: templateData.imageUrl || null,
-            design: templateData.design || null,
-            logoUrl: templateData.logoUrl || null,
-            signatureUrl: templateData.signatureUrl || null,
-            uploadedAt: new Date(),
-            uploadedBy: decoded.userId
-          }
-        }
-      },
+      { $set: { [targetField]: templateValue } },
       { new: true, runValidators: true }
     );
     if (!society) {
@@ -46,8 +60,9 @@ export async function POST(request) {
     });
     return NextResponse.json({
       success: true,
-      message: 'Template saved successfully',
-      template: society.billTemplate
+      message: `${scope === 'receipt' ? 'Receipt' : 'Bill'} template saved successfully`,
+      scope,
+      template: society[targetField]
     });
   } catch (error) {
     console.error('❌ Save template error:', error);

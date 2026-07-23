@@ -61,7 +61,8 @@ export async function POST(request) {
       success: true,
       url: publicUrl,
       type,
-      filename
+      filename,
+      storage: 'mongodb'
     });
   } catch (error) {
     console.error('❌ Upload file error:', error);

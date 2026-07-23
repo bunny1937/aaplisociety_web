@@ -480,6 +480,11 @@ export default function GenerateBillsPage() {
   const [payConfirming, setPayConfirming] = useState(false);
   const [payResults, setPayResults] = useState(null);
   const [autoGenState, setAutoGenState] = useState(null); // null | { status: "running"|"done"|"error", label, count, error }
+  // Safe default after payment upload: generate only for successfully paid members.
+  // Full-society generation remains available, but must be explicitly selected.
+  const [nextGenScope, setNextGenScope] = useState("paid");
+  const [nextPushMode, setNextPushMode] = useState("schedule");
+  const [nextPushDate, setNextPushDate] = useState("");
   const diffIssues =
     excelValidation?.issues?.filter((i) => i.type === "diff") || [];
   // Conflicts can no longer be "approved" — they must be fixed in the Excel and
@@ -704,7 +709,28 @@ if (!latestPeriodId) {
       // Fetch fresh member data — user may have changed carpetArea/parking after page load
       const freshMembersRes = await apiClient.get("/api/members/list");
       queryClient.setQueryData(["members-list"], freshMembersRes);
-      const members = (freshMembersRes?.members || []).filter((m) => !m.isDeleted);
+      const allMembers = (freshMembersRes?.members || []).filter((m) => !m.isDeleted);
+      const successfulPaymentMemberIds = new Set(
+        (payResults?.results || [])
+          .filter((r) => r.status === "Success")
+          .map((r) => String(r.memberId)),
+      );
+      const members = nextGenScope === "paid"
+        ? allMembers.filter((m) => successfulPaymentMemberIds.has(String(m._id)))
+        : allMembers;
+      if (!members.length) {
+        throw new Error(
+          nextGenScope === "paid"
+            ? "No successfully paid members are available. Select All members only if you intentionally want a society-wide run."
+            : "No active members found",
+        );
+      }
+      if (nextGenScope === "all") {
+        const ok = window.confirm(
+          `You selected ALL ${members.length} members. This will generate ${nextPeriodLabel} for the entire society. Continue?`,
+        );
+        if (!ok) { setAutoGenState(null); return; }
+      }
       const checkRes = await apiClient.post(
         "/api/bills/get-previous-balances",
         {
@@ -805,7 +831,15 @@ if (!latestPeriodId) {
         billYear: nextYear,
         dueDate: nextDueDate,
         bills,
+        publishMode: nextPushMode === "now" ? "now" : "schedule",
+        scheduledPushDate:
+          nextPushMode === "schedule"
+            ? new Date(`${nextPushDate}T09:00:00+05:30`).toISOString()
+            : null,
       };
+      if (nextPushMode === "schedule" && !nextPushDate) {
+        throw new Error("Choose the date on which members should receive the generated bill");
+      }
       const result = await apiClient.post("/api/bills/generate-final", payload);
       const count = result.billsGenerated ?? result.count ?? 0;
       // Advance UI to next month
@@ -2452,6 +2486,28 @@ ${
               <div style={{ marginTop: "1.5rem", padding: "1rem", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8 }}>
                 <div style={{ fontSize: "0.82rem", color: "#1e40af", fontWeight: 600, marginBottom: "0.75rem" }}>
                   Next Month Generation
+                </div>
+                <div style={{ display: "grid", gap: "0.75rem", marginBottom: "0.75rem", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+                  <label style={{ fontSize: 13 }}>
+                    Generate for
+                    <select value={nextGenScope} onChange={(e) => setNextGenScope(e.target.value)} style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}>
+                      <option value="paid">Only successfully paid members</option>
+                      <option value="all">All active members (society-wide)</option>
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 13 }}>
+                    Member visibility
+                    <select value={nextPushMode} onChange={(e) => setNextPushMode(e.target.value)} style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}>
+                      <option value="now">Push now</option>
+                      <option value="schedule">Schedule to date</option>
+                    </select>
+                  </label>
+                  {nextPushMode === "schedule" && (
+                    <label style={{ fontSize: 13 }}>
+                      Push date
+                      <input type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} value={nextPushDate} onChange={(e) => setNextPushDate(e.target.value)} style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }} />
+                    </label>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
                   <button

@@ -21,6 +21,11 @@ const ProfileSchema = new mongoose.Schema(
       enum: ["Member", "Secretary", "Accountant", "Treasurer"],
       default: "Member",
     },
+    occupancyType: {
+      type: String,
+      enum: ["Owner", "Tenant"],
+      default: "Owner",
+    },
     flatNo: { type: String, trim: true, default: "" },
     wing: { type: String, trim: true, default: "" },
     societyName: { type: String, trim: true, default: "" },
