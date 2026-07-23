@@ -25,7 +25,9 @@ export const GET = withRoute(async (req) => {
 export const POST = withRoute(async (req) => {
   const claims = getClaims(req);
   const societyId = requireTenant(claims);
-  if (!claims.memberId) throw new ApiError(403, "Only residents can record rent payments");
+  if (!claims.memberId || claims.occupancyType === "Tenant") {
+    throw new ApiError(403, "Only the owner can confirm rent payments");
+  }
   const body = await req.json().catch(() => ({}));
   const parsed = rentPaymentCreateSchema.safeParse(body);
   if (!parsed.success) throw zodError(parsed);

@@ -22,8 +22,9 @@ export const POST = withRoute(async (req) => {
   // Enforce rotation: the presented jti must exist and be unrevoked.
   const stored = await RefreshToken.findOne({ jti: payload.jti });
   if (!stored || stored.revoked) throw new ApiError(401, "Refresh token revoked");
-  stored.revoked = true;
-  await stored.save();
+  // Rotation consumes the token. Delete it immediately instead of retaining
+  // hundreds of revoked rows until their natural TTL date.
+  await RefreshToken.deleteOne({ _id: stored._id });
 
   const user = await User.findById(payload.userId);
   if (!user || user.isActive === false) throw new ApiError(401, "User not found");

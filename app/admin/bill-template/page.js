@@ -101,6 +101,7 @@ export default function BillTemplateDesigner() {
   const [pdfFields, setPdfFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [previewConfirmed, setPreviewConfirmed] = useState(false);
   // Fetch society
   const { data: societyData } = useQuery({
     queryKey: ["society-config"],
@@ -109,6 +110,10 @@ export default function BillTemplateDesigner() {
   const { data: billingHeadsData } = useQuery({
     queryKey: ["billing-heads"],
     queryFn: () => apiClient.get("/api/billing-heads/list"),
+  });
+  const { data: sampleMembersData } = useQuery({
+    queryKey: ["template-sample-member"],
+    queryFn: () => apiClient.get("/api/members/list?limit=1"),
   });
   // Fetch saved template
   const { data: savedTemplateData } = useQuery({
@@ -149,6 +154,7 @@ export default function BillTemplateDesigner() {
   // Save template mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!previewConfirmed) throw new Error("Preview a real member bill and confirm it before saving");
       if (scope === "receipt") {
         return apiClient.post("/api/bill-template/save-full", {
           type: "custom",
@@ -286,6 +292,7 @@ export default function BillTemplateDesigner() {
     const society = societyData?.society || {};
     const config = society.config || {};
     const heads = billingHeadsData?.heads || [];
+    const sampleMember = sampleMembersData?.members?.[0] || {};
     // Build charges from billing heads
     const charges = [];
     charges.push({ name: "Maintenance", amount: 3600, rate: 3, perSqFt: true });
@@ -321,9 +328,9 @@ export default function BillTemplateDesigner() {
     const sampleData = {
       societyName: societyData?.society?.name || "Sample Society",
       societyAddress: societyData?.society?.address || "Society Address, City",
-      memberName: "Tanvi Naidu",
-      flatNo: "B-1037",
-      area: 3016,
+      memberName: sampleMember.ownerName || "Sample member",
+      flatNo: `${sampleMember.wing || ""}-${sampleMember.flatNo || "—"}`,
+      area: sampleMember.carpetAreaSqft || sampleMember.builtUpAreaSqft || 0,
       billPeriod: "2026-04",
       billDate: "15/4/2026",
       dueDate: "9/5/2026",
@@ -565,7 +572,7 @@ export default function BillTemplateDesigner() {
         </div>
         <button
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
+          disabled={saveMutation.isPending || !previewConfirmed}
           className="btn btn-primary"
         >
           {saveMutation.isPending
@@ -871,9 +878,11 @@ export default function BillTemplateDesigner() {
           <div className={styles.previewPanel}>
             <h2>👁️ Live Preview (with Interest & Previous Balance)</h2>
             <div className={styles.previewWrapper}>
-              <div
-                dangerouslySetInnerHTML={{ __html: generatePreviewHTML() }}
-              />
+              <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML() }} />
+              <button type="button" className="btn btn-success"
+                onClick={() => setPreviewConfirmed(true)} style={{ marginTop: "1rem" }}>
+                {previewConfirmed ? "✅ Preview confirmed" : "Confirm this real-member preview"}
+              </button>
             </div>
           </div>
         </div>

@@ -24,6 +24,7 @@ import Bill from "@/models/Bill";
 import Transaction from "@/models/Transaction";
 import BulkImportRun from "@/models/BulkImportRun";
 import EmailOutbox from "@/models/EmailOutbox";
+import TenantRequest from "@/models/TenantRequest";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import * as XLSX from "xlsx";
@@ -137,6 +138,17 @@ function rowToSocietyPayload(row) {
       charges,
       interestRate: parseFloat(row["Interest Rate %"]) || 21,
       interestAfterDays: parseInt(row["Bill Payment Due After (Days)"]) || 15,
+      billDueDate:
+  parseDateOrNull(
+    row["Bill Due Date*"] || row["Bill Due Date"]
+  ),
+
+billDueDay:
+  parseDateOrNull(
+    row["Bill Due Date*"] || row["Bill Due Date"]
+  )?.getDate(),
+      billDueDate: parseDateOrNull(row["Bill Due Date*"] || row["Bill Due Date"]),
+      billDueDay: parseDateOrNull(row["Bill Due Date*"] || row["Bill Due Date"])?.getDate() || 10,
     },
   };
 }
@@ -278,7 +290,7 @@ function parseMemberRows(
       parkingSlots: slots,
       familyMembers,
       ownerHistory,
-      tenantHistory: allTenants,
+      tenantHistory: allTenants.filter((t) => !t.isCurrent),
       currentTenant,
       isDeleted: false,
       advanceCredit: 0,
@@ -394,7 +406,7 @@ export async function POST(request) {
       400,
     );
   }
-  // ── PHASE 1: PARSE ────────────────────────────────────────────────
+  // ── PHASE 1: PARSE ──────────────���─────────────────────────────────
   // Society sheet
   const societySheet = wb.Sheets[wb.SheetNames[0]];
   const societyRows = XLSX.utils.sheet_to_json(societySheet, { defval: "" });
@@ -425,9 +437,23 @@ export async function POST(request) {
       422,
     );
   }
-  const societyPayload = rowToSocietyPayload(societyRows[0]);
-  // Member sheet (index 1 = "1. Basic Info (Required)")
-  const basicInfoSheetName = wb.SheetNames[1];
+ const societyPayload = rowToSocietyPayload(societyRows[0]);
+
+if (!societyPayload.config?.billDueDate) {
+  return fail(
+    {
+      validationFailed: true,
+      phase: "society",
+      errors: [
+        "Society sheet requires 'Bill Due Date*' as a valid Excel date.",
+      ],
+    },
+    422,
+  );
+}
+
+// Member sheet (index 1 = "1. Basic Info (Required)")
+const basicInfoSheetName = wb.SheetNames[1];
   const basicInfoRows = basicInfoSheetName
     ? XLSX.utils.sheet_to_json(wb.Sheets[basicInfoSheetName], {
         defval: "",
@@ -728,6 +754,66 @@ export async function POST(request) {
               isNewUser: true,
             });
           }
+        }
+        const tenant = memberData.currentTenant;
+        if (tenant?.name && tenant?.contactNumber) {
+          const tenantEmail = String(tenant.email || '').trim().toLowerCase();
+          const tenantPwd = generatePassword();
+          const tenantHash = await bcrypt.hash(tenantPwd, 10);
+          const tenantUsername = await generateSimpleUsername(
+            societyCode, `${memberData.flatNo}t`, usernameBloom);
+          const [tenantUser] = await User.create([{
+            name: tenant.name,
+            email: tenantEmail || undefined,
+            username: tenantUsername,
+            phone: tenant.contactNumber,
+            password: tenantHash,
+            role: "Member",
+            societyId: society._id,
+            mustChangePassword: true,
+            profiles: [{
+              profileId: new mongoose.Types.ObjectId(),
+              societyId: society._id,
+              memberId: member._id,
+              role: "Member",
+              occupancyType: "Tenant",
+              flatNo: memberData.flatNo,
+              wing: memberData.wing,
+              societyName: society.name,
+              isPrimary: true,
+              status: "Active",
+              joinedAt: new Date(),
+            }],
+            isActive: true,
+            importRunId,
+          }], { session });
+          await TenantRequest.create([{
+            societyId: society._id,
+            memberId: member._id,
+            requestedByUserId: tenantUser._id,
+            tenantName: tenant.name,
+            tenantPhone: tenant.contactNumber,
+            tenantEmail: tenantEmail || undefined,
+            leaseStartDate: tenant.startDate,
+            leaseEndDate: tenant.endDate,
+            rentPerMonth: tenant.rentPerMonth,
+            depositAmount: tenant.depositAmount,
+            status: "Approved",
+            approvedAt: new Date(),
+            approvedBy: tenantUser._id,
+            importRunId,
+          }], { session });
+          if (tenantEmail) memberCredentials.push({
+            userId: tenantUser._id,
+            flatNo: memberData.flatNo,
+            wing: memberData.wing,
+            ownerName: tenant.name,
+            username: tenantUsername,
+            email: tenantEmail,
+            password: tenantPwd,
+            isNewUser: true,
+            accountType: "Tenant",
+          });
         }
         membersCreated++;
       }

@@ -53,7 +53,20 @@ const VisitorSchema = new mongoose.Schema(
     },
     name: { type: String, required: true, trim: true, maxlength: 100 },
     phone: { type: String, trim: true, maxlength: 20, default: "" },
-    photo: { type: String, trim: true, default: "" }, // stored URL only, never base64
+    photo: { type: String, trim: true, default: "" }, // legacy URL
+    // Canonical R2 object key. The upload route already wrote this field, but
+    // it was missing from the strict schema and was therefore discarded.
+    photoKey: { type: String, trim: true, default: null },
+    phoneConfirmation: {
+      decision: { type: String, enum: ["Allow", "Deny"] },
+      decisionSource: { type: String },
+      note: { type: String },
+      guardId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      memberId: { type: mongoose.Schema.Types.ObjectId, ref: "Member" },
+      decidedAt: { type: Date },
+      ip: { type: String },
+      device: { type: String },
+    },
     vehicleNumber: { type: String, trim: true, uppercase: true, default: "" },
     purpose: {
       type: String,

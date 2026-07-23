@@ -20,11 +20,13 @@ const EmailOutboxSchema = new mongoose.Schema(
     attempts: { type: Number, default: 0 },
     lastError: { type: String },
     sentAt: { type: Date },
+    purgeAt: { type: Date, default: () => new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) },
   },
   { timestamps: true },
 );
 // Idempotency: same import + same user + same email type can only ever
 // produce one outbox row, so a retried finalize step can't queue a duplicate.
+EmailOutboxSchema.index({ purgeAt: 1 }, { expireAfterSeconds: 0 });
 EmailOutboxSchema.index(
   { importRunId: 1, userId: 1, type: 1 },
   { unique: true },

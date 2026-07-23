@@ -54,10 +54,12 @@ const PaymentImportSchema = new mongoose.Schema(
       default: "Completed",
     },
     notes: String,
+    purgeAt: { type: Date, default: () => new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) },
   },
   { timestamps: true },
 );
 PaymentImportSchema.index({ societyId: 1, importYear: 1, importMonth: 1 });
+PaymentImportSchema.index({ purgeAt: 1 }, { expireAfterSeconds: 0 });
 // Import-level idempotency: one completed/processing import per (society, file
 // signature). Partial index so legacy rows with a null contentHash are exempt.
 PaymentImportSchema.index(

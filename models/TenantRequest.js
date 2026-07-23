@@ -21,7 +21,8 @@ const TenantRequestSchema = new mongoose.Schema(
     tenantPhone: { type: String, required: true },
     tenantEmail: { type: String, required: true },
     leaseStartDate: { type: Date, required: true },
-    leaseEndDate: { type: Date, required: true },
+    // Blank while the tenant is active; populated when the owner ends the lease.
+    leaseEndDate: { type: Date, default: null },
     rentPerMonth: { type: Number, required: true },
     depositAmount: { type: Number, default: 0 },
     documents: TenantRequestDocumentsSchema,

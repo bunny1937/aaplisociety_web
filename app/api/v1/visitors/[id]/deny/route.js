@@ -13,6 +13,7 @@ export const POST = withRoute(async (req, ctx) => {
   const claims = getClaims(req);
   const societyId = requireTenant(claims);
 
+  const body = await req.json().catch(() => ({}));
   const visitor = await Visitor.findOne({ _id: id, societyId });
   if (!visitor) throw new ApiError(404, "Visitor not found");
   const isPrivileged = VISITOR_ACCESS_ROLES.includes(claims.role);
@@ -26,6 +27,18 @@ export const POST = withRoute(async (req, ctx) => {
   visitor.approvedAt = new Date();
   visitor.approverRole = claims.role;
   visitor.escalation = { ...(visitor.escalation || {}), stopped: true };
+  if (body.decisionSource === "GuardPhoneConfirmation") {
+    visitor.phoneConfirmation = {
+      decision: "Deny",
+      decisionSource: body.decisionSource,
+      note: body.note || "Resident verbally denied by phone",
+      guardId: claims.userId,
+      memberId: visitor.memberId,
+      decidedAt: new Date(),
+      ip: req.headers.get("x-forwarded-for") || null,
+      device: req.headers.get("user-agent") || null,
+    };
+  }
   await visitor.save();
 
   await notifyVisitorChange({

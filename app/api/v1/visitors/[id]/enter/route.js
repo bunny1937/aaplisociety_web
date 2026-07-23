@@ -14,6 +14,7 @@ export const POST = withRoute(async (req, ctx) => {
   const societyId = requireTenant(claims);
   requireRoles(claims, VISITOR_ACCESS_ROLES);
 
+  const body = await req.json().catch(() => ({}));
   const visitor = await Visitor.findOne({ _id: id, societyId });
   if (!visitor) throw new ApiError(404, "Visitor not found");
   if (visitor.status === "Entered") throw new ApiError(409, "Visitor already entered");
@@ -23,6 +24,18 @@ export const POST = withRoute(async (req, ctx) => {
   visitor.entryTime = new Date();
   visitor.enteredBy = claims.userId;
   visitor.escalation = { ...(visitor.escalation || {}), stopped: true };
+  if (body.decisionSource === "GuardPhoneConfirmation") {
+    visitor.phoneConfirmation = {
+      decision: "Allow",
+      decisionSource: body.decisionSource,
+      note: body.note || "Resident verbally approved by phone",
+      guardId: claims.userId,
+      memberId: visitor.memberId,
+      decidedAt: new Date(),
+      ip: req.headers.get("x-forwarded-for") || null,
+      device: req.headers.get("user-agent") || null,
+    };
+  }
   await visitor.save();
 
   await notifyVisitorChange({

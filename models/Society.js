@@ -76,10 +76,21 @@ const SocietySchema = new mongoose.Schema(
     // Configuration
     config: {
       // billing settings (non-charge)
-      interestRate: { type: Number, default: 0 },
-      serviceTaxRate: { type: Number, default: 0 },
-      gracePeriodDays: { type: Number, default: 10 },
-      billDueDay: { type: Number, min: 1, max: 31, default: 10 },
+     interestRate: { type: Number, default: 0 },
+serviceTaxRate: { type: Number, default: 0 },
+gracePeriodDays: { type: Number, default: 10 },
+
+billDueDate: {
+  type: Date,
+  default: null,
+},
+
+billDueDay: {
+  type: Number,
+  min: 1,
+  max: 31,
+  default: 10,
+},
       billPayFinalDay: { type: Number, min: 1, max: 31, default: 25 }, // ← NEW: last day to accept payment/interest for the month
       // NEW CONFIG FLAGS
       interestRounding: {

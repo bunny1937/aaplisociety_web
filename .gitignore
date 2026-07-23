@@ -13,6 +13,12 @@ docs/
 scripts/
 *.xlsx
 public/uploads/
+db-export-2026-07-23
+LEDGER_V2_PHASE4_5.md
+LEDGER_V2_PHASE4.md
+society_web_mono.md
+CHANGED_FILES.txt
+db-export-2026-07-23.zip
 .vscode
 # BillHistory_*.xlsx
 # BulkImport_Template.xlsx

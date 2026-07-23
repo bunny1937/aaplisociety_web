@@ -32,7 +32,7 @@ export const GET = withRoute(async (req) => {
 
   const bills = await Bill.find(query).sort({ createdAt: -1 }).limit(200);
   const memberIds = [...new Set(bills.map((b) => String(b.memberId)))];
-  const members = await Member.find({ _id: { $in: memberIds } }).lean();
+  const members = await Member.find({ _id: { $in: memberIds } }).select("flatNo wing ownerName carpetAreaSqft builtUpAreaSqft").lean();
   const byId = new Map(members.map((m) => [String(m._id), m]));
   return json({ bills: bills.map((b) => normalizeBill(b, byId.get(String(b.memberId)))) });
 });

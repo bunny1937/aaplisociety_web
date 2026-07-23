@@ -71,7 +71,7 @@ const NotificationSchema = new mongoose.Schema(
       },
     ],
     actionUrl: { type: String, default: null },
-    expiresAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },

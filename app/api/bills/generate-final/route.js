@@ -9,6 +9,7 @@ import renderBillHtml from "@/lib/bill-renderer";
 import cache from "@/lib/cache";
 import { generateBill } from "@/lib/billing/generationService";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import { notifyBillCreated } from "@/lib/v1/notify";
 
 // Ledger V2: THIN WRAPPER over the shared GenerationService. Contains no
 // billing math of its own — charges/interest/totals are recomputed from
@@ -169,11 +170,13 @@ export async function POST(request) {
         if (bill.status !== "Scheduled" && (member?.advanceCredit || 0) > 0) {
           const applied = Math.min(parseFloat(member.advanceCredit.toFixed(2)), bill.totalBillDue);
           if (applied > 0) {
-            await applyPaymentToBill({ billId: bill._id, payment: applied, performedBy: decoded.userId });
+            const ar = await applyPaymentToBill({ billId: bill._id, payment: applied, performedBy: decoded.userId });
+            await Bill.updateOne({ _id: bill._id }, { $inc: { advanceApplied: applied }, $set: { status: ar.balanceAmount > 0 ? "Unpaid" : "Paid" } });
             await Member.updateOne({ _id: memberId }, { $inc: { advanceCredit: -applied } });
           }
         }
 
+        if (bill.status !== "Scheduled") await notifyBillCreated({ billId: bill._id, societyId, memberId, amount: bill.totalBillDue, period: billPeriodId });
         createdBills.push(bill._id);
       } catch (err) {
         if (err.code === "P4_DUPLICATE") {

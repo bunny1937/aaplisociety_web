@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api-client";
 export default function BillingConfigPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("charges");
+  const [billDueDate, setBillDueDate] = useState("");
   // ─── CHARGES TAB STATE ───────────────────────────────────────────────────────
   const [customCharges, setCustomCharges] = useState([]);
   // ─── MATRIX / GRID SHARED STATE ──────────────────────────────────────────────
@@ -38,8 +39,21 @@ export default function BillingConfigPage() {
     queryFn: () => apiClient.get("/api/billing/template"),
   });
   const society = societyData?.society;
+  useEffect(() => {
+  const value = society?.config?.billDueDate;
+
+  if (value) {
+    setBillDueDate(
+      new Date(value).toISOString().slice(0, 10),
+    );
+  }
+}, [society]);
   const members = membersData?.members ?? [];
   const billTemplate = templateData?.template;
+  useEffect(() => {
+    const value = society?.config?.billDueDate;
+    if (value) setBillDueDate(new Date(value).toISOString().slice(0, 10));
+  }, [society]);
   // ─── LOAD BILLING HEADS INTO customCharges ────────────────────────────────────
   useEffect(() => {
     if (billingHeadsData?.heads) {
@@ -116,6 +130,8 @@ export default function BillingConfigPage() {
   // ─── CHARGES: SAVE ────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!billDueDate) throw new Error("Choose the maintenance bill due date");
+      await apiClient.put("/api/society/config", { billDueDate });
       for (const charge of customCharges) {
         if (!charge.name?.trim()) continue;
         if (charge.isExisting) {
@@ -428,6 +444,17 @@ export default function BillingConfigPage() {
           </button>
         )}
       </div>
+      {activeTab === "charges" && (
+        <div className={styles.section} style={{ marginBottom: "1.25rem" }}>
+          <h2>📅 Maintenance Bill Due Date</h2>
+          <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+            This exact date is shown everywhere and updates every open bill when saved.
+          </p>
+          <input type="date" value={billDueDate}
+            onChange={(e) => setBillDueDate(e.target.value)}
+            style={{ padding: "0.7rem", border: "1px solid #d1d5db", borderRadius: 8 }} />
+        </div>
+      )}
       {/* ── TAB BAR ── */}
       <div
         style={{

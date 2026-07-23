@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 import crypto from "node:crypto";
 import cache from "@/lib/cache";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import { notifyPaymentReceived } from "@/lib/v1/notify";
 function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
 }
@@ -430,7 +431,7 @@ export async function POST(request) {
           );
           const newBal = twoDp(prevBal - row.amountPaid);
           const txnId = Transaction.generateTransactionId();
-          await Transaction.create({
+          const paymentTxn = await Transaction.create({
             transactionId: txnId,
             date: new Date(row.paymentDate),
             memberId: row.memberId,
@@ -476,7 +477,14 @@ export async function POST(request) {
               billPeriodId: bill.billPeriodId,
               memberId: row.memberId,
               societyId: dec.societyId,
-              amount: amountApplied,
+              amount: twoDp(row.amountPaid),
+              amountReceived: twoDp(row.amountPaid),
+              amountApplied,
+              interestApplied: intClr,
+              principalApplied: prinClr,
+              advanceCreditCreated: advanceCredit,
+              remainingBalance: twoDp(result.balanceAmount),
+              settlementStatus: result.balanceAmount > 0 ? "Partial" : "Paid",
               previousBalanceSnapshot: balanceBefore,
               paymentMode: row.paymentMethod || "Cash",
               paidAt: new Date(row.paymentDate),
@@ -486,6 +494,7 @@ export async function POST(request) {
             });
             receiptNos.push(receiptNo);
           }
+          await notifyPaymentReceived({ transactionId: paymentTxn._id, societyId: dec.societyId, memberId: row.memberId, amount: twoDp(row.amountPaid), appliedAmount: amountApplied, advanceCredit, remainingBalance: twoDp(result.balanceAmount), period: row.billPeriodId });
 
           totalInterestCleared += intClr;
           totalPrincipalCleared += prinClr;

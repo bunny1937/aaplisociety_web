@@ -195,6 +195,15 @@ function rowToSocietyPayload(row) {
       charges: charges.filter((c) => c.label),
       interestRate: parseFloat(row["Interest Rate %"]) || 21,
       interestAfterDays: parseInt(row["Bill Payment Due After (Days)"]) || 15,
+      billDueDate:
+  parseDateOrNull(
+    row["Bill Due Date*"] || row["Bill Due Date"]
+  ),
+
+billDueDay:
+  parseDateOrNull(
+    row["Bill Due Date*"] || row["Bill Due Date"]
+  )?.getDate(),
     },
   };
 }
