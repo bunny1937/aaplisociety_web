@@ -137,18 +137,11 @@ function rowToSocietyPayload(row) {
     config: {
       charges,
       interestRate: parseFloat(row["Interest Rate %"]) || 21,
-      interestAfterDays: parseInt(row["Bill Payment Due After (Days)"]) || 15,
-      billDueDate:
-  parseDateOrNull(
-    row["Bill Due Date*"] || row["Bill Due Date"]
-  ),
-
-billDueDay:
-  parseDateOrNull(
-    row["Bill Due Date*"] || row["Bill Due Date"]
-  )?.getDate(),
-      billDueDate: parseDateOrNull(row["Bill Due Date*"] || row["Bill Due Date"]),
-      billDueDay: parseDateOrNull(row["Bill Due Date*"] || row["Bill Due Date"])?.getDate() || 10,
+      billGenerationDay: parseInt(row["Bill Creation Day*"]),
+      paymentUploadDay: parseInt(row["Payment Upload Day*"]),
+      billDueDay: parseInt(row["Bill Due Day*"]),
+      interestAfterDays:
+        parseInt(row["Interest Starts After Due Date (Days)"]) || 15,
     },
   };
 }
@@ -437,23 +430,19 @@ export async function POST(request) {
       422,
     );
   }
- const societyPayload = rowToSocietyPayload(societyRows[0]);
-
-if (!societyPayload.config?.billDueDate) {
-  return fail(
-    {
-      validationFailed: true,
-      phase: "society",
-      errors: [
-        "Society sheet requires 'Bill Due Date*' as a valid Excel date.",
-      ],
-    },
-    422,
-  );
-}
-
-// Member sheet (index 1 = "1. Basic Info (Required)")
-const basicInfoSheetName = wb.SheetNames[1];
+  const societyPayload = rowToSocietyPayload(societyRows[0]);
+  const scheduleErrors = [
+    ["Bill Creation Day*", societyPayload.config.billGenerationDay],
+    ["Payment Upload Day*", societyPayload.config.paymentUploadDay],
+    ["Bill Due Day*", societyPayload.config.billDueDay],
+  ]
+    .filter(([, value]) => !Number.isInteger(value) || value < 1 || value > 31)
+    .map(([label]) => `${label} must be a whole number from 1 to 31.`);
+  if (scheduleErrors.length) {
+    return fail({ validationFailed: true, phase: "society", errors: scheduleErrors }, 422);
+  }
+  // Member sheet (index 1 = "1. Basic Info (Required)")
+  const basicInfoSheetName = wb.SheetNames[1];
   const basicInfoRows = basicInfoSheetName
     ? XLSX.utils.sheet_to_json(wb.Sheets[basicInfoSheetName], {
         defval: "",

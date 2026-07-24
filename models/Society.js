@@ -76,21 +76,10 @@ const SocietySchema = new mongoose.Schema(
     // Configuration
     config: {
       // billing settings (non-charge)
-     interestRate: { type: Number, default: 0 },
-serviceTaxRate: { type: Number, default: 0 },
-gracePeriodDays: { type: Number, default: 10 },
-
-billDueDate: {
-  type: Date,
-  default: null,
-},
-
-billDueDay: {
-  type: Number,
-  min: 1,
-  max: 31,
-  default: 10,
-},
+      interestRate: { type: Number, default: 0 },
+      serviceTaxRate: { type: Number, default: 0 },
+      gracePeriodDays: { type: Number, default: 10 },
+      billDueDay: { type: Number, min: 1, max: 31, default: 10 },
       billPayFinalDay: { type: Number, min: 1, max: 31, default: 25 }, // ← NEW: last day to accept payment/interest for the month
       // NEW CONFIG FLAGS
       interestRounding: {
@@ -132,7 +121,8 @@ billDueDay: {
       // billGenerationDay: day of month admin generates bills (e.g., 1 = 1st of month)
       // billPushDay: day of month bills become visible to members / go Unpaid (e.g., 5 = 5th)
       // If billPushDay > today at generation time → bills stored as 'Scheduled', auto-pushed by cron
-      billGenerationDay: { type: Number, min: 1, max: 28, default: 1 },
+      billGenerationDay: { type: Number, min: 1, max: 31, default: 1 },
+      paymentUploadDay: { type: Number, min: 1, max: 31, default: 30 },
       billPushDay: { type: Number, min: 1, max: 28, default: 1 },
       // Interest Activation Settings (replaces gracePeriodDays / billDueDay / billPayFinalDay)
       interestAfterDays: { type: Number, min: 0, max: 365, default: 15 },
@@ -264,21 +254,11 @@ SocietySchema.pre("save", function (next) {
   if (this.isModified("config") || this.isModified("matrixConfig")) {
     this.configVersion += 1;
   }
-  // Clamp day fields so they never overflow for any given month.
-  // We clamp against the shortest month (Feb = 28 in non-leap, 29 in leap).
-  // Using Feb of current year as the reference — safest cross-month anchor.
+  // Keep the configured recurring day (e.g. 30) unchanged. At runtime,
+  // safeConfigDate clamps it only for short months (30 -> Feb 28/29).
   if (this.config) {
-    const now = new Date();
-    const y = now.getFullYear();
-    // Feb = month 2, so new Date(y, 2, 0).getDate() = 28 or 29
-    const febLastDay = new Date(y, 2, 0).getDate(); // 28 or 29
-    if (this.config.billDueDay > febLastDay)
-      this.config.billDueDay = febLastDay;
     if (this.config.billPayFinalDay > 31) this.config.billPayFinalDay = 31;
-    if (this.config.billGenerationDay > febLastDay)
-      this.config.billGenerationDay = febLastDay;
-    if (this.config.billPushDay > febLastDay)
-      this.config.billPushDay = febLastDay;
+    if (this.config.billPushDay > 28) this.config.billPushDay = 28;
     // Ensure new enum fields have valid defaults if missing
     if (!this.config.interestRounding)
       this.config.interestRounding = "TWO_DECIMAL";

@@ -4,13 +4,12 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { runEscalationSweep } from "@/lib/escalation";
+import { cronAuthorized } from "@/lib/v1/config";
 function authorize(request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false; // must be configured to enable the endpoint
-  const header =
-    request.headers.get("authorization") || request.headers.get("x-cron-secret") || "";
-  const token = header.replace(/^Bearer\s+/i, "");
-  return token === secret;
+  // Endpoint stays disabled until CRON_SECRET is configured, then accepts
+  // Bearer, raw Authorization, x-cron-secret, and ?secret= schedulers.
+  if (!process.env.CRON_SECRET) return false;
+  return cronAuthorized(request);
 }
 async function handle(request) {
   if (!authorize(request))

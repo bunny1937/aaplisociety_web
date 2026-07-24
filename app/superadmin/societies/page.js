@@ -72,15 +72,15 @@ function validateRows(rows) {
           `Interest Rate must be a number between 0–100, got "${row["Interest Rate %"]}"`,
         );
     }
-    const iad = parseInt(row["Bill Payment Due After (Days)"]);
-    if (
-      row["Bill Payment Due After (Days)"] !== undefined &&
-      row["Bill Payment Due After (Days)"] !== ""
-    ) {
-      if (isNaN(iad) || iad < 0 || iad > 365)
-        e(
-          `Bill Payment Due After (Days) must be 0–365, got "${row["Bill Payment Due After (Days)"]}"`,
-        );
+    for (const label of ["Bill Creation Day*", "Payment Upload Day*", "Bill Due Day*"]) {
+      const value = Number(row[label]);
+      if (!Number.isInteger(value) || value < 1 || value > 31) {
+        e(`${label} must be a whole number from 1 to 31, got "${row[label]}"`);
+      }
+    }
+    const iad = parseInt(row["Interest Starts After Due Date (Days)"]);
+    if (!isNaN(iad) && (iad < 0 || iad > 365)) {
+      e(`Interest Starts After Due Date (Days) must be 0–365, got "${row["Interest Starts After Due Date (Days)"]}"`);
     }
     // Charge amounts must be numeric and non-negative
     const chargeFields = [
@@ -194,16 +194,10 @@ function rowToSocietyPayload(row) {
     config: {
       charges: charges.filter((c) => c.label),
       interestRate: parseFloat(row["Interest Rate %"]) || 21,
-      interestAfterDays: parseInt(row["Bill Payment Due After (Days)"]) || 15,
-      billDueDate:
-  parseDateOrNull(
-    row["Bill Due Date*"] || row["Bill Due Date"]
-  ),
-
-billDueDay:
-  parseDateOrNull(
-    row["Bill Due Date*"] || row["Bill Due Date"]
-  )?.getDate(),
+      billGenerationDay: parseInt(row["Bill Creation Day*"]),
+      paymentUploadDay: parseInt(row["Payment Upload Day*"]),
+      billDueDay: parseInt(row["Bill Due Day*"]),
+      interestAfterDays: parseInt(row["Interest Starts After Due Date (Days)"]) || 15,
     },
   };
 }
@@ -222,7 +216,10 @@ function downloadTemplate() {
     "Contact Email",
     "Contact Phone",
     "Interest Rate %",
-    "Bill Payment Due After (Days)",
+    "Bill Creation Day*",
+    "Payment Upload Day*",
+    "Bill Due Day*",
+    "Interest Starts After Due Date (Days)",
     "Maintenance Rate (Per Sq Ft)",
     "Sinking Fund Rate (Per Sq Ft)",
     "Repair Fund Rate (Per Sq Ft)",
@@ -247,7 +244,10 @@ function downloadTemplate() {
     "secretary@godboleheights.com",
     "9876543210",
     "21",
-    "15",
+    1,
+    30,
+    30,
+    15,
     "1.5",
     "0.5",
     "0.25",
