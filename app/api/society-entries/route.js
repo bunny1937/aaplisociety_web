@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import SocietyEntry from "@/models/SocietyEntry";
+// Registers the User schema in this lambda so populate("createdBy") cannot
+// throw MissingSchemaError (was returning 500 on ledger/payment fetches).
+import User from "@/models/User";
+void User;
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 function auth(request) {
   const token = getTokenFromRequest(request);

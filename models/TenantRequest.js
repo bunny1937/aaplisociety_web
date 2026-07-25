@@ -31,6 +31,22 @@ const TenantRequestSchema = new mongoose.Schema(
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     approvedAt: Date,
     leaseExpiredAt: Date,
+    // Owner-authored notes on the tenancy (visible to owner + admin).
+    notes: [
+      new mongoose.Schema(
+        { text: String, at: { type: Date, default: Date.now }, by: String },
+        { _id: false },
+      ),
+    ],
+    // Proposed lease-date change awaiting admin approval. The live
+    // leaseStartDate/leaseEndDate are untouched until the admin approves.
+    pendingLeaseChange: {
+      leaseStartDate: Date,
+      leaseEndDate: Date,
+      requestedAt: Date,
+      status: { type: String, enum: ["Pending", "Approved", "Rejected"] },
+      decidedAt: Date,
+    },
     ownerConfirmedMoveOutAt: Date,
     adminConfirmedMoveOutAt: Date,
   },

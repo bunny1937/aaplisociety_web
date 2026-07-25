@@ -1,0 +1,121 @@
+// PATCH /api/admin/payments/received/:id - edit the NON-FINANCIAL metadata of
+// a recorded payment (mode, reference, cheque/bank/UPI, notes, value date).
+//
+// POST  /api/admin/payments/received/:id - reverse a payment. This never
+// silently rewrites history: the original row is flagged isReversed and a
+// mirror Debit transaction is written so the ledger nets to zero and both
+// rows stay visible in the audit trail.
+//
+// The amount of an existing payment is deliberately NOT editable - changing it
+// in place would desynchronise bill allocation, receipts and balances. Reverse
+// the payment and record a correct one instead.
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import Transaction from "@/models/Transaction";
+import User from "@/models/User";
+void User;
+import { requireRoles } from "@/lib/authz";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const EDITABLE = ["paymentMode", "chequeNo", "bankName", "upiId", "transactionRef", "notes"];
+
+async function load(id, societyId) {
+  const txn = await Transaction.findOne({ _id: id, societyId, category: "Payment" });
+  return txn;
+}
+
+export async function PATCH(request, ctx) {
+  const auth = requireRoles(request, ["Admin", "Secretary", "Treasurer"]);
+  if (!auth.valid) return auth;
+  try {
+    await connectDB();
+    const { id } = await ctx.params;
+    const txn = await load(id, auth.user.societyId);
+    if (!txn) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    if (txn.isReversed)
+      return NextResponse.json({ error: "This payment is reversed and can no longer be edited" }, { status: 409 });
+
+    const body = await request.json();
+    const updates = {};
+    for (const key of EDITABLE) {
+      if (typeof body[key] === "string") updates[key] = body[key].trim();
+    }
+    if (body.date) {
+      const d = new Date(body.date);
+      if (Number.isNaN(d.getTime()))
+        return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+      updates.date = d;
+    }
+    if (body.amount !== undefined)
+      return NextResponse.json(
+        { error: "Amount cannot be edited. Reverse this payment and record a corrected one." },
+        { status: 400 },
+      );
+    if (Object.keys(updates).length === 0)
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+
+    Object.assign(txn, updates);
+    await txn.save();
+    return NextResponse.json({ success: true, payment: { _id: String(txn._id), ...updates } });
+  } catch (err) {
+    console.error("Payment edit error", err);
+    return NextResponse.json({ error: "Failed to update payment", details: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(request, ctx) {
+  const auth = requireRoles(request, ["Admin", "Treasurer"]);
+  if (!auth.valid) return auth;
+  try {
+    await connectDB();
+    const { id } = await ctx.params;
+    const body = await request.json().catch(() => ({}));
+    if (body.action !== "reverse")
+      return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
+
+    const txn = await load(id, auth.user.societyId);
+    if (!txn) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    if (txn.isReversed)
+      return NextResponse.json({ error: "Payment is already reversed" }, { status: 409 });
+
+    const reversalId = Transaction.generateTransactionId
+      ? Transaction.generateTransactionId()
+      : `TXN${Date.now().toString(36).toUpperCase()}`;
+
+    // Mirror row: a Debit that cancels the original Credit.
+    const mirror = await Transaction.create({
+      transactionId: reversalId,
+      date: new Date(),
+      memberId: txn.memberId,
+      societyId: txn.societyId,
+      type: txn.type === "Credit" ? "Debit" : "Credit",
+      category: "Adjustment",
+      description: `Reversal of ${txn.transactionId}${body.reason ? ` - ${body.reason}` : ""}`,
+      amount: txn.amount,
+      balanceAfterTransaction: (txn.balanceAfterTransaction || 0) + (txn.amount || 0),
+      billPeriodId: txn.billPeriodId,
+      paymentMode: "System",
+      notes: body.reason || "",
+      createdBy: auth.user.userId,
+      financialYear: txn.financialYear,
+    });
+
+    txn.isReversed = true;
+    txn.reversalTransactionId = reversalId;
+    await txn.save();
+
+    return NextResponse.json({
+      success: true,
+      reversalTransactionId: reversalId,
+      mirrorId: String(mirror._id),
+      // Member-level aggregates (outstanding / advanceCredit) are derived
+      // elsewhere - re-run the balance recompute if your totals look stale.
+      warning: "Reversal recorded. Verify the member balance after reversing.",
+    });
+  } catch (err) {
+    console.error("Payment reversal error", err);
+    return NextResponse.json({ error: "Failed to reverse payment", details: err.message }, { status: 500 });
+  }
+}

@@ -113,8 +113,26 @@ export default function BillTemplateDesigner() {
   });
   const { data: sampleMembersData } = useQuery({
     queryKey: ["template-sample-member"],
-    queryFn: () => apiClient.get("/api/members/list?limit=1"),
+    queryFn: () => apiClient.get("/api/members/list?limit=25"),
   });
+  // Which real member the admin is previewing. Defaults to the first member.
+  const [previewMemberId, setPreviewMemberId] = useState("");
+  const memberOptions = sampleMembersData?.members || [];
+  useEffect(() => {
+    if (!previewMemberId && memberOptions.length) setPreviewMemberId(memberOptions[0]._id);
+  }, [memberOptions, previewMemberId]);
+  // The member's REAL latest bill — this is what the preview renders, so the
+  // admin verifies actual processed values instead of hardcoded sample numbers.
+  const { data: previewBillData, isFetching: previewLoading, error: previewError } = useQuery({
+    queryKey: ["template-preview-bill", previewMemberId],
+    queryFn: () => apiClient.get(`/api/bill-template/preview-bill?memberId=${previewMemberId}`),
+    enabled: Boolean(previewMemberId),
+  });
+  const previewBill = previewBillData?.bill || null;
+  // Any change to the design invalidates a previous confirmation.
+  useEffect(() => {
+    setPreviewConfirmed(false);
+  }, [template, previewMemberId, uploadedLogo, uploadedSignature, activeTab]);
   // Fetch saved template
   const { data: savedTemplateData } = useQuery({
     queryKey: ["bill-template-full"],
@@ -292,7 +310,11 @@ export default function BillTemplateDesigner() {
     const society = societyData?.society || {};
     const config = society.config || {};
     const heads = billingHeadsData?.heads || [];
-    const sampleMember = sampleMembersData?.members?.[0] || {};
+    const sampleMember =
+      (previewBill && previewBill.member) ||
+      (memberOptions.find((m) => m._id === previewMemberId) ?? memberOptions[0]) ||
+      {};
+    const real = previewBill || null;
     // Build charges from billing heads
     const charges = [];
     charges.push({ name: "Maintenance", amount: 3600, rate: 3, perSqFt: true });
@@ -331,17 +353,17 @@ export default function BillTemplateDesigner() {
       memberName: sampleMember.ownerName || "Sample member",
       flatNo: `${sampleMember.wing || ""}-${sampleMember.flatNo || "—"}`,
       area: sampleMember.carpetAreaSqft || sampleMember.builtUpAreaSqft || 0,
-      billPeriod: "2026-04",
-      billDate: "15/4/2026",
-      dueDate: "9/5/2026",
-      previousBalance: 2426,
-      daysOverdue: 0,
+      billPeriod: real?.billPeriodId || "2026-04",
+      billDate: real?.billDate ? new Date(real.billDate).toLocaleDateString("en-IN") : "15/4/2026",
+      dueDate: real?.dueDate ? new Date(real.dueDate).toLocaleDateString("en-IN") : "9/5/2026",
+      previousBalance: real?.previousBalance ?? 2426,
+      daysOverdue: real?.daysOverdue ?? 0,
       interestRate: societyData?.society?.config?.interestRate || 21,
       interestMethod:
         societyData?.society?.config?.interestCalculationMethod || "SIMPLE",
       gracePeriodDays: societyData?.society?.config?.gracePeriodDays || 15,
-      interestAmount: 96.88,
-      charges: charges,
+      interestAmount: real?.interestAmount ?? 96.88,
+      charges: real?.charges?.length ? real.charges : charges,
       subtotal: charges.reduce((s, c) => s + c.amount, 0),
       serviceTax: +(
         charges.reduce((s, c) => s + c.amount, 0) *
@@ -351,6 +373,7 @@ export default function BillTemplateDesigner() {
         return +(this.subtotal + this.serviceTax).toFixed(2);
       },
       get grandTotal() {
+        if (real?.totalAmount != null) return +Number(real.totalAmount).toFixed(2);
         return +(
           this.previousBalance +
           this.interestAmount +
@@ -573,6 +596,8 @@ export default function BillTemplateDesigner() {
         <button
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending || !previewConfirmed}
+          title={previewConfirmed ? "Save this template" : "Confirm the live preview below first — that is what enables Save"}
+          title={previewConfirmed ? "Save this template" : "Confirm the live preview below first — that is what enables Save"}
           className="btn btn-primary"
         >
           {saveMutation.isPending
@@ -617,7 +642,7 @@ export default function BillTemplateDesigner() {
             color: "#3730a3",
           }}
         >
-          Designing the <strong>receipt</strong> template (used for payment &amp;
+          Designing the <strong>receipt</strong> template (used for payment &
           advance receipts). Colours, logo, signature and footer apply to
           generated receipts. Uploaded PDF/image is only available for bills.
         </div>
@@ -876,12 +901,46 @@ export default function BillTemplateDesigner() {
           </div>
           {/* Preview with FULL DATA */}
           <div className={styles.previewPanel}>
-            <h2>👁️ Live Preview (with Interest & Previous Balance)</h2>
+            <h2>👁️ Live Preview — real member bill</h2>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>Preview as member:</label>
+              <select value={previewMemberId} onChange={(e) => setPreviewMemberId(e.target.value)}>
+                {memberOptions.length === 0 ? <option value="">No members found</option> : null}
+                {memberOptions.map((m) => (
+                  <option key={m._id} value={m._id}>
+                    {(m.wing ? m.wing + "-" : "") + (m.flatNo || "")} · {m.ownerName || ""}
+                  </option>
+                ))}
+              </select>
+              {previewLoading ? <span style={{ fontSize: 12 }}>Loading real bill…</span> : null}
+            </div>
+            {previewError ? (
+              <div style={{ background: "#fee2e2", color: "#991b1b", padding: 10, borderRadius: 6, marginBottom: 10, fontSize: 13 }}>
+                Could not load a real bill: {String(previewError.message || previewError)}. The preview below is showing sample figures.
+              </div>
+            ) : null}
+            {!previewLoading && !previewError && !previewBill ? (
+              <div style={{ background: "#fef3c7", color: "#92400e", padding: 10, borderRadius: 6, marginBottom: 10, fontSize: 13 }}>
+                This member has no generated bill yet, so sample figures are shown. Generate a bill to verify real mapping.
+              </div>
+            ) : null}
+            {previewBill ? (
+              <div style={{ background: "#dcfce7", color: "#166534", padding: 10, borderRadius: 6, marginBottom: 10, fontSize: 13 }}>
+                Showing real bill <strong>{previewBill.billPeriodId}</strong> for{" "}
+                <strong>{(previewBill.member?.wing ? previewBill.member.wing + "-" : "") + (previewBill.member?.flatNo || "")}</strong>{" "}
+                — total <strong>₹{previewBill.totalAmount}</strong>, area{" "}
+                <strong>{previewBill.member?.areaSqFt || previewBill.member?.carpetAreaSqft || "—"} sq ft</strong>.
+              </div>
+            ) : null}
             <div className={styles.previewWrapper}>
               <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML() }} />
               <button type="button" className="btn btn-success"
                 onClick={() => setPreviewConfirmed(true)} style={{ marginTop: "1rem" }}>
-                {previewConfirmed ? "✅ Preview confirmed" : "Confirm this real-member preview"}
+                {previewConfirmed
+                  ? "✅ Preview confirmed — you can now save"
+                  : previewBill
+                    ? "Confirm this real-member preview"
+                    : "Confirm preview (no real bill available)"}
               </button>
             </div>
           </div>

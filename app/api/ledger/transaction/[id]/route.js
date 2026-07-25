@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import Transaction from "@/models/Transaction";
+// Registers the User schema in this lambda so populate("createdBy") cannot
+// throw MissingSchemaError (was returning 500 on ledger/payment fetches).
+import User from "@/models/User";
+void User;
 import BillingHead from "@/models/BillingHead";
 export async function GET(request, { params }) {
   try {

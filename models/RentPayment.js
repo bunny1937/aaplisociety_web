@@ -11,6 +11,13 @@ const RentPaymentSchema = new mongoose.Schema(
     paymentMode: { type: String, enum: ["Cash", "UPI", "BankTransfer", "Cheque", "Online"], required: true },
     paidAt: { type: Date, required: true },
     notes: String,
+    // Tenant-submitted payments start Pending and only the owner confirms them.
+    status: { type: String, enum: ["Pending", "Confirmed", "Rejected"], default: "Confirmed", index: true },
+    submittedByRole: { type: String, enum: ["Owner", "Tenant"], default: "Owner" },
+    confirmedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    confirmedAt: Date,
+    rejectionReason: String,
+    reference: String,
   },
   { timestamps: true },
 );

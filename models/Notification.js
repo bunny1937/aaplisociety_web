@@ -62,6 +62,9 @@ const NotificationSchema = new mongoose.Schema(
     },
     // member:[memberId] · wing:[wingName] · flats:[memberId] · role:[roleName] · user:[userId]
     recipientIds: [{ type: String }],
+    // "owner" | "tenant" | "all" — narrows a flat-scoped notification to one
+    // occupant so tenants stop receiving the owner's visitor//rent alerts.
+    audience: { type: String, enum: ["owner", "tenant", "all"], default: "all" },
     // Arbitrary structured payload (visitorId, photo, flatNo, action, …)
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     readBy: [
