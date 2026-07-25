@@ -15,15 +15,21 @@ export async function POST(request) {
     }
     const templateData = await request.json();
     const scope = templateData.scope === 'receipt' ? 'receipt' : 'bill';
-    if (scope === 'receipt' && !['default', 'custom'].includes(templateData.type || 'custom')) {
+    if (scope === 'receipt' && !['default', 'custom', 'uploaded-pdf', 'uploaded-image'].includes(templateData.type || 'custom')) {
       return NextResponse.json(
-        { error: 'Receipt templates currently support the editable designer only' },
+        { error: 'Unsupported receipt template type' },
         { status: 400 }
       );
     }
     const templateValue = scope === 'receipt'
       ? {
           type: templateData.type || 'custom',
+          pdfUrl: templateData.pdfUrl || null,
+          hasFormFields: templateData.hasFormFields || false,
+          detectedFields: templateData.detectedFields || [],
+          pdfFields: templateData.pdfFields || [],
+          imageUrl: templateData.imageUrl || null,
+          imageFields: templateData.imageFields || [],
           design: templateData.design || null,
           logoUrl: templateData.logoUrl || null,
           signatureUrl: templateData.signatureUrl || null,
@@ -35,7 +41,9 @@ export async function POST(request) {
           pdfUrl: templateData.pdfUrl || null,
           hasFormFields: templateData.hasFormFields || false,
           detectedFields: templateData.detectedFields || [],
+          pdfFields: templateData.pdfFields || [],
           imageUrl: templateData.imageUrl || null,
+          imageFields: templateData.imageFields || [],
           design: templateData.design || null,
           logoUrl: templateData.logoUrl || null,
           signatureUrl: templateData.signatureUrl || null,

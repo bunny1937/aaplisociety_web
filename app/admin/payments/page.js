@@ -1,702 +1,746 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
-import styles from "@/styles/Dashboard.module.css";
-import gridStyles from "@/styles/BillingGrid.module.css";
-import Select from "react-select";
-export default function AdvancedPaymentPage() {
-  const queryClient = useQueryClient();
+import { useCallback, useEffect, useMemo, useState } from "react";
+import RSelect from "react-select";
+import {
+  Card, PageHeader, Button, Badge, Spinner, Toast, EmptyState,
+  Modal, StatCard, tokens, grid, Field, Input, Select, Textarea,
+} from "@/components/visitor/ui";
+
+async function api(url, opts) {
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: opts && opts.body ? { "Content-Type": "application/json" } : undefined,
+    ...opts,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error((data && data.error) || "Request failed");
+  return data;
+}
+
+const MODES = ["", "Cash", "Cheque", "Online", "UPI", "NEFT", "RTGS", "System"];
+const RECORD_MODES = ["Cash", "Cheque", "Online", "UPI", "NEFT", "RTGS"];
+const DASH = "—";
+const money = (n) => `Rs ${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtDate = (v) => {
+  if (!v) return DASH;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? DASH : d.toLocaleDateString("en-IN");
+};
+
+const S = {
+  tabs: { display: "flex", gap: 6, marginBottom: 18, borderBottom: `1px solid ${tokens.border.split(" ").pop()}` },
+  tab: (active) => ({
+    padding: "10px 16px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    color: active ? tokens.primary : tokens.sub,
+    borderBottom: active ? `2px solid ${tokens.primary}` : "2px solid transparent",
+    marginBottom: -1,
+    background: "none",
+    border: "none",
+    borderBottomWidth: 2,
+  }),
+  filters: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 },
+  fl: { display: "grid", gap: 4 },
+  lbl: { fontSize: 11.5, color: tokens.sub, fontWeight: 600 },
+  inp: { padding: "7px 10px", borderRadius: 8, border: `1px solid ${tokens.border}`, fontSize: 13 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  th: { textAlign: "left", padding: "10px 8px", borderBottom: `2px solid ${tokens.border}`, color: tokens.sub, fontSize: 11.5, textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap" },
+  td: { padding: "10px 8px", borderBottom: `1px solid ${tokens.border}`, verticalAlign: "top" },
+  num: { textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
+  center: { display: "flex", justifyContent: "center", padding: 48 },
+  pager: { display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginTop: 14 },
+  sub: { fontSize: 11.5, color: tokens.sub },
+};
+
+const EMPTY_FILTERS = { paymentMode: "", from: "", to: "", includeReversed: false };
+
+export default function PaymentsPage() {
+  const [tab, setTab] = useState("received"); // received | pending
+  const [toast, setToast] = useState(null);
+
+  // ── Received list state (folded in from the old payments-received page) ──
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [edit, setEdit] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = new URLSearchParams({ page: String(page), limit: "50" });
+      if (filters.paymentMode) p.set("paymentMode", filters.paymentMode);
+      if (filters.from) p.set("from", filters.from);
+      if (filters.to) p.set("to", filters.to);
+      if (filters.includeReversed) p.set("includeReversed", "1");
+      setData(await api(`/api/admin/payments/received?${p.toString()}`));
+    } catch (err) {
+      setToast({ type: "error", message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, filters]);
+
+  useEffect(() => { if (tab === "received") load(); }, [load, tab]);
+
+  const rows = useMemo(() => {
+    const list = (data && data.payments) || [];
+    const term = q.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter((r) =>
+      [r.transactionId, r.description, r.notes, r.transactionRef, r.chequeNo,
+        r.member && r.member.flatNo, r.member && r.member.ownerName]
+        .filter(Boolean).join(" ").toLowerCase().includes(term),
+    );
+  }, [data, q]);
+
+  const summary = (data && data.summary) || { count: 0, amount: 0, interest: 0, principal: 0, advance: 0 };
+
+  async function saveEdit() {
+    setSaving(true);
+    try {
+      await api(`/api/admin/payments/received/${edit._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          paymentMode: edit.paymentMode || "",
+          transactionRef: edit.transactionRef || "",
+          chequeNo: edit.chequeNo || "",
+          bankName: edit.bankName || "",
+          upiId: edit.upiId || "",
+          notes: edit.notes || "",
+          date: edit.date,
+        }),
+      });
+      setToast({ type: "success", message: "Payment updated" });
+      setEdit(null);
+      load();
+    } catch (err) {
+      setToast({ type: "error", message: err.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reverse(row) {
+    const reason = window.prompt(
+      `Reverse ${row.transactionId} (${money(row.amount)})?\n\nThe original stays in the ledger flagged as reversed and a mirror entry cancels it. Reason:`,
+      "",
+    );
+    if (reason === null) return;
+    try {
+      const res = await api(`/api/admin/payments/received/${row._id}`, {
+        method: "POST",
+        body: JSON.stringify({ action: "reverse", reason }),
+      });
+      setToast({ type: "success", message: res.warning || "Payment reversed" });
+      load();
+    } catch (err) {
+      setToast({ type: "error", message: err.message });
+    }
+  }
+
+  function exportCsv() {
+    const head = ["Txn ID", "Date", "Flat", "Owner", "Amount", "Mode", "Interest", "Principal", "Advance", "Reversed", "Notes"];
+    const lines = rows.map((r) => [
+      r.transactionId, fmtDate(r.date),
+      r.member ? `${r.member.wing || ""}${r.member.wing ? "-" : ""}${r.member.flatNo}` : "",
+      r.member ? r.member.ownerName : "",
+      r.amount, r.paymentMode || "",
+      (r.breakdown && r.breakdown.interestCleared) || 0,
+      (r.breakdown && r.breakdown.principalCleared) || 0,
+      (r.breakdown && r.breakdown.advanceCredit) || 0,
+      r.isReversed ? "YES" : "", (r.notes || "").replace(/"/g, "'"),
+    ]);
+    const csv = [head, ...lines].map((l) => l.map((c) => `"${c === undefined || c === null ? "" : c}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payments-received-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Pending / outstanding tab (late-list is the authoritative list of
+  // members whose oldest unpaid bill is past the payment deadline; see gap
+  // note in report — it does not include members who are outstanding but
+  // still within the payment window) ──
+  const [pending, setPending] = useState(null);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingDone, setPendingDone] = useState(null);
+
+  const loadPending = useCallback(async () => {
+    setPendingLoading(true);
+    try {
+      const [late, done] = await Promise.all([
+        api("/api/payments/late-list"),
+        api("/api/payments/pending-done").catch(() => null),
+      ]);
+      setPending(late);
+      setPendingDone(done);
+    } catch (err) {
+      setToast({ type: "error", message: err.message });
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (tab === "pending") loadPending(); }, [tab, loadPending]);
+
+  // ── Record-payment modal (ported CREATE flow from the old advanced
+  // payments page — posts to the same /api/payments/record + mark-done
+  // routes) ──
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [members, setMembers] = useState(null);
+  const [membersLoading, setMembersLoading] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState("");
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMode, setPaymentMode] = useState("Cash");
-  const [paymentDate, setPaymentDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [outstanding, setOutstanding] = useState(null);
+  const [outstandingLoading, setOutstandingLoading] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [mode, setMode] = useState("Cash");
+  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [chequeNo, setChequeNo] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [transactionRef, setTransactionRef] = useState("");
   const [notes, setNotes] = useState("");
-  const [paymentDetails, setPaymentDetails] = useState({});
-  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
-  const [allocationStrategy, setAllocationStrategy] = useState("oldest-first");
-  const [showForecast, setShowForecast] = useState(false);
-  // Fetch members
-  const { data: membersData } = useQuery({
-    queryKey: ["members"],
-    queryFn: () => apiClient.get("/api/members/list"),
-  });
-  // Fetch outstanding info when member selected
-  const { data: outstandingData, isLoading: outstandingLoading } = useQuery({
-    queryKey: ["outstanding", selectedMemberId],
-    queryFn: () =>
-      apiClient.get(`/api/payments/outstanding?memberId=${selectedMemberId}`),
-    enabled: !!selectedMemberId,
-  });
-  // Fetch payment history for selected member
-  const { data: paymentHistory } = useQuery({
-    queryKey: ["payment-history", selectedMemberId],
-    queryFn: () =>
-      apiClient.get(
-        `/api/ledger/fetch?memberId=${selectedMemberId}&category=Payment&limit=10`,
-      ),
-    enabled: !!selectedMemberId,
-  });
-  // Record payment mutation
-  const recordPaymentMutation = useMutation({
-    mutationFn: (data) => apiClient.post("/api/payments/record", data),
-    onSuccess: () => {
-      alert("✅ Payment recorded successfully!");
-      queryClient.invalidateQueries(["outstanding"]);
-      queryClient.invalidateQueries(["payment-history"]);
-      queryClient.invalidateQueries(["ledger"]);
-      resetForm();
-    },
-    onError: (error) => {
-      alert(`❌ Error: ${error.message}`);
-    },
-  });
-  // "Payment Done" (cash/manual acknowledgement, pending Excel confirmation).
-  const markDoneMutation = useMutation({
-    mutationFn: (data) => apiClient.post("/api/payments/mark-done", data),
-    onSuccess: () => {
-      alert("✅ Marked as Payment Done (pending Excel confirmation)");
-      queryClient.invalidateQueries(["outstanding"]);
-      queryClient.invalidateQueries(["pending-done"]);
-      resetForm();
-    },
-    onError: (error) => {
-      alert(`❌ Error: ${error.message}`);
-    },
-  });
-  const { data: pendingDoneData } = useQuery({
-    queryKey: ["pending-done"],
-    queryFn: () => apiClient.get("/api/payments/pending-done"),
-  });
-  const handleMarkDone = () => {
-    if (!selectedMemberId || !paymentAmount) {
-      alert("Please select member and enter amount");
-      return;
-    }
-    markDoneMutation.mutate({
-      memberId: selectedMemberId,
-      amount: parseFloat(paymentAmount),
-      paymentMode,
-      paymentDate,
-      notes,
-    });
-  };
-  const resetForm = () => {
+  const [submitting, setSubmitting] = useState(false);
+  const [markingDone, setMarkingDone] = useState(false);
+
+  function resetRecordForm() {
     setSelectedMemberId("");
-    setPaymentAmount("");
+    setOutstanding(null);
+    setAmount("");
+    setMode("Cash");
+    setPayDate(new Date().toISOString().split("T")[0]);
+    setChequeNo("");
+    setBankName("");
+    setUpiId("");
+    setTransactionRef("");
     setNotes("");
-    setPaymentDetails({});
-    setShowReceiptPreview(false);
-  };
-  const handleQuickPayment = (percentage) => {
-    if (outstandingData?.totalOutstanding) {
-      const amount = (outstandingData.totalOutstanding * percentage) / 100;
-      setPaymentAmount(Math.round(amount));
+  }
+
+  function openRecordModal(prefillMemberId) {
+    resetRecordForm();
+    if (prefillMemberId) setSelectedMemberId(prefillMemberId);
+    setRecordOpen(true);
+    if (!members) {
+      setMembersLoading(true);
+      api("/api/members/list")
+        .then((d) => setMembers(d.members || []))
+        .catch((err) => setToast({ type: "error", message: err.message }))
+        .finally(() => setMembersLoading(false));
     }
-  };
-  const handleSubmit = (e) => {
+  }
+
+  useEffect(() => {
+    if (!recordOpen || !selectedMemberId) { setOutstanding(null); return; }
+    let cancelled = false;
+    setOutstandingLoading(true);
+    api(`/api/payments/outstanding?memberId=${selectedMemberId}`)
+      .then((d) => { if (!cancelled) setOutstanding(d); })
+      .catch((err) => { if (!cancelled) setToast({ type: "error", message: err.message }); })
+      .finally(() => { if (!cancelled) setOutstandingLoading(false); });
+    return () => { cancelled = true; };
+  }, [recordOpen, selectedMemberId]);
+
+  const memberOptions = useMemo(() => (
+    (members || [])
+      .slice()
+      .sort((a, b) => {
+        const wingCompare = (a.wing || "").localeCompare(b.wing || "");
+        if (wingCompare !== 0) return wingCompare;
+        return (parseInt(a.roomNo) || 0) - (parseInt(b.roomNo) || 0);
+      })
+      .map((m) => ({
+        value: m._id,
+        label: `${m.wing || ""}-${m.roomNo} | ${m.ownerName} | ${m.areaSqFt} sq.ft`,
+      }))
+  ), [members]);
+
+  const selectedMember = useMemo(
+    () => (members || []).find((m) => m._id === selectedMemberId),
+    [members, selectedMemberId],
+  );
+
+  function quickPay(pct) {
+    if (outstanding?.totalOutstanding) {
+      setAmount(String(Math.round((outstanding.totalOutstanding * pct) / 100)));
+    }
+  }
+
+  async function submitPayment(e) {
     e.preventDefault();
-    if (!selectedMemberId || !paymentAmount) {
-      alert("Please select member and enter amount");
+    if (!selectedMemberId || !amount || parseFloat(amount) <= 0) {
+      setToast({ type: "error", message: "Select a member and enter a valid amount" });
       return;
     }
-    // Guard: check if payment window is closed (billPayFinalDate from outstanding API)
-    if (outstandingData?.billPayFinalDate) {
-      const finalDate = new Date(outstandingData.billPayFinalDate);
+    if (outstanding?.billPayFinalDate) {
+      const finalDate = new Date(outstanding.billPayFinalDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (today > finalDate) {
-        alert(
-          `❌ Payment window closed.\n\nThe last date to accept payments was ${finalDate.toLocaleDateString("en-IN")}.\n\nPlease contact the admin.`,
-        );
+        setToast({ type: "error", message: `Payment window closed on ${finalDate.toLocaleDateString("en-IN")}. Use the Pending tab to record late payments.` });
         return;
       }
     }
-    const payload = {
-      memberId: selectedMemberId,
-      amount: parseFloat(paymentAmount),
-      paymentMode,
-      paymentDate,
-      paymentDetails,
-      notes,
-    };
-    recordPaymentMutation.mutate(payload);
-  };
-  // Transform members data for React Select
-  const memberOptions =
-    membersData?.members
-      ?.sort((a, b) => {
-        // ✅ PROPER NUMERIC SORTING
-        const wingCompare = (a.wing || "").localeCompare(b.wing || "");
-        if (wingCompare !== 0) return wingCompare;
-        const roomA = parseInt(a.roomNo) || 0;
-        const roomB = parseInt(b.roomNo) || 0;
-        return roomA - roomB;
-      })
-      .map((member) => ({
-        value: member._id,
-        label: `${member.wing || ""}-${member.roomNo} | ${member.ownerName} | ${
-          member.areaSqFt
-        } sq.ft`,
-        member: member,
-      })) || [];
-  // ✅ ADD THIS: Find the currently selected member
-  const selectedMember = membersData?.members?.find(
-    (m) => m._id === selectedMemberId,
-  );
-  const forecastInterest = (days) => {
-    if (!outstandingData?.principalAmount) return 0;
-    const rate = outstandingData.interestRate / 100;
-    const n = outstandingData.interestCompoundingFrequency === "DAILY" ? 30 : 1;
-    const t = days / 30;
-    const amount =
-      outstandingData.principalAmount * Math.pow(1 + rate / n, n * t);
-    return Math.round((amount - outstandingData.principalAmount) * 100) / 100;
-  };
+    setSubmitting(true);
+    try {
+      const res = await api("/api/payments/record", {
+        method: "POST",
+        body: JSON.stringify({
+          memberId: selectedMemberId,
+          amount: parseFloat(amount),
+          paymentMode: mode,
+          paymentDate: payDate,
+          chequeNo: mode === "Cheque" ? chequeNo : undefined,
+          bankName: mode === "Cheque" ? bankName : undefined,
+          upiId: mode === "UPI" ? upiId : undefined,
+          transactionRef: ["Online", "NEFT", "RTGS"].includes(mode) ? transactionRef : undefined,
+          notes,
+        }),
+      });
+      setToast({ type: "success", message: `Payment ${res?.transaction?.transactionId || ""} recorded` });
+      setRecordOpen(false);
+      resetRecordForm();
+      if (tab === "received") load();
+      if (tab === "pending") loadPending();
+    } catch (err) {
+      setToast({ type: "error", message: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function markDone() {
+    if (!selectedMemberId || !amount || parseFloat(amount) <= 0) {
+      setToast({ type: "error", message: "Select a member and enter a valid amount" });
+      return;
+    }
+    setMarkingDone(true);
+    try {
+      await api("/api/payments/mark-done", {
+        method: "POST",
+        body: JSON.stringify({
+          memberId: selectedMemberId,
+          amount: parseFloat(amount),
+          paymentMode: mode,
+          paymentDate: payDate,
+          notes,
+        }),
+      });
+      setToast({ type: "success", message: "Marked as Payment Done (pending Excel confirmation)" });
+      setRecordOpen(false);
+      resetRecordForm();
+      if (tab === "pending") loadPending();
+    } catch (err) {
+      setToast({ type: "error", message: err.message });
+    } finally {
+      setMarkingDone(false);
+    }
+  }
+
   return (
     <div>
-      {/* PAGE HEADER */}
-      <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.pageTitle}>💳 Advanced Payment Recording</h1>
-          <p className={styles.pageSubtitle}>
-            Real-time interest calculation with payment forecasting
-          </p>
-        </div>
+      <PageHeader
+        title="Payments"
+        subtitle="Record payments, review what's been received, and track members who are pending or overdue."
+        actions={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={() => openRecordModal()}>+ Record payment</Button>
+            {tab === "received" && <Button variant="ghost" onClick={exportCsv}>Export CSV</Button>}
+            <Button variant="ghost" onClick={() => (tab === "received" ? load() : loadPending())}>Refresh</Button>
+          </div>
+        }
+      />
+
+      <div style={S.tabs}>
+        <button style={S.tab(tab === "received")} onClick={() => setTab("received")}>Received</button>
+        <button style={S.tab(tab === "pending")} onClick={() => setTab("pending")}>Pending / Outstanding</button>
       </div>
-      {/* PAYMENT DONE — awaiting Excel confirmation */}
-      {pendingDoneData?.bills?.length > 0 && (
-        <div
-          className={styles.contentCard}
-          style={{ marginBottom: "1.5rem", borderLeft: "4px solid #F59E0B" }}
-        >
-          <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>
-              🕓 Payment Done — awaiting Excel confirmation ({pendingDoneData.bills.length})
-            </h2>
+
+      {tab === "received" && (
+        <>
+          <div style={{ ...grid(190), marginBottom: 18 }}>
+            <StatCard label="Payments" value={summary.count} color={tokens.primary} />
+            <StatCard label="Total received" value={money(summary.amount)} color="#16a34a" />
+            <StatCard label="Interest cleared" value={money(summary.interest)} color="#d97706" />
+            <StatCard label="Principal cleared" value={money(summary.principal)} color="#2563eb" />
+            <StatCard label="Advance credit" value={money(summary.advance)} color="#7c3aed" />
           </div>
-          <div style={{ padding: "1rem 1.5rem", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-              <thead>
-                <tr style={{ textAlign: "left", borderBottom: "1px solid #E5E7EB" }}>
-                  <th style={{ padding: "0.5rem" }}>Flat</th>
-                  <th style={{ padding: "0.5rem" }}>Member</th>
-                  <th style={{ padding: "0.5rem" }}>Period</th>
-                  <th style={{ padding: "0.5rem" }}>Amount</th>
-                  <th style={{ padding: "0.5rem" }}>Mode</th>
-                  <th style={{ padding: "0.5rem" }}>Date</th>
-                  <th style={{ padding: "0.5rem" }}>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingDoneData.bills.map((b) => (
-                  <tr key={b.billId} style={{ borderBottom: "1px solid #F3F4F6" }}>
-                    <td style={{ padding: "0.5rem" }}>{b.flat}</td>
-                    <td style={{ padding: "0.5rem" }}>{b.memberName}</td>
-                    <td style={{ padding: "0.5rem" }}>{b.billPeriodId}</td>
-                    <td style={{ padding: "0.5rem", fontWeight: 600 }}>₹{Number(b.amount || 0).toFixed(2)}</td>
-                    <td style={{ padding: "0.5rem" }}>{b.paymentMode}</td>
-                    <td style={{ padding: "0.5rem" }}>{b.paymentDate ? new Date(b.paymentDate).toLocaleDateString("en-IN") : "—"}</td>
-                    <td style={{ padding: "0.5rem", color: "#6B7280" }}>{b.notes || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p style={{ fontSize: "0.8rem", color: "#92400E", marginTop: "0.75rem" }}>
-              These are acknowledged cash/manual payments. Upload the payment Excel to allocate them and mark the bills as <strong>Paid</strong>.
-            </p>
-          </div>
-        </div>
+
+          <Card>
+            <div style={S.filters}>
+              <div style={S.fl}>
+                <span style={S.lbl}>From</span>
+                <input type="date" style={S.inp} value={filters.from}
+                  onChange={(e) => { setPage(1); setFilters((f) => ({ ...f, from: e.target.value })); }} />
+              </div>
+              <div style={S.fl}>
+                <span style={S.lbl}>To</span>
+                <input type="date" style={S.inp} value={filters.to}
+                  onChange={(e) => { setPage(1); setFilters((f) => ({ ...f, to: e.target.value })); }} />
+              </div>
+              <div style={S.fl}>
+                <span style={S.lbl}>Mode</span>
+                <select style={S.inp} value={filters.paymentMode}
+                  onChange={(e) => { setPage(1); setFilters((f) => ({ ...f, paymentMode: e.target.value })); }}>
+                  {MODES.map((m) => <option key={m} value={m}>{m || "All modes"}</option>)}
+                </select>
+              </div>
+              <label style={{ ...S.lbl, display: "flex", gap: 6, alignItems: "center", paddingBottom: 8 }}>
+                <input type="checkbox" checked={filters.includeReversed}
+                  onChange={(e) => { setPage(1); setFilters((f) => ({ ...f, includeReversed: e.target.checked })); }} />
+                Show reversed
+              </label>
+              <div style={S.fl}>
+                <span style={S.lbl}>Search</span>
+                <input style={{ ...S.inp, minWidth: 220 }} value={q} onChange={(e) => setQ(e.target.value)}
+                  placeholder="Txn id, flat, owner, ref..." />
+              </div>
+              <Button variant="ghost" onClick={() => { setQ(""); setPage(1); setFilters(EMPTY_FILTERS); }}>Clear</Button>
+            </div>
+
+            {loading ? (
+              <div style={S.center}><Spinner /></div>
+            ) : rows.length === 0 ? (
+              <EmptyState title="No payments" subtitle="Nothing matches these filters." />
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>Txn</th>
+                      <th style={S.th}>Date</th>
+                      <th style={S.th}>Flat / owner</th>
+                      <th style={{ ...S.th, ...S.num }}>Amount</th>
+                      <th style={S.th}>Mode</th>
+                      <th style={S.th}>Allocation</th>
+                      <th style={S.th}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const b = r.breakdown || {};
+                      return (
+                        <tr key={r._id} style={r.isReversed ? { opacity: 0.55 } : undefined}>
+                          <td style={S.td}>
+                            <div style={{ fontWeight: 700 }}>{r.transactionId}</div>
+                            {r.isReversed && <Badge color="#991b1b">Reversed</Badge>}
+                            {r.billPeriodId && <div style={S.sub}>{r.billPeriodId}</div>}
+                          </td>
+                          <td style={S.td}>{fmtDate(r.date)}</td>
+                          <td style={S.td}>
+                            <div style={{ fontWeight: 600 }}>
+                              {r.member ? `${r.member.wing ? `${r.member.wing}-` : ""}${r.member.flatNo || DASH}` : DASH}
+                            </div>
+                            <div style={S.sub}>{r.member ? r.member.ownerName : ""}</div>
+                          </td>
+                          <td style={{ ...S.td, ...S.num, fontWeight: 800 }}>{money(r.amount)}</td>
+                          <td style={S.td}>
+                            <div>{r.paymentMode || DASH}</div>
+                            {(r.transactionRef || r.chequeNo) && (
+                              <div style={S.sub}>{r.chequeNo || r.transactionRef}</div>
+                            )}
+                          </td>
+                          <td style={S.td}>
+                            <div style={S.sub}>Interest {money(b.interestCleared)}</div>
+                            <div style={S.sub}>Principal {money(b.principalCleared)}</div>
+                            {b.advanceCredit ? <div style={{ ...S.sub, color: "#7c3aed", fontWeight: 700 }}>Advance {money(b.advanceCredit)}</div> : null}
+                          </td>
+                          <td style={S.td}>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              <Button size="sm" variant="ghost" disabled={r.isReversed}
+                                onClick={() => setEdit({ ...r, date: r.date ? String(r.date).slice(0, 10) : "" })}>Edit</Button>
+                              <Button size="sm" variant="ghost" disabled={r.isReversed} onClick={() => reverse(r)}>Reverse</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {data && data.pages > 1 && (
+              <div style={S.pager}>
+                <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                <span style={S.sub}>Page {data.page} of {data.pages}</span>
+                <Button size="sm" variant="ghost" disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </div>
+            )}
+          </Card>
+        </>
       )}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.5fr 1fr",
-          gap: "1.5rem",
-        }}
-      >
-        {/* LEFT PANEL: PAYMENT FORM */}
-        <div className={styles.contentCard}>
-          <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>🔍 Member Selection</h2>
-          </div>
-          <form onSubmit={handleSubmit} style={{ padding: "1.5rem" }}>
-            {/* MEMBER SELECTOR WITH SEARCH */}
-            <div className={gridStyles.formGroup}>
-              <label className="label">Select Member *</label>
-              <Select
-                options={memberOptions}
-                value={memberOptions.find(
-                  (opt) => opt.value === selectedMemberId,
-                )}
-                onChange={(option) => setSelectedMemberId(option?.value || "")}
-                placeholder="🔍 Search by Room No, Name, or Wing..."
-                isClearable
-                isSearchable
-                styles={{
-                  control: (base) => ({
-                    ...base,
-                    fontSize: "1rem",
-                    padding: "0.5rem",
-                    borderColor: "#D1D5DB",
-                    "&:hover": {
-                      borderColor: "#3B82F6",
-                    },
-                  }),
-                  option: (base, state) => ({
-                    ...base,
-                    backgroundColor: state.isSelected
-                      ? "#3B82F6"
-                      : state.isFocused
-                        ? "#DBEAFE"
-                        : "white",
-                    color: state.isSelected ? "white" : "#1F2937",
-                    fontSize: "0.9375rem",
-                    padding: "0.75rem 1rem",
-                  }),
-                  menu: (base) => ({
-                    ...base,
-                    maxHeight: "300px",
-                    overflowY: "auto",
-                    zIndex: 9999,
-                  }),
-                }}
-              />
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#6B7280",
-                  marginTop: "0.5rem",
-                }}
-              >
-                📊 Total Members: <strong>{memberOptions.length}</strong> | 🔍
-                Type to search
-              </p>
-            </div>
-            {/* OUTSTANDING INFO BOX */}
-            {outstandingLoading && selectedMemberId && (
-              <div
-                style={{
-                  padding: "1rem",
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: "8px",
-                  textAlign: "center",
-                }}
-              >
-                <div className="loading-spinner"></div>
-                <p>Calculating outstanding amount...</p>
+
+      {tab === "pending" && (
+        <>
+          {pendingDone?.bills?.length > 0 && (
+            <Card style={{ marginBottom: 18, borderLeft: "4px solid #F59E0B" }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Payment Done — awaiting Excel confirmation ({pendingDone.bills.length})
               </div>
-            )}
-            {outstandingData && outstandingData.totalOutstanding > 0 && (
-              <div
-                style={{
-                  marginTop: "1rem",
-                  padding: "1.5rem",
-                  backgroundColor:
-                    outstandingData.daysOverdue > 0 ? "#FEF3C7" : "#DBEAFE",
-                  border: `3px solid ${
-                    outstandingData.daysOverdue > 0 ? "#F59E0B" : "#3B82F6"
-                  }`,
-                  borderRadius: "12px",
-                }}
-              >
-                {/* MEMBER INFO HEADER */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "1rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #D1D5DB",
-                  }}
-                >
-                  <div>
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "1.25rem",
-                        color: "#1F2937",
-                      }}
-                    >
-                      {selectedMember?.wing}-{selectedMember?.roomNo}
-                    </h3>
-                    <p style={{ margin: "0.25rem 0 0 0", color: "#6B7280" }}>
-                      {selectedMember?.ownerName}
-                    </p>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.875rem",
-                        color: "#6B7280",
-                      }}
-                    >
-                      Area
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "1.125rem",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {selectedMember?.areaSqFt} sq.ft
-                    </p>
-                  </div>
-                </div>
-                {/* OUTSTANDING BREAKDOWN */}
-                <div style={{ fontSize: "0.9375rem" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    <span style={{ color: "#4B5563" }}>Principal Amount:</span>
-                    <strong style={{ fontSize: "1.125rem" }}>
-                      ₹{outstandingData.principalAmount.toLocaleString("en-IN")}
-                    </strong>
-                  </div>
-                  {outstandingData.interestAmount > 0 && (
-                    <>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: "0.5rem",
-                          color: "#DC2626",
-                        }}
-                      >
-                        <span>
-                          Interest ({outstandingData.daysOverdue} days overdue):
-                        </span>
-                        <strong style={{ fontSize: "1.125rem" }}>
-                          +₹
-                          {outstandingData.interestAmount.toLocaleString(
-                            "en-IN",
-                          )}
-                        </strong>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.8125rem",
-                          color: "#92400E",
-                          backgroundColor: "#FEE2E2",
-                          padding: "0.5rem",
-                          borderRadius: "6px",
-                          marginBottom: "0.75rem",
-                        }}
-                      >
-                        ⚠️ Overdue since:{" "}
-                        {new Date(
-                          outstandingData.graceEndDate,
-                        ).toLocaleDateString("en-IN")}
-                        <br />
-                        Interest Method:{" "}
-                        {outstandingData.interestCalculationMethod} @{" "}
-                        {outstandingData.interestRate}% p.a.
-                      </div>
-                    </>
-                  )}
-                  <hr style={{ margin: "0.75rem 0", borderColor: "#D1D5DB" }} />
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: "1.25rem",
-                      fontWeight: "bold",
-                      color: "#DC2626",
-                    }}
-                  >
-                    <span>Total Outstanding:</span>
-                    <span>
-                      ₹
-                      {outstandingData.totalOutstanding.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                </div>
-                {/* QUICK PAYMENT BUTTONS */}
-                <div style={{ marginTop: "1rem" }}>
-                  <p
-                    style={{
-                      fontSize: "0.875rem",
-                      color: "#6B7280",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    Quick Payment:
-                  </p>
-                  <div
-                    style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
-                  >
-                    {[25, 50, 75, 100].map((pct) => (
-                      <button
-                        key={pct}
-                        type="button"
-                        onClick={() => handleQuickPayment(pct)}
-                        className="btn btn-secondary"
-                        style={{ flex: "1 1 auto", fontSize: "0.875rem" }}
-                      >
-                        {pct}% (₹
-                        {Math.round(
-                          (outstandingData.totalOutstanding * pct) / 100,
-                        ).toLocaleString("en-IN")}
-                        )
-                      </button>
+              <div style={{ overflowX: "auto" }}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>Flat</th>
+                      <th style={S.th}>Member</th>
+                      <th style={S.th}>Period</th>
+                      <th style={{ ...S.th, ...S.num }}>Amount</th>
+                      <th style={S.th}>Mode</th>
+                      <th style={S.th}>Date</th>
+                      <th style={S.th}>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingDone.bills.map((b) => (
+                      <tr key={b.billId}>
+                        <td style={S.td}>{b.flat}</td>
+                        <td style={S.td}>{b.memberName}</td>
+                        <td style={S.td}>{b.billPeriodId}</td>
+                        <td style={{ ...S.td, ...S.num, fontWeight: 700 }}>{money(b.amount)}</td>
+                        <td style={S.td}>{b.paymentMode}</td>
+                        <td style={S.td}>{fmtDate(b.paymentDate)}</td>
+                        <td style={{ ...S.td, ...S.sub }}>{b.notes || DASH}</td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-                {/* FORECAST TOGGLE */}
-                <button
-                  type="button"
-                  onClick={() => setShowForecast(!showForecast)}
-                  style={{
-                    marginTop: "1rem",
-                    width: "100%",
-                    padding: "0.625rem",
-                    backgroundColor: "#F3F4F6",
-                    border: "1px solid #D1D5DB",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  {showForecast ? "▲ Hide" : "▼ Show"} Interest Forecast
-                </button>
-                {showForecast && (
-                  <div
-                    style={{
-                      marginTop: "0.75rem",
-                      padding: "0.75rem",
-                      backgroundColor: "#FEE2E2",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    <p style={{ fontWeight: "bold", marginBottom: "0.5rem" }}>
-                      📈 Future Interest Projection:
-                    </p>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      <div>
-                        <span style={{ color: "#6B7280" }}>+7 days:</span>
-                        <strong style={{ float: "right" }}>
-                          +₹{forecastInterest(7).toLocaleString("en-IN")}
-                        </strong>
-                      </div>
-                      <div>
-                        <span style={{ color: "#6B7280" }}>+15 days:</span>
-                        <strong style={{ float: "right" }}>
-                          +₹{forecastInterest(15).toLocaleString("en-IN")}
-                        </strong>
-                      </div>
-                      <div>
-                        <span style={{ color: "#6B7280" }}>+30 days:</span>
-                        <strong style={{ float: "right", color: "#DC2626" }}>
-                          +₹{forecastInterest(30).toLocaleString("en-IN")}
-                        </strong>
-                      </div>
-                      <div>
-                        <span style={{ color: "#6B7280" }}>+60 days:</span>
-                        <strong style={{ float: "right", color: "#DC2626" }}>
-                          +₹{forecastInterest(60).toLocaleString("en-IN")}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ ...S.sub, marginTop: 10 }}>
+                Acknowledged cash/manual payments. Upload the payment Excel to allocate them and mark the bills Paid.
+              </div>
+            </Card>
+          )}
+
+          <div style={{ ...grid(190), marginBottom: 18 }}>
+            <StatCard label="Late members" value={pending?.totalMembers ?? 0} color={tokens.danger} />
+            <StatCard label="Total due" value={money(pending?.totalDue)} color="#dc2626" />
+            <StatCard label="Interest due" value={money(pending?.totalInterestDue)} color="#d97706" />
+            <StatCard label="Principal due" value={money(pending?.totalPrincipalDue)} color="#2563eb" />
+          </div>
+
+          <Card>
+            <div style={{ ...S.sub, marginBottom: 14 }}>
+              Members whose oldest unpaid bill is past the payment deadline (payment window closed for them).
+              Members with dues still inside the payment window are not listed here — see the "Received" tab
+              totals or record a payment directly for any member via "+ Record payment".
+            </div>
+            {pendingLoading ? (
+              <div style={S.center}><Spinner /></div>
+            ) : !pending?.members?.length ? (
+              <EmptyState icon="✅" title="No overdue members" subtitle="Nobody is past their payment deadline." />
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>Flat</th>
+                      <th style={S.th}>Member</th>
+                      <th style={S.th}>Oldest period</th>
+                      <th style={S.th}>Deadline</th>
+                      <th style={{ ...S.th, ...S.num }}>Principal</th>
+                      <th style={{ ...S.th, ...S.num }}>Interest</th>
+                      <th style={{ ...S.th, ...S.num }}>Total due</th>
+                      <th style={S.th}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pending.members.map((m) => (
+                      <tr key={m.memberId}>
+                        <td style={S.td}>{m.wing}-{m.flatNo}</td>
+                        <td style={S.td}>{m.ownerName}</td>
+                        <td style={S.td}>{m.oldestPeriod}</td>
+                        <td style={{ ...S.td, color: "#dc2626", fontWeight: 700 }}>{fmtDate(m.deadline)}</td>
+                        <td style={{ ...S.td, ...S.num }}>{money(m.principalOutstanding)}</td>
+                        <td style={{ ...S.td, ...S.num, color: "#dc2626" }}>{money(m.interestOutstanding)}</td>
+                        <td style={{ ...S.td, ...S.num, fontWeight: 800 }}>{money(m.totalOutstanding)}</td>
+                        <td style={S.td}>
+                          <Button size="sm" onClick={() => openRecordModal(m.memberId)}>Record payment</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-            {/* Payment window closed banner */}
-            {outstandingData?.billPayFinalDate &&
-              new Date() > new Date(outstandingData.billPayFinalDate) && (
-                <div
-                  style={{
-                    background: "#FEF2F2",
-                    border: "1px solid #FCA5A5",
-                    borderRadius: "8px",
-                    padding: "1rem",
-                    marginTop: "1rem",
-                    color: "#991B1B",
-                    fontWeight: 600,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  🔒 Payment window closed after{" "}
-                  {new Date(
-                    outstandingData.billPayFinalDate,
-                  ).toLocaleDateString("en-IN")}
-                  . Contact admin to process outstanding dues.
-                </div>
-              )}
-            {/* PAYMENT AMOUNT */}
-            <div
-              className={gridStyles.formGroup}
-              style={{ marginTop: "1.5rem" }}
-            >
-              <label className="label">Payment Amount (₹) *</label>
-              <input
-                type="number"
-                min="1"
-                step="0.01"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                className="input"
-                placeholder="Enter amount"
-                style={{ fontSize: "1.25rem", fontWeight: "bold" }}
-              />
-              {outstandingData && paymentAmount && (
-                <p
-                  style={{
-                    marginTop: "0.5rem",
-                    fontSize: "0.875rem",
-                    color:
-                      parseFloat(paymentAmount) >=
-                      outstandingData.totalOutstanding
-                        ? "#059669"
-                        : "#F59E0B",
-                  }}
-                >
-                  {parseFloat(paymentAmount) >= outstandingData.totalOutstanding
-                    ? "✅ Full payment - Account will be cleared"
-                    : `⚠️ Partial payment - Remaining: ₹${(
-                        outstandingData.totalOutstanding -
-                        parseFloat(paymentAmount)
-                      ).toLocaleString("en-IN")}`}
-                </p>
-              )}
+          </Card>
+        </>
+      )}
+
+      {/* EDIT MODAL — metadata only, amount is intentionally immutable */}
+      <Modal
+        open={Boolean(edit)}
+        title={edit ? `Edit ${edit.transactionId}` : ""}
+        onClose={() => setEdit(null)}
+        width={520}
+        footer={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button disabled={saving} onClick={saveEdit}>{saving ? "Saving..." : "Save changes"}</Button>
+            <Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button>
+          </div>
+        }
+      >
+        {edit && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ padding: 10, borderRadius: 8, background: "#f3f4f6", fontSize: 12.5, color: tokens.sub }}>
+              Amount ({money(edit.amount)}) cannot be edited here - changing it would desynchronise
+              bill allocation and receipts. Reverse this payment and record a corrected one instead.
             </div>
-            {/* PAYMENT MODE */}
-            <div className={gridStyles.formGroup}>
-              <label className="label">Payment Mode *</label>
-              <select
-                value={paymentMode}
-                onChange={(e) => setPaymentMode(e.target.value)}
-                className="input"
-              >
-                <option value="Cash">Cash</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Online">Online Transfer</option>
-                <option value="UPI">UPI</option>
-                <option value="NEFT">NEFT</option>
-                <option value="RTGS">RTGS</option>
+            <div style={S.fl}>
+              <span style={S.lbl}>Value date</span>
+              <input type="date" style={S.inp} value={edit.date || ""}
+                onChange={(e) => setEdit((s) => ({ ...s, date: e.target.value }))} />
+            </div>
+            <div style={S.fl}>
+              <span style={S.lbl}>Payment mode</span>
+              <select style={S.inp} value={edit.paymentMode || ""}
+                onChange={(e) => setEdit((s) => ({ ...s, paymentMode: e.target.value }))}>
+                {MODES.filter(Boolean).map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
-            {/* PAYMENT DATE */}
-            <div className={gridStyles.formGroup}>
-              <label className="label">Payment Date *</label>
-              <input
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="input"
-              />
+            <div style={S.fl}>
+              <span style={S.lbl}>Reference / UTR</span>
+              <input style={S.inp} value={edit.transactionRef || ""}
+                onChange={(e) => setEdit((s) => ({ ...s, transactionRef: e.target.value }))} />
             </div>
-            {/* NOTES */}
-            <div className={gridStyles.formGroup}>
-              <label className="label">Notes (Optional)</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="input"
-                rows="3"
-                placeholder="Add any additional notes..."
-              />
+            <div style={S.fl}>
+              <span style={S.lbl}>Cheque no.</span>
+              <input style={S.inp} value={edit.chequeNo || ""}
+                onChange={(e) => setEdit((s) => ({ ...s, chequeNo: e.target.value }))} />
             </div>
-            {/* SUBMIT BUTTON */}
-            <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
-              <button
-                type="button"
-                onClick={resetForm}
-                className="btn btn-secondary"
-                style={{ flex: 1 }}
-              >
-                🔄 Reset
-              </button>
-              <button
-                type="submit"
-                className="btn btn-success"
-                style={{ flex: 2 }}
-                disabled={
-                  !selectedMemberId ||
-                  !paymentAmount ||
-                  recordPaymentMutation.isPending
-                }
-              >
-                {recordPaymentMutation.isPending ? (
-                  <>
-                    <span className="loading-spinner"></span> Processing...
-                  </>
-                ) : (
-                  "💰 Record Payment"
-                )}
-              </button>
+            <div style={S.fl}>
+              <span style={S.lbl}>Bank</span>
+              <input style={S.inp} value={edit.bankName || ""}
+                onChange={(e) => setEdit((s) => ({ ...s, bankName: e.target.value }))} />
             </div>
-            {/* CASH / MANUAL "PAYMENT DONE" (pending Excel confirmation) */}
-            <button
-              type="button"
-              onClick={handleMarkDone}
-              disabled={!selectedMemberId || !paymentAmount || markDoneMutation.isPending}
-              className="btn"
-              style={{ width: "100%", marginTop: "0.75rem", background: "#F59E0B", color: "white" }}
+            <div style={S.fl}>
+              <span style={S.lbl}>UPI id</span>
+              <input style={S.inp} value={edit.upiId || ""}
+                onChange={(e) => setEdit((s) => ({ ...s, upiId: e.target.value }))} />
+            </div>
+            <div style={S.fl}>
+              <span style={S.lbl}>Notes</span>
+              <textarea rows={3} style={S.inp} value={edit.notes || ""}
+                onChange={(e) => setEdit((s) => ({ ...s, notes: e.target.value }))} />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* RECORD PAYMENT MODAL — ported CREATE flow */}
+      <Modal
+        open={recordOpen}
+        title="Record a payment"
+        onClose={() => { setRecordOpen(false); resetRecordForm(); }}
+        width={640}
+        footer={
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Button
+              variant="subtle"
+              disabled={!selectedMemberId || !amount || markingDone}
+              onClick={markDone}
             >
-              {markDoneMutation.isPending ? "Marking..." : "🕓 Mark Payment Done (cash — confirm later via Excel)"}
-            </button>
-          </form>
-        </div>
-        {/* RIGHT PANEL: PAYMENT HISTORY */}
-        <div>
-          {selectedMemberId && paymentHistory?.transactions?.length > 0 && (
-            <div className={styles.contentCard}>
-              <div className={styles.cardHeader}>
-                <h2 className={styles.cardTitle}>📜 Recent Payments</h2>
+              {markingDone ? "Marking..." : "Mark done (cash, confirm via Excel)"}
+            </Button>
+            <Button
+              disabled={!selectedMemberId || !amount || submitting}
+              onClick={submitPayment}
+            >
+              {submitting ? "Recording..." : "Record payment"}
+            </Button>
+            <Button variant="ghost" onClick={() => { setRecordOpen(false); resetRecordForm(); }}>Cancel</Button>
+          </div>
+        }
+      >
+        <form onSubmit={submitPayment} style={{ display: "grid", gap: 14 }}>
+          <Field label="Member" required>
+            <RSelect
+              options={memberOptions}
+              value={memberOptions.find((o) => o.value === selectedMemberId) || null}
+              onChange={(opt) => setSelectedMemberId(opt?.value || "")}
+              placeholder={membersLoading ? "Loading members..." : "Search by room, name or wing..."}
+              isClearable
+              isSearchable
+              isLoading={membersLoading}
+              styles={{ menu: (base) => ({ ...base, zIndex: 9999 }) }}
+            />
+          </Field>
+
+          {outstandingLoading && (
+            <div style={{ ...S.center, padding: 16 }}><Spinner size={18} /></div>
+          )}
+
+          {outstanding && (
+            <Card pad={14} style={{ background: outstanding.isPaymentBlocked ? "#FEF2F2" : "#F0F9FF" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{selectedMember?.wing}-{selectedMember?.roomNo}</div>
+                  <div style={S.sub}>{selectedMember?.ownerName}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={S.sub}>Total outstanding</div>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: "#dc2626" }}>{money(outstanding.totalOutstanding)}</div>
+                </div>
               </div>
-              <div style={{ padding: "1rem" }}>
-                {paymentHistory.transactions.slice(0, 5).map((txn) => (
-                  <div
-                    key={txn._id}
-                    style={{
-                      padding: "0.75rem",
-                      backgroundColor: "#F9FAFB",
-                      borderLeft: "4px solid #10B981",
-                      marginBottom: "0.75rem",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: "0.25rem",
-                      }}
-                    >
-                      <strong style={{ color: "#059669" }}>
-                        ₹{txn.amount.toLocaleString("en-IN")}
-                      </strong>
-                      <span style={{ fontSize: "0.875rem", color: "#6B7280" }}>
-                        {new Date(txn.date).toLocaleDateString("en-IN")}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.875rem", color: "#6B7280" }}>
-                      {txn.paymentMode} • {txn.description}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <div style={S.sub}>Principal {money(outstanding.principalAmount)} · Interest {money(outstanding.interestAmount)}</div>
+              {outstanding.isPaymentBlocked && (
+                <div style={{ marginTop: 8, fontSize: 12.5, color: "#991b1b", fontWeight: 600 }}>
+                  {outstanding.blockMessage || "Payment window closed for this member."}
+                </div>
+              )}
+              {outstanding.totalOutstanding > 0 && (
+                <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                  {[25, 50, 75, 100].map((pct) => (
+                    <Button key={pct} type="button" size="sm" variant="subtle" onClick={() => quickPay(pct)}>
+                      {pct}% ({money((outstanding.totalOutstanding * pct) / 100)})
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+
+          <Field label="Payment amount (Rs)" required>
+            <Input type="number" min="1" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" />
+          </Field>
+
+          <Field label="Payment mode" required>
+            <Select value={mode} onChange={(e) => setMode(e.target.value)}>
+              {RECORD_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+
+          {mode === "Cheque" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Cheque no."><Input value={chequeNo} onChange={(e) => setChequeNo(e.target.value)} /></Field>
+              <Field label="Bank"><Input value={bankName} onChange={(e) => setBankName(e.target.value)} /></Field>
             </div>
           )}
-        </div>
-      </div>
+          {mode === "UPI" && (
+            <Field label="UPI id"><Input value={upiId} onChange={(e) => setUpiId(e.target.value)} /></Field>
+          )}
+          {["Online", "NEFT", "RTGS"].includes(mode) && (
+            <Field label="Reference / UTR"><Input value={transactionRef} onChange={(e) => setTransactionRef(e.target.value)} /></Field>
+          )}
+
+          <Field label="Payment date" required>
+            <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+          </Field>
+
+          <Field label="Notes">
+            <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+          </Field>
+        </form>
+      </Modal>
+
+      {toast ? <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> : null}
     </div>
   );
 }

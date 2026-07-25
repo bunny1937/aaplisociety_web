@@ -10,18 +10,12 @@ import { verifyToken, getTokenFromRequest } from "@/lib/jwt";
 import renderBillHtml from "@/lib/bill-renderer"; // ← default import NOT named { renderBillHtml }
 import { FlexiblePDFGenerator } from "@/lib/pdf-generator";
 import { extractFileId, loadUploadedFile } from "@/lib/file-store";
+import { buildPdfFillData, buildOverlayBillData } from "@/lib/bill-pdf-fields";
 function formatMoney(value) {
   return `Rs. ${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-}
-function formatDateForPdf(dateValue) {
-  return new Date(dateValue).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 async function appendReceiptPage(pdfDoc, receipt, bill, society, member) {
   if (!receipt) return;
@@ -146,6 +140,10 @@ export async function GET(request) {
     }
     const society = await Society.findById(decoded.societyId).lean();
     const hasPdfTemplate = Boolean(society?.billTemplate?.pdfUrl);
+    const hasImageTemplate =
+      !hasPdfTemplate &&
+      society?.billTemplate?.type === "uploaded-image" &&
+      Boolean(society?.billTemplate?.imageUrl);
     const member = bill.memberId;
     const currentBillTotal = Number(
       bill.currentBillTotal ?? bill.totalAmount ?? 0,
@@ -214,6 +212,14 @@ export async function GET(request) {
       // from the DB when the stored URL points there; else fall back to the
       // legacy on-disk path for old templates.
       const storedUrl = society.billTemplate.pdfUrl;
+      // Custom overlay positions the admin configured/confirmed in the
+      // bill-template designer's PDF field editor (only relevant for PDFs
+      // with no fillable form fields — see FlexiblePDFGenerator).
+      const customPositions = Object.fromEntries(
+        (society.billTemplate.pdfFields || [])
+          .filter((f) => f && f.name)
+          .map((f) => [f.name, { x: f.x, y: f.y, fontSize: f.fontSize, maxWidth: f.width }]),
+      );
       let generator;
       if (typeof storedUrl === "string" && storedUrl.includes("/api/files/")) {
         const stored = await loadUploadedFile(extractFileId(storedUrl));
@@ -223,63 +229,15 @@ export async function GET(request) {
             { status: 404 },
           );
         }
-        generator = new FlexiblePDFGenerator({ buffer: stored.buffer });
+        generator = new FlexiblePDFGenerator({ buffer: stored.buffer }, customPositions);
       } else {
         const templatePath = join(process.cwd(), "public", storedUrl);
-        generator = new FlexiblePDFGenerator(templatePath);
+        generator = new FlexiblePDFGenerator(templatePath, customPositions);
       }
-      const items = Object.entries(bill.charges || {}).map(
-        ([description, amount]) => ({
-          description,
-          quantity: 1,
-          rate: Number(amount || 0),
-          amount: Number(amount || 0),
-        }),
-      );
-      const paymentDetails = [
-        `Previous dues: ${formatMoney(previousBalance)}`,
-        `Interest: ${formatMoney(interestAmount)}`,
-        `Total payable: ${formatMoney(totalPayable)}`,
-      ].join(" | ");
-      const formFieldData = {
-        "Company name": society.name || "",
-        Address: society.address || "",
-        "GST number": society.gstNumber || "N/A",
-        "Invoice number": bill.billPeriodId || pdfTitle,
-        "Invoice date_af_date": formatDateForPdf(
-          bill.generatedAt || bill.createdAt,
-        ),
-        "Bill date_af_date": formatDateForPdf(
-          bill.generatedAt || bill.createdAt,
-        ),
-        "Due date_af_date": formatDateForPdf(bill.dueDate || new Date()),
-        "Customer name": member?.ownerName || "",
-        "Customer address": `${member?.wing || ""}-${member?.flatNo || ""}`,
-        "Customer phone": member?.contactNumber || "",
-        "Customer GST number": "N/A",
-        "Sub Total": Number(currentBillTotal || 0).toFixed(2),
-        Discount: "0",
-        "Tax Rate": "0",
-        "Tax value": Number(bill.serviceTax || 0).toFixed(2),
-        Shipping: "0",
-        "Previous dues": Number(previousBalance || 0).toFixed(2),
-        "Grand total": Number(totalPayable || 0).toFixed(2),
-        "Account holder name": society.bankDetails?.accountHolderName || "",
-        "Account number": society.bankDetails?.accountNumber || "",
-        "Bank name": society.bankDetails?.bankName || "",
-        "IFSC Code": society.bankDetails?.ifscCode || "",
-      };
-      items.slice(0, 6).forEach((item, index) => {
-        const productNum = index + 1;
-        formFieldData[`Product #${productNum}`] = item.description || "";
-        formFieldData[`Product #${productNum} amount`] = Number(
-          item.amount || 0,
-        ).toFixed(2);
-        formFieldData[`Product #${productNum} Rate`] = Number(
-          item.rate || 0,
-        ).toFixed(2);
-        formFieldData[`Qty #${productNum}`] = String(item.quantity || 1);
-        formFieldData[`HSN code #${productNum}`] = item.hsnCode || "";
+      const { items, paymentDetails, formFieldData } = buildPdfFillData({
+        bill,
+        society,
+        member,
       });
       const pdfBytes = await generator.generateBill({
         companyName: society.name || "",
@@ -296,6 +254,44 @@ export async function GET(request) {
         paymentDetails,
         formFieldData,
       });
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+      const previousReceipt = await Receipt.findOne({
+        memberId: bill.memberId?._id || bill.memberId,
+        societyId: decoded.societyId,
+        billPeriodId: { $lt: bill.billPeriodId },
+      })
+        .sort({ billPeriodId: -1, paidAt: -1 })
+        .lean();
+      await appendReceiptPage(pdfDoc, previousReceipt, bill, society, member);
+      const finalPdf = await pdfDoc.save();
+      return new NextResponse(Buffer.from(finalPdf), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="${pdfTitle}.pdf"`,
+        },
+      });
+    }
+    // ─── Case 1b: Uploaded-image template — composite the image + overlay
+    // fields into a fresh single-page PDF via the same generator + field
+    // config (society.billTemplate.imageFields) the admin previewed. ───
+    if (hasImageTemplate) {
+      const storedUrl = society.billTemplate.imageUrl;
+      const fileId = extractFileId(storedUrl);
+      const stored = fileId ? await loadUploadedFile(fileId) : null;
+      if (!stored) {
+        return NextResponse.json(
+          { error: "Bill template image not found" },
+          { status: 404 },
+        );
+      }
+      const customPositions = Object.fromEntries(
+        (society.billTemplate.imageFields || [])
+          .filter((f) => f && f.name)
+          .map((f) => [f.name, { x: f.x, y: f.y, fontSize: f.fontSize, maxWidth: f.width }]),
+      );
+      const generator = new FlexiblePDFGenerator(null, customPositions);
+      const overlayData = buildOverlayBillData({ bill, society, member });
+      const pdfBytes = await generator.generateImageOverlay(stored.buffer, stored.contentType, overlayData);
       const pdfDoc = await PDFDocument.load(pdfBytes);
       const previousReceipt = await Receipt.findOne({
         memberId: bill.memberId?._id || bill.memberId,

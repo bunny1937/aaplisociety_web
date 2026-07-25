@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/BillTemplate.module.css";
+import { OVERLAY_FIELD_KEYS } from "@/lib/bill-pdf-fields";
+import { RECEIPT_OVERLAY_FIELD_KEYS } from "@/lib/receipt-pdf-fields";
 // 3 DEFAULT TEMPLATES
 const DEFAULT_TEMPLATES = {
   modern: {
@@ -94,14 +96,23 @@ export default function BillTemplateDesigner() {
   const [pdfHasFormFields, setPdfHasFormFields] = useState(false);
   const [detectedFields, setDetectedFields] = useState([]);
   const [uploadedImage, setUploadedImage] = useState(null);
+  const [imageFields, setImageFields] = useState([]);
   const [uploadedLogo, setUploadedLogo] = useState(null);
   const [uploadedSignature, setUploadedSignature] = useState(null);
-  // PDF Editor states
-  const [showPDFEditor, setShowPDFEditor] = useState(false);
+  // Field-mapping / sample-preview modal — null when closed, "pdf" or
+  // "image" for which uploaded template it's currently editing. Shared by
+  // both bill and receipt scope (the field vocabulary + preview endpoint
+  // switch based on `scope`, see fieldVocab/previewEndpoint below).
+  const [editorMode, setEditorMode] = useState(null);
   const [pdfFields, setPdfFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
+  // Rendered sample PDF (blob URL) for the uploaded-PDF/uploaded-image flow —
+  // filled with a real member's real bill/receipt via the preview-fill
+  // route, same code path as actual generation. Null until generated.
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+  const [pdfPreviewError, setPdfPreviewError] = useState(null);
   // Fetch society
   const { data: societyData } = useQuery({
     queryKey: ["society-config"],
@@ -129,10 +140,28 @@ export default function BillTemplateDesigner() {
     enabled: Boolean(previewMemberId),
   });
   const previewBill = previewBillData?.bill || null;
-  // Any change to the design invalidates a previous confirmation.
+  // Any change to the design (or, for the uploaded-PDF flow, the PDF itself,
+  // its field positions, or the switch between template types) invalidates a
+  // previous confirmation — Save re-gates until a fresh preview is confirmed.
   useEffect(() => {
     setPreviewConfirmed(false);
-  }, [template, previewMemberId, uploadedLogo, uploadedSignature, activeTab]);
+    setPdfPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPdfPreviewError(null);
+  }, [
+    template,
+    previewMemberId,
+    uploadedLogo,
+    uploadedSignature,
+    activeTab,
+    scope,
+    uploadedPDF,
+    pdfFields,
+    uploadedImage,
+    imageFields,
+  ]);
   // Fetch saved template
   const { data: savedTemplateData } = useQuery({
     queryKey: ["bill-template-full"],
@@ -146,25 +175,25 @@ export default function BillTemplateDesigner() {
         ? savedTemplateData?.receiptTemplate
         : savedTemplateData?.template;
     if (!saved) return;
-    if (scope === "receipt") {
-      // Receipts only support the custom designer (no uploaded PDF/image).
-      setActiveTab("design");
-      if (saved.type === "custom" && saved.design) setTemplate(saved.design);
-      setUploadedLogo(saved.logoUrl);
-      setUploadedSignature(saved.signatureUrl);
-      return;
-    }
     if (saved.type === "custom" && saved.design) {
       setActiveTab("design");
       setTemplate(saved.design);
+      setUploadedPDF(null);
+      setUploadedImage(null);
     } else if (saved.type === "uploaded-pdf" && saved.pdfUrl) {
       setActiveTab("upload");
       setUploadedPDF(saved.pdfUrl);
       setPdfHasFormFields(saved.hasFormFields || false);
       setDetectedFields(saved.detectedFields || []);
+      setPdfFields(saved.pdfFields || []);
+      setUploadedImage(null);
     } else if (saved.type === "uploaded-image" && saved.imageUrl) {
       setActiveTab("upload");
       setUploadedImage(saved.imageUrl);
+      setImageFields(saved.imageFields || []);
+      setUploadedPDF(null);
+    } else {
+      setActiveTab(scope === "receipt" ? "design" : "select");
     }
     setUploadedLogo(saved.logoUrl);
     setUploadedSignature(saved.signatureUrl);
@@ -172,16 +201,10 @@ export default function BillTemplateDesigner() {
   // Save template mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!previewConfirmed) throw new Error("Preview a real member bill and confirm it before saving");
-      if (scope === "receipt") {
-        return apiClient.post("/api/bill-template/save-full", {
-          type: "custom",
-          design: template,
-          logoUrl: uploadedLogo,
-          signatureUrl: uploadedSignature,
-          scope: "receipt",
-        });
-      }
+      if (!previewConfirmed)
+        throw new Error(
+          `Preview a real member ${scope === "receipt" ? "receipt" : "bill"} and confirm it before saving`,
+        );
       let templateData = {};
       if (activeTab === "select" || activeTab === "design") {
         templateData = {
@@ -197,6 +220,7 @@ export default function BillTemplateDesigner() {
             pdfUrl: uploadedPDF,
             hasFormFields: pdfHasFormFields,
             detectedFields,
+            pdfFields,
             logoUrl: uploadedLogo,
             signatureUrl: uploadedSignature,
           };
@@ -204,6 +228,7 @@ export default function BillTemplateDesigner() {
           templateData = {
             type: "uploaded-image",
             imageUrl: uploadedImage,
+            imageFields,
             logoUrl: uploadedLogo,
             signatureUrl: uploadedSignature,
           };
@@ -211,7 +236,7 @@ export default function BillTemplateDesigner() {
       }
       return apiClient.post("/api/bill-template/save-full", {
         ...templateData,
-        scope: "bill",
+        scope,
       });
     },
     onSuccess: () => {
@@ -220,6 +245,42 @@ export default function BillTemplateDesigner() {
     },
     onError: (error) => {
       alert("Failed to save: " + error.message);
+    },
+  });
+  // Render a sample PDF from the uploaded template (PDF or image) + a real
+  // member's real bill/receipt, via the same fill logic used for actual
+  // generation. `editorMode` ("pdf" | "image") picks which uploaded template
+  // to fill; `scope` ("bill" | "receipt") picks which preview endpoint (and
+  // therefore which real record — Bill vs Receipt) to fill it with.
+  const previewFillMutation = useMutation({
+    mutationFn: async () => {
+      const isImageMode = editorMode === "image";
+      const templateUrl = isImageMode ? uploadedImage : uploadedPDF;
+      if (!templateUrl) throw new Error(isImageMode ? "Upload an image first" : "Upload a PDF first");
+      if (!previewMemberId) throw new Error("Pick a member to preview");
+      const endpoint =
+        scope === "receipt" ? "/api/receipt-template/preview-fill" : "/api/bill-template/preview-fill";
+      const res = await apiClient.post(endpoint, {
+        type: isImageMode ? "uploaded-image" : "uploaded-pdf",
+        pdfUrl: isImageMode ? undefined : uploadedPDF,
+        imageUrl: isImageMode ? uploadedImage : undefined,
+        memberId: previewMemberId,
+        pdfFields: isImageMode ? undefined : pdfFields,
+        imageFields: isImageMode ? imageFields : undefined,
+      });
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    },
+    onSuccess: (url) => {
+      setPdfPreviewError(null);
+      setPreviewConfirmed(false);
+      setPdfPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    },
+    onError: (error) => {
+      setPdfPreviewError(error.message || "Failed to render preview");
     },
   });
   // SMART PDF UPLOAD - Auto-detect form fields
@@ -540,15 +601,24 @@ export default function BillTemplateDesigner() {
       </div>
     `;
   };
-  // Open PDF Editor
+  // Open the field-mapping / sample-preview modal for the uploaded PDF or
+  // uploaded image. Which fields array (pdfFields vs imageFields) the modal
+  // reads/writes is driven by editorMode below.
   const openPDFEditor = () => {
     if (!uploadedPDF) {
       alert("Please upload a PDF first");
       return;
     }
-    setShowPDFEditor(true);
+    setEditorMode("pdf");
   };
-  // Add field to PDF
+  const openImageEditor = () => {
+    if (!uploadedImage) {
+      alert("Please upload an image first");
+      return;
+    }
+    setEditorMode("image");
+  };
+  // Add field to the currently-open template (PDF or image)
   const addFieldToPDF = (fieldName) => {
     const newField = {
       id: Date.now(),
@@ -560,28 +630,32 @@ export default function BillTemplateDesigner() {
       fontSize: 12,
       fontColor: "#000000",
     };
-    setPdfFields([...pdfFields, newField]);
+    if (editorMode === "image") {
+      setImageFields((fields) => [...fields, newField]);
+    } else {
+      setPdfFields((fields) => [...fields, newField]);
+    }
     setSelectedField(newField.id);
-  };
-  // Update field position
-  const updateFieldPosition = (fieldId, x, y) => {
-    setPdfFields(
-      pdfFields.map((field) =>
-        field.id === fieldId ? { ...field, x, y } : field,
-      ),
-    );
   };
   // Update field properties
   const updateFieldProperty = (fieldId, property, value) => {
-    setPdfFields(
-      pdfFields.map((field) =>
+    const updater = (fields) =>
+      fields.map((field) =>
         field.id === fieldId ? { ...field, [property]: value } : field,
-      ),
-    );
+      );
+    if (editorMode === "image") {
+      setImageFields(updater);
+    } else {
+      setPdfFields(updater);
+    }
   };
   // Delete field
   const deleteField = (fieldId) => {
-    setPdfFields(pdfFields.filter((field) => field.id !== fieldId));
+    if (editorMode === "image") {
+      setImageFields((fields) => fields.filter((field) => field.id !== fieldId));
+    } else {
+      setPdfFields((fields) => fields.filter((field) => field.id !== fieldId));
+    }
     if (selectedField === fieldId) {
       setSelectedField(null);
     }
@@ -596,7 +670,6 @@ export default function BillTemplateDesigner() {
         <button
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending || !previewConfirmed}
-          title={previewConfirmed ? "Save this template" : "Confirm the live preview below first — that is what enables Save"}
           title={previewConfirmed ? "Save this template" : "Confirm the live preview below first — that is what enables Save"}
           className="btn btn-primary"
         >
@@ -644,7 +717,8 @@ export default function BillTemplateDesigner() {
         >
           Designing the <strong>receipt</strong> template (used for payment &
           advance receipts). Colours, logo, signature and footer apply to
-          generated receipts. Uploaded PDF/image is only available for bills.
+          generated receipts. You can also upload a PDF/image receipt
+          template in the Upload tab, mapped from a real recorded payment.
         </div>
       )}
       {/* Tabs */}
@@ -950,9 +1024,9 @@ export default function BillTemplateDesigner() {
       {activeTab === "upload" && (
         <div className={styles.uploadSection}>
           <div className={styles.uploadCard}>
-            <h3>📄 Upload Your PDF Bill Template</h3>
+            <h3>📄 Upload Your PDF {scope === "receipt" ? "Receipt" : "Bill"} Template</h3>
             <p style={{ marginBottom: "1.5rem", lineHeight: "1.6" }}>
-              Upload your society's existing PDF bill format.
+              Upload your society's existing PDF {scope === "receipt" ? "receipt" : "bill"} format.
               <br />
               <strong>System will automatically:</strong>
             </p>
@@ -1056,22 +1130,50 @@ export default function BillTemplateDesigner() {
                     </p>
                   </div>
                 )}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    margin: "1rem 0",
+                  }}
+                >
+                  <button type="button" className="btn btn-primary" onClick={openPDFEditor}>
+                    ⚙️ Configure fields & preview a real sample {scope === "receipt" ? "receipt" : "bill"}
+                  </button>
+                  {previewConfirmed ? (
+                    <span style={{ color: "#059669", fontWeight: 600, fontSize: 13 }}>
+                      ✅ Sample confirmed — Save is unlocked
+                    </span>
+                  ) : (
+                    <span style={{ color: "#92400e", fontWeight: 600, fontSize: 13 }}>
+                      ⚠️ Save is locked until you preview &amp; confirm a real sample {scope === "receipt" ? "receipt" : "bill"}
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 0.5rem 0" }}>
+                  Raw uploaded file (unfilled):
+                </p>
                 <iframe
                   src={uploadedPDF}
                   style={{
                     width: "100%",
-                    height: "600px",
+                    height: "400px",
                     border: "2px solid #e5e7eb",
                     borderRadius: "8px",
-                    marginTop: "1rem",
+                    marginTop: "0.25rem",
                   }}
                 />
               </div>
             )}
           </div>
           <div className={styles.uploadCard}>
-            <h3>🖼️ Or Upload Image Template</h3>
-            <p>Upload bill as JPG/PNG. System will overlay text on it.</p>
+            <h3>🖼️ Or Upload Image {scope === "receipt" ? "Receipt" : "Bill"} Template</h3>
+            <p>
+              Upload {scope === "receipt" ? "receipt" : "bill"} as JPG/PNG. System will overlay text
+              fields you position on top of it.
+            </p>
             <input
               type="file"
               accept=".jpg,.jpeg,.png"
@@ -1079,6 +1181,31 @@ export default function BillTemplateDesigner() {
             />
             {uploadedImage && (
               <div className={styles.uploadedPreview}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    margin: "1rem 0",
+                  }}
+                >
+                  <button type="button" className="btn btn-primary" onClick={openImageEditor}>
+                    ⚙️ Configure fields & preview a real sample {scope === "receipt" ? "receipt" : "bill"}
+                  </button>
+                  {previewConfirmed ? (
+                    <span style={{ color: "#059669", fontWeight: 600, fontSize: 13 }}>
+                      ✅ Sample confirmed — Save is unlocked
+                    </span>
+                  ) : (
+                    <span style={{ color: "#92400e", fontWeight: 600, fontSize: 13 }}>
+                      ⚠️ Save is locked until you preview &amp; confirm a real sample {scope === "receipt" ? "receipt" : "bill"}
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 0.5rem 0" }}>
+                  Raw uploaded file (unfilled):
+                </p>
                 <img
                   src={uploadedImage}
                   alt="Template"
@@ -1086,6 +1213,185 @@ export default function BillTemplateDesigner() {
                 />
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* PDF/image field-mapping / sample-preview modal */}
+      {editorMode && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+          onClick={() => setEditorMode(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              width: "min(900px, 100%)",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              padding: 24,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0 }}>
+                {editorMode === "image" ? "🖼️ Image" : "📄 PDF"} Field Mapping &amp; Sample Preview
+                {scope === "receipt" ? " (Receipt)" : " (Bill)"}
+              </h2>
+              <button type="button" onClick={() => setEditorMode(null)} style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer" }}>
+                ✕
+              </button>
+            </div>
+
+            {editorMode === "pdf" && pdfHasFormFields ? (
+              <div style={{ background: "#eef2ff", padding: 14, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                This PDF has {detectedFields.length} fillable form fields. The system automatically
+                matches each one (by name, case/space-insensitive) to the bill data below — no manual
+                mapping needed. Detected fields:
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {detectedFields.map((f, i) => (
+                    <span key={i} style={{ background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "2px 8px", fontSize: 12 }}>
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ background: "#fef3c7", padding: 14, borderRadius: 8, marginBottom: 12, fontSize: 13, color: "#92400e" }}>
+                  {editorMode === "image"
+                    ? "The system overlays (draws) text onto the uploaded image at fixed positions. Add the fields you want drawn and set their X/Y position (from the top-left corner, in points) and font size below."
+                    : "No fillable form fields were detected, so the system overlays (draws) text onto the PDF at fixed positions instead. Add the fields you want drawn and set their X/Y position (from the top-left corner, in PDF points) and font size below."}
+                </div>
+                {(() => {
+                  const fieldVocab = scope === "receipt" ? RECEIPT_OVERLAY_FIELD_KEYS : OVERLAY_FIELD_KEYS;
+                  const activeFields = editorMode === "image" ? imageFields : pdfFields;
+                  return (
+                    <>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                        {fieldVocab.filter((k) => !activeFields.some((f) => f.name === k.key)).map((k) => (
+                          <button
+                            key={k.key}
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => addFieldToPDF(k.key)}
+                          >
+                            + {k.label}
+                          </button>
+                        ))}
+                      </div>
+                      {activeFields.length > 0 && (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ background: "#f9fafb" }}>
+                              <th style={{ textAlign: "left", padding: 6 }}>Field</th>
+                              <th style={{ padding: 6 }}>X</th>
+                              <th style={{ padding: 6 }}>Y</th>
+                              <th style={{ padding: 6 }}>Font size</th>
+                              <th style={{ padding: 6 }}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeFields.map((f) => (
+                              <tr key={f.id} style={{ borderTop: "1px solid #e5e7eb" }}>
+                                <td style={{ padding: 6 }}>
+                                  {fieldVocab.find((k) => k.key === f.name)?.label || f.name}
+                                </td>
+                                <td style={{ padding: 6 }}>
+                                  <input
+                                    type="number"
+                                    value={f.x}
+                                    onChange={(e) => updateFieldProperty(f.id, "x", +e.target.value)}
+                                    style={{ width: 70 }}
+                                  />
+                                </td>
+                                <td style={{ padding: 6 }}>
+                                  <input
+                                    type="number"
+                                    value={f.y}
+                                    onChange={(e) => updateFieldProperty(f.id, "y", +e.target.value)}
+                                    style={{ width: 70 }}
+                                  />
+                                </td>
+                                <td style={{ padding: 6 }}>
+                                  <input
+                                    type="number"
+                                    value={f.fontSize}
+                                    onChange={(e) => updateFieldProperty(f.id, "fontSize", +e.target.value)}
+                                    style={{ width: 60 }}
+                                  />
+                                </td>
+                                <td style={{ padding: 6 }}>
+                                  <button type="button" onClick={() => deleteField(f.id)} style={{ color: "red" }}>
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+                <label style={{ fontSize: 13, fontWeight: 600 }}>Preview as member:</label>
+                <select value={previewMemberId} onChange={(e) => setPreviewMemberId(e.target.value)}>
+                  {memberOptions.length === 0 ? <option value="">No members found</option> : null}
+                  {memberOptions.map((m) => (
+                    <option key={m._id} value={m._id}>
+                      {(m.wing ? m.wing + "-" : "") + (m.flatNo || "")} · {m.ownerName || ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={previewFillMutation.isPending || !previewMemberId}
+                  onClick={() => previewFillMutation.mutate()}
+                >
+                  {previewFillMutation.isPending ? "⏳ Rendering…" : "🖨️ Generate sample preview"}
+                </button>
+              </div>
+              {pdfPreviewError ? (
+                <div style={{ background: "#fee2e2", color: "#991b1b", padding: 10, borderRadius: 6, marginBottom: 10, fontSize: 13 }}>
+                  {pdfPreviewError}
+                </div>
+              ) : null}
+              {pdfPreviewUrl ? (
+                <>
+                  <iframe
+                    src={pdfPreviewUrl}
+                    title={`Sample ${scope === "receipt" ? "receipt" : "bill"} preview`}
+                    style={{ width: "100%", height: "500px", border: "2px solid #e5e7eb", borderRadius: 8, marginBottom: 12 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={() => setPreviewConfirmed(true)}
+                  >
+                    {previewConfirmed ? "✅ Confirmed — you can now save" : "Confirm this real-member sample"}
+                  </button>
+                </>
+              ) : (
+                <p style={{ fontSize: 13, color: "#6b7280" }}>
+                  Generate a sample to see the real, filled-in PDF before confirming.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -20,9 +20,19 @@ const SocietySchema = new mongoose.Schema(
     receiptTemplate: {
       type: {
         type: String,
-        enum: ["default", "custom"],
+        enum: ["default", "custom", "uploaded-pdf", "uploaded-image"],
         default: "default",
       },
+      // For uploaded PDF (mirrors billTemplate below — receipts use their
+      // own field vocabulary, see lib/receipt-pdf-fields.js, but the same
+      // { id, name, x, y, width, height, fontSize, fontColor } shape).
+      pdfUrl: { type: String },
+      hasFormFields: { type: Boolean, default: false },
+      detectedFields: [{ type: String }],
+      pdfFields: [{ type: mongoose.Schema.Types.Mixed }],
+      // For uploaded image
+      imageUrl: { type: String },
+      imageFields: [{ type: mongoose.Schema.Types.Mixed }],
       design: { type: mongoose.Schema.Types.Mixed, default: null },
       logoUrl: { type: String },
       signatureUrl: { type: String },
@@ -39,8 +49,15 @@ const SocietySchema = new mongoose.Schema(
       pdfUrl: { type: String },
       hasFormFields: { type: Boolean, default: false },
       detectedFields: [{ type: String }],
+      // Custom overlay field positions the admin set in the PDF field editor
+      // (only used for PDFs with no fillable form fields). Each entry:
+      // { id, name, x, y, width, height, fontSize, fontColor }
+      pdfFields: [{ type: mongoose.Schema.Types.Mixed }],
       // For uploaded image
       imageUrl: { type: String },
+      // Overlay field positions for the uploaded-image flow — same shape as
+      // pdfFields, drawn on top of the image via generateImageOverlay().
+      imageFields: [{ type: mongoose.Schema.Types.Mixed }],
       // For custom design
       design: {
         type: mongoose.Schema.Types.Mixed,

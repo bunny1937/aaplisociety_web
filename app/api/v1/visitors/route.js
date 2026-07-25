@@ -2,7 +2,7 @@ import { withRoute, ApiError, json, zodError } from "@/lib/v1/http";
 import { getClaims, requireTenant } from "@/lib/v1/auth";
 import { visitorCreateSchema } from "@/lib/v1/schemas";
 import { Visitor, Blacklist, Member, User } from "@/lib/v1/models";
-import { VISITOR_ACCESS_ROLES } from "@/lib/v1/constants";
+import { VISITOR_ACCESS_ROLES, OCCUPANCY_TYPES } from "@/lib/v1/constants";
 import { notifyVisitorChange } from "@/lib/v1/notify";
 import { presignDownload } from "@/lib/v1/storage";
 
@@ -22,6 +22,13 @@ export const GET = withRoute(async (req) => {
   if (!VISITOR_ACCESS_ROLES.includes(claims.role)) {
     if (!claims.memberId) return json({ visitors: [] });
     query.memberId = claims.memberId;
+    // Owners get a lighter-weight feed: only guests who actually made it
+    // through the gate, not the full pending/approved/rejected request log.
+    // Tenants (who live on-site day to day) see everything, entry and exit.
+    if (claims.occupancyType === OCCUPANCY_TYPES.OWNER) {
+      query.purpose = "Guest";
+      query.status = { $in: ["Entered", "Exited"] };
+    }
   }
   if (status) query.status = status;
 

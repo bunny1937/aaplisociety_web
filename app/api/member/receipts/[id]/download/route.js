@@ -5,6 +5,9 @@ import Receipt from "@/models/Receipt";
 import Bill from "@/models/Bill";
 import Society from "@/models/Society";
 import Member from "@/models/Member";
+import { FlexiblePDFGenerator } from "@/lib/pdf-generator";
+import { buildReceiptFillData } from "@/lib/receipt-pdf-fields";
+import { extractFileId, loadUploadedFile } from "@/lib/file-store";
 export async function GET(request, { params }) {
   try {
     await connectDB();
@@ -32,12 +35,55 @@ export async function GET(request, { params }) {
         )
         .lean(),
     ]);
+    const receiptTemplate = society?.receiptTemplate;
+    // Uploaded-PDF / uploaded-image templates — same generator + field
+    // config (receiptTemplate.pdfFields / imageFields) the admin previewed
+    // and confirmed in the Bill Template page → Receipt scope → Upload tab.
+    if (
+      (receiptTemplate?.type === "uploaded-pdf" && receiptTemplate.pdfUrl) ||
+      (receiptTemplate?.type === "uploaded-image" && receiptTemplate.imageUrl)
+    ) {
+      const isImage = receiptTemplate.type === "uploaded-image";
+      const storedUrl = isImage ? receiptTemplate.imageUrl : receiptTemplate.pdfUrl;
+      const fileId = extractFileId(storedUrl);
+      const stored = fileId ? await loadUploadedFile(fileId) : null;
+      if (!stored) {
+        return NextResponse.json({ error: "Receipt template file not found" }, { status: 404 });
+      }
+      const { overlayData, formFieldData } = buildReceiptFillData({ receipt, bill, society, member });
+      let pdfBytes;
+      if (isImage) {
+        const customPositions = Object.fromEntries(
+          (receiptTemplate.imageFields || [])
+            .filter((f) => f && f.name)
+            .map((f) => [f.name, { x: f.x, y: f.y, fontSize: f.fontSize, maxWidth: f.width }]),
+        );
+        const generator = new FlexiblePDFGenerator(null, customPositions);
+        pdfBytes = await generator.generateImageOverlay(stored.buffer, stored.contentType, overlayData);
+      } else {
+        const customPositions = Object.fromEntries(
+          (receiptTemplate.pdfFields || [])
+            .filter((f) => f && f.name)
+            .map((f) => [f.name, { x: f.x, y: f.y, fontSize: f.fontSize, maxWidth: f.width }]),
+        );
+        const generator = new FlexiblePDFGenerator({ buffer: stored.buffer }, customPositions);
+        pdfBytes = await generator.generateGenericOverlay(overlayData, formFieldData);
+      }
+      await Receipt.findByIdAndUpdate(id, { status: "Downloaded" });
+      return new NextResponse(Buffer.from(pdfBytes), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="${receipt.filename || receipt.receiptNo || "receipt"}.pdf"`,
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
     // Same admin-designed template (Bill Template page → Receipt scope) the
     // admin sees in preview — a saved design change is picked up on the very
     // next member download, no republish step needed.
     const design =
-      society?.receiptTemplate?.type === "custom" && society.receiptTemplate.design
-        ? society.receiptTemplate.design
+      receiptTemplate?.type === "custom" && receiptTemplate.design
+        ? receiptTemplate.design
         : null;
     const html = generateReceiptHtml({ receipt, bill, society, member, design });
     // Mark as downloaded
