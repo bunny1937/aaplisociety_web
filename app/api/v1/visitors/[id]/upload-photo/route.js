@@ -18,6 +18,12 @@ export const POST = withRoute(async (req, ctx) => {
   const societyId = requireTenant(claims);
   requireRoles(claims, VISITOR_ACCESS_ROLES);
 
+  // A malformed id used to surface as a 500 CastError, which the guard app
+  // reported as a generic upload failure.
+  if (!id || !/^[a-f\d]{24}$/i.test(String(id))) {
+    throw new ApiError(400, "Invalid visitor id");
+  }
+
   const visitor = await Visitor.findOne({ _id: id, societyId });
   if (!visitor) throw new ApiError(404, "Visitor not found");
 
@@ -37,6 +43,10 @@ export const POST = withRoute(async (req, ctx) => {
   visitor.photoKey = key;
   await visitor.save();
 
-  const url = await presignDownload(key);
-  return json({ ok: true, photoKey: key, url });
+  // Return the URL under BOTH keys. The client reads `photoUrl` (that is the
+  // field name every visitor payload uses elsewhere), while `url` is kept for
+  // any existing caller. Returning only `url` meant a freshly uploaded photo
+  // did not render until the next full list refetch.
+  const photoUrl = await presignDownload(key);
+  return json({ ok: true, photoKey: key, photoUrl, url: photoUrl });
 });

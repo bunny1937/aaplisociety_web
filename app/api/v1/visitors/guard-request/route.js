@@ -20,7 +20,11 @@ export const POST = withRoute(async (req) => {
   const data = parsed.data;
 
   const existing = await Visitor.findOne({ societyId, "offlineMeta.clientRef": data.clientRef });
-  if (existing) return json({ visitor: existing, deduped: true });
+  // Always expose visitorId at the top level. The Flutter guard screen reads
+  // the new visitor's id to follow up with POST /visitors/:id/upload-photo;
+  // when the id was only reachable at body.visitor._id the client read
+  // body._id, got null, and skipped every photo upload silently.
+  if (existing) return json({ ok: true, visitorId: String(existing._id), visitor: existing, deduped: true });
 
   const member = await Member.findOne({ _id: data.memberId, societyId }).select("_id");
   if (!member) throw new ApiError(404, "Member not found");
@@ -53,11 +57,11 @@ export const POST = withRoute(async (req) => {
       guardId: claims.userId,
       guardName: guard?.name || guard?.username,
     });
-    return json({ visitor }, { status: 201 });
+    return json({ ok: true, visitorId: String(visitor._id), visitor }, { status: 201 });
   } catch (e) {
     if (e?.code === 11000) {
       const winner = await Visitor.findOne({ societyId, "offlineMeta.clientRef": data.clientRef });
-      if (winner) return json({ visitor: winner, deduped: true });
+      if (winner) return json({ ok: true, visitorId: String(winner._id), visitor: winner, deduped: true });
     }
     throw e;
   }

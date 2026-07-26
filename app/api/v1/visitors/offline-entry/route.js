@@ -21,7 +21,9 @@ export const POST = withRoute(async (req) => {
   const data = parsed.data;
 
   const existing = await Visitor.findOne({ societyId, "offlineMeta.clientRef": data.clientRef });
-  if (existing) return json({ visitor: existing, deduped: true });
+  // Same contract as /visitors/guard-request: visitorId is always top-level so
+  // the client can immediately attach the gate photo.
+  if (existing) return json({ ok: true, visitorId: String(existing._id), visitor: existing, deduped: true });
 
   try {
     const visitor = await Visitor.create({
@@ -50,12 +52,12 @@ export const POST = withRoute(async (req) => {
       entryMethod: "OfflineEntry",
       isBlacklisted: false,
     });
-    return json({ visitor }, { status: 201 });
+    return json({ ok: true, visitorId: String(visitor._id), visitor }, { status: 201 });
   } catch (e) {
     // Concurrent sync of the same clientRef: return the winner.
     if (e?.code === 11000) {
       const winner = await Visitor.findOne({ societyId, "offlineMeta.clientRef": data.clientRef });
-      if (winner) return json({ visitor: winner, deduped: true });
+      if (winner) return json({ ok: true, visitorId: String(winner._id), visitor: winner, deduped: true });
     }
     throw e;
   }
