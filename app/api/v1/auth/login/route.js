@@ -17,7 +17,10 @@ async function verifyPassword(plain, user) {
 }
 
 export const POST = withRoute(async (req) => {
-  const commit = enforceRateLimit(req, "login", { windowMs: 15 * 60 * 1000, limit: 10, skipSuccessfulRequests: true });
+  // enforceRateLimit is async now that the counter lives in shared Redis rather
+  // than in this instance's memory. Forgetting the await would silently disable
+  // the limit (a pending promise is truthy and never throws here).
+  const commit = await enforceRateLimit(req, "login", { windowMs: 15 * 60 * 1000, limit: 10, skipSuccessfulRequests: true });
   const body = await req.json().catch(() => ({}));
   const parsed = loginSchema.safeParse(body);
   if (!parsed.success) throw zodError(parsed);

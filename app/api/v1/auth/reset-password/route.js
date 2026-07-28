@@ -13,7 +13,8 @@ function sha256(v) {
 }
 
 export const POST = withRoute(async (req) => {
-  enforceRateLimit(req, "reset-password", { windowMs: 15 * 60 * 1000, limit: 10 });
+  // Async now - shared Redis counter instead of a per-instance Map.
+  await enforceRateLimit(req, "reset-password", { windowMs: 15 * 60 * 1000, limit: 10 });
   const body = await req.json().catch(() => ({}));
   const parsed = resetPasswordSchema.safeParse(body);
   if (!parsed.success) throw zodError(parsed);

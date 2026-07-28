@@ -34,7 +34,10 @@ async function sendResetEmail(to, code) {
 }
 
 export const POST = withRoute(async (req) => {
-  enforceRateLimit(req, "forgot-password", { windowMs: 15 * 60 * 1000, limit: 5 });
+  // Async now - the counter lives in shared Redis instead of this instance's
+  // memory. This is the endpoint that can send SMS/email, so a per-instance
+  // limit was the weakest link in the whole API.
+  await enforceRateLimit(req, "forgot-password", { windowMs: 15 * 60 * 1000, limit: 5 });
   const body = await req.json().catch(() => ({}));
   const parsed = forgotPasswordSchema.safeParse(body);
   if (!parsed.success) throw zodError(parsed);

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { withRoute, json } from "@/lib/v1/http";
 import { getClaims, requireTenant } from "@/lib/v1/auth";
 import { Notification } from "@/lib/v1/models";
@@ -51,5 +52,35 @@ export const GET = withRoute(async (req) => {
   if (unreadOnly) items = items.filter((i) => !i.read);
 
   const unreadCount = items.filter((i) => !i.read).length;
-  return json({ notifications: items, unreadCount });
+
+  // --- Conditional GET -----------------------------------------------------
+  // This route is polled more than every other route in the system combined.
+  // The overwhelmingly common case is "nothing new since ?since=", and we were
+  // still serialising JSON and sending a body for it every single time.
+  //
+  // The ETag is derived from what the client can actually observe: how many rows
+  // it would get, the newest row's timestamp, and the unread count (which can
+  // change without a new row when something is marked read). If all three match
+  // what the client already holds, answer 304 with no body at all.
+  //
+  // This does NOT reduce invocations - only the client's poll interval can do
+  // that - but it removes the response body, the JSON parse on the phone, and
+  // the bandwidth, on the ~95% of polls that carry no news.
+  const newest = items.length ? new Date(items[0].createdAt).getTime() : 0;
+  const etag = `W/"${createHash("sha1")
+    .update(`${items.length}:${newest}:${unreadCount}`)
+    .digest("base64url")}"`;
+
+  const ifNoneMatch = req.headers.get("if-none-match");
+  if (ifNoneMatch && ifNoneMatch === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: { ETag: etag, "Cache-Control": "no-store" },
+    });
+  }
+
+  return json(
+    { notifications: items, unreadCount },
+    { headers: { ETag: etag, "Cache-Control": "no-store" } },
+  );
 });
