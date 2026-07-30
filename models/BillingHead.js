@@ -20,6 +20,17 @@ const BillingHeadSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Optional link to a Chart of Accounts Income account (Phase 2.7 of the
+    // accounting-system revamp — docs/accounting-system-ARD.md §7). Lets a
+    // posting rule map this specific billing head to its own income account
+    // via the "billingHead:<id>" resolver key, instead of everything landing
+    // in one generic maintenance-income account. Additive, optional, never
+    // required — existing billing reads are unaffected.
+    linkedAccountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ChartOfAccount",
+      default: null,
+    },
     canBeArchived: { type: Boolean, default: false },
 isDeleted: { type: Boolean, default: false },
 deletedAt: { type: Date },

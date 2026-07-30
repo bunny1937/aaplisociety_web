@@ -237,6 +237,75 @@ const SocietySchema = new mongoose.Schema(
       billHistoryPeriods: [{ type: String }], // e.g. ["2025-04", "2025-05", ...]
       joinPeriodId: { type: String, default: null }, // YYYY-MM when society joined platform
     },
+    // Accounting control center (Phase 2.3 of the accounting-system revamp —
+    // see docs/accounting-system-ARD.md §6.11). Additive, optional sub-document.
+    // Deliberately does NOT duplicate config.interestRate / config.charges —
+    // this only holds HOW billing outcomes post to accounts, never HOW
+    // billing is calculated. Reads should go through
+    // lib/services/FiscalConfigService.js, which fills in defaults for
+    // societies that haven't configured this yet (no backfill needed).
+    accountingConfig: {
+      enabled: { type: Boolean, default: false },
+      financialYearDefaults: {
+        startMonth: { type: Number, default: 3, min: 0, max: 11 }, // April = 3 (0-indexed), matches FINANCIAL_YEAR_START_MONTH
+        lockAfterDays: { type: Number, default: 0 },
+      },
+      voucherPrefixes: {
+        Receipt: { type: String, default: "RV", uppercase: true, trim: true },
+        Payment: { type: String, default: "PV", uppercase: true, trim: true },
+        Journal: { type: String, default: "JV", uppercase: true, trim: true },
+        Contra: { type: String, default: "CV", uppercase: true, trim: true },
+        DebitNote: { type: String, default: "DN", uppercase: true, trim: true },
+        CreditNote: { type: String, default: "CN", uppercase: true, trim: true },
+      },
+      voucherNumberPadding: { type: Number, default: 5, min: 1, max: 10 },
+      defaultAccountMappings: {
+        maintenanceIncomeAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+        interestIncomeAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+        cashAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+        defaultBankAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+        memberReceivableAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+        roundOffAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+      },
+      depreciationPolicy: {
+        method: { type: String, enum: ["StraightLine", "WDV"], default: "StraightLine" },
+        roundingRule: { type: String, enum: ["nearest", "up", "down"], default: "nearest" },
+      },
+      interestPolicy: {
+        // HOW interest posts, not how it's calculated. Calculation stays
+        // owned by utils/interestUtils.js — never duplicate the rate/formula here.
+        postingAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+      },
+      taxConfig: {
+        gstEnabled: { type: Boolean, default: false },
+        tdsEnabled: { type: Boolean, default: false },
+      },
+      roundingPolicy: {
+        method: { type: String, enum: ["nearest", "up", "down"], default: "nearest" },
+        precision: { type: Number, default: 2 },
+      },
+      currency: {
+        code: { type: String, default: "INR" },
+        symbol: { type: String, default: "₹" },
+      },
+      scheduleConfig: {
+        format: { type: String, enum: ["default", "custom"], default: "default" },
+        customScheduleMap: { type: mongoose.Schema.Types.Mixed, default: null },
+      },
+      auditorPreferences: {
+        defaultReadOnly: { type: Boolean, default: true },
+        requireRemarksOnAdjustment: { type: Boolean, default: true },
+      },
+      financialClosingRules: {
+        requireTrialBalanceMatch: { type: Boolean, default: true },
+        requireAllDepreciationPosted: { type: Boolean, default: true },
+        requireReconciliationComplete: { type: Boolean, default: false },
+      },
+      documentLockingRules: {
+        lockVouchersAfterApproval: { type: Boolean, default: true },
+        allowBackdatedEntriesInDraftFY: { type: Boolean, default: true },
+      },
+    },
     // Matrix Config
     matrixConfig: {
       L: { type: Number, default: 0 },
@@ -268,7 +337,11 @@ function clampDay(day, month, year) {
   return Math.min(day, lastDay);
 }
 SocietySchema.pre("save", function (next) {
-  if (this.isModified("config") || this.isModified("matrixConfig")) {
+  if (
+    this.isModified("config") ||
+    this.isModified("matrixConfig") ||
+    this.isModified("accountingConfig")
+  ) {
     this.configVersion += 1;
   }
   // Keep the configured recurring day (e.g. 30) unchanged. At runtime,
