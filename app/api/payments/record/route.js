@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import Transaction from "@/models/Transaction";
-import Bill from "@/models/Bill"; // ✅ ADDED
-import Member from "@/models/Member";
-import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { getFinancialYear } from "@/lib/date-utils";
 import AuditLog from "@/models/AuditLog";
 import { getBillPayFinalDate } from "../../../../utils/interestUtils";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import {
+  recordPayment,
+  PaymentServiceError,
+} from "@/lib/services/PaymentService";
+
+// Business logic lives in lib/services/PaymentService.js as of Phase 2.1 of
+// the accounting-system revamp (docs/accounting-system-ARD.md §9). This route
+// only handles auth + request parsing + response mapping.
+
 export async function POST(request) {
   try {
     await connectDB();
@@ -288,56 +293,26 @@ export async function POST(request) {
       amount: paymentAmount,
       balanceAfterTransaction: newLedgerBalance,
       paymentMode: paymentMode || "Cash",
+    const result = await recordPayment({
+      memberId,
+      societyId: decoded.societyId,
+      amount,
+      paymentMode,
+      paymentDate,
       chequeNo,
       bankName,
       upiId,
       transactionRef,
       notes,
-      createdBy: decoded.userId,
-      financialYear: getFinancialYear(new Date()),
-      // Store breakdown for transparency
-      paymentBreakdown: breakdown,
+      actorUserId: decoded.userId,
+      actorRole: decoded.role,
     });
-    // ✅ AUDIT LOG
-    await AuditLog.create({
-      userId: decoded.userId,
-      societyId: decoded.societyId,
-      action: "RECORD_PAYMENT",
-      newData: {
-        memberId,
-        memberName: member.ownerName,
-        roomNo: member.roomNo,
-        wing: member.wing,
-        amount: paymentAmount,
-        paymentMode,
-        previousBalance: currentLedgerBalance,
-        newBalance: newLedgerBalance,
-        billsUpdated,
-        breakdown,
-      },
-      timestamp: new Date(),
-    });
-    // ✅ Get society config for breakdown visibility
-    const societyConfig = society?.config || {};
-    const showBreakdown = societyConfig.memberPaymentBreakdownVisible !== false;
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Payment recorded successfully",
-        transaction: {
-          transactionId: transaction.transactionId,
-          amount: paymentAmount,
-          previousBalance: currentLedgerBalance,
-          newBalance: newLedgerBalance,
-          billsUpdated,
-          // Only expose breakdown if society config allows
-          ...(showBreakdown ? { breakdown } : {}),
-          advanceCredit: advanceCredit > 0 ? advanceCredit : undefined,
-        },
-      },
-      { status: 201 },
-    );
+
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (error instanceof PaymentServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Record payment error:", error);
     return NextResponse.json(
       {

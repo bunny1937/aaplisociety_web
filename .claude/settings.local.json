@@ -80,7 +80,17 @@
       "Bash(timeout 180 npx next build)",
       "Read(//d/projects//**)",
       "Read(//c//**)",
-      "Bash(find /d -maxdepth 3 -iname \"pubspec.yaml\")"
+      "Bash(find /d -maxdepth 3 -iname \"pubspec.yaml\")",
+      "Bash(npx skills *)",
+      "Bash(claude mcp *)",
+      "Bash(timeout 25 npx -y @modelcontextprotocol/server-filesystem \"C:\\\\projects\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(timeout 25 npx -y @supabase/mcp-server-supabase@latest)",
+      "Bash(curl *)",
+      "Bash(gh auth *)",
+      "Bash(npx jest *)",
+      "Bash(npm ls *)",
+      "Bash(npm install *)"
     ]
   },
   "enableAllProjectMcpServers": true,
