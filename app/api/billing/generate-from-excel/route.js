@@ -24,33 +24,31 @@ export async function POST(request) {
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     const { bills, billMonth, billYear } = await request.json();
-    if (!bills?.length || billMonth === undefined || !billYear) {
+    // Each row may carry its own billMonth/billYear (mixed-period uploads —
+    // one flat catching up on last month while another starts a new one).
+    // Fall back to the request-level values for older callers that don't.
+    if (!bills?.length || (billMonth === undefined && bills.some((b) => b.billMonth === undefined))) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 },
       );
     }
     const societyId = decoded.societyId;
-    const month = billMonth + 1; // client sends 0-indexed month
-    const billPeriodId = `${billYear}-${String(month).padStart(2, "0")}`;
-    const existing = await Bill.findOne({ societyId, billPeriodId });
-    if (existing)
-      return NextResponse.json(
-        { error: `Bills for ${billPeriodId} already exist` },
-        { status: 409 },
-      );
 
     const society = await Society.findById(societyId).lean();
     const created = [];
     const errors = [];
 
     for (const b of bills) {
+      const rowBillYear = b.billYear ?? billYear;
+      const rowMonth = (b.billMonth ?? billMonth) + 1; // client sends 0-indexed month
+      const billPeriodId = `${rowBillYear}-${String(rowMonth).padStart(2, "0")}`;
       try {
         const bill = await generateBill({
           societyId,
           memberId: b.memberId,
-          year: billYear,
-          month,
+          year: rowBillYear,
+          month: rowMonth,
           performedBy: decoded.userId,
         });
 
@@ -79,7 +77,7 @@ export async function POST(request) {
           balanceAmount: bill.balanceAmount,
           status: bill.status,
           billPeriod: billPeriodId,
-          billDate: new Date(billYear, billMonth, 1),
+          billDate: new Date(rowBillYear, rowMonth - 1, 1),
           dueDate: bill.dueDate,
           unpaidBills,
           recentTransactions: [],

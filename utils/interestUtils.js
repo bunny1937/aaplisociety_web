@@ -155,8 +155,12 @@ export function allocatePaymentInterestFirst(
   let totalInterestCleared = 0;
   let totalPrincipalCleared = 0;
   // Deep clone to avoid mutating originals.
+  // billId falls back to b.billId for callers that already pass a plain
+  // { billId, ... } shape instead of a Mongoose bill doc with _id (e.g. the
+  // v1 mobile bill-pay route) — kept backward-compatible when lib/v1/business.js
+  // re-exports this function instead of duplicating it.
   const workBills = bills.map((b) => ({
-    billId: b._id,
+    billId: b._id ?? b.billId,
     interestBalance: b.interestBalance || 0,
     principalBalance: b.principalBalance || 0,
     balanceAmount: b.balanceAmount || 0,

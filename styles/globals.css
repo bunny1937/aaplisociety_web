@@ -569,3 +569,21 @@ tbody tr:last-child td { border-bottom: none; }
   margin-bottom: 16px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
+
+/* ── Financial Statements — live-build animations ─────────────── */
+@keyframes acctFadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes acctBlink {
+  50% { opacity: 0; }
+}
+@keyframes acctPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(30, 58, 138, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(30, 58, 138, 0); }
+}
+.acct-row-actions { opacity: 0.3; transition: opacity 0.15s; }
+.acct-row:hover .acct-row-actions { opacity: 1; }
+.acct-input { border: 1px solid transparent; background: transparent; font-family: inherit; border-radius: 6px; }
+.acct-input:hover { border-color: #e2e8f0; }
+.acct-input:focus { outline: none; border-color: #1e3a8a; box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.12); background: #fff; }

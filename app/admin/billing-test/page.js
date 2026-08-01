@@ -612,11 +612,13 @@ export default function BillingTestPage() {
       const data = await res.json();
       setExcelValidation(data);
       if (data.gridRows && data.gridColumns) setBillGrid({ gridRows: data.gridRows, columns: data.gridColumns });
-      const mode = data.uploadMode || "BILL_GENERATE";
-      log(`Validation: mode=${mode}, errors=${data.errorCount}`, data.errorCount > 0 ? "err" : "ok");
-      setPhase(mode === "PAYMENT_ONLY" ? "payment-preview-ready" : "validated");
-      // if payment mode, auto-send to payment preview
-      if (mode === "PAYMENT_ONLY") {
+      // Mode is per-row now: data.bills = rows to generate, data.alreadyBilledRows
+      // = rows already billed (payment-only). A file can contain both.
+      const isPaymentOnly = (data.bills?.length ?? 0) === 0 && (data.alreadyBilledRows?.length ?? 0) > 0;
+      log(`Validation: generate=${data.bills?.length ?? 0} alreadyBilled=${data.alreadyBilledRows?.length ?? 0}, errors=${data.errorCount}`, data.errorCount > 0 ? "err" : "ok");
+      setPhase(isPaymentOnly ? "payment-preview-ready" : "validated");
+      // if every row is already billed, auto-send to payment preview
+      if (isPaymentOnly) {
         const fd2 = new FormData(); fd2.append("file", file);
         const r2 = await fetch("/api/billing/upload-payments?action=preview", { method: "POST", body: fd2, credentials: "include" });
         const d2 = await r2.json();
@@ -807,9 +809,9 @@ export default function BillingTestPage() {
                   <span key={l} style={{ border: `2px solid ${c}`, color: c, padding: "3px 10px", borderRadius: 5, fontWeight: 700, fontSize: "0.8rem", background: "white" }}>{v} {l}</span>
                 ))}
                 <span style={{ border: "2px solid #86efac", color: "#065f46", padding: "3px 10px", borderRadius: 5, fontWeight: 700, fontSize: "0.8rem", background: "#f0fdf4" }}>
-                  {excelValidation.uploadMode || "BILL_GENERATE"}
+                  gen={excelValidation.bills?.length ?? 0} alreadyBilled={excelValidation.alreadyBilledRows?.length ?? 0}
                 </span>
-                {canGenFromExcel && excelValidation.uploadMode !== "PAYMENT_ONLY" && (
+                {canGenFromExcel && (
                   <button onClick={() => generateFromExcel(false)} style={{ padding: "5px 14px", background: "#059669", color: "white", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: "0.8rem" }}>
                     Generate Bills from Excel
                   </button>
