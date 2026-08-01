@@ -5,6 +5,10 @@ import { getFinancialYear } from "@/lib/date-utils";
 import AuditLog from "@/models/AuditLog";
 import { getBillPayFinalDate } from "../../../../utils/interestUtils";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import Member from "@/models/Member";
+import Bill from "@/models/Bill";
+import Society from "@/models/Society";
+import Transaction from "@/models/Transaction";
 import {
   recordPayment,
   PaymentServiceError,
@@ -293,7 +297,15 @@ export async function POST(request) {
       amount: paymentAmount,
       balanceAfterTransaction: newLedgerBalance,
       paymentMode: paymentMode || "Cash",
-    const result = await recordPayment({
+      chequeNo,
+      bankName,
+      upiId,
+      transactionRef,
+      notes,
+      createdBy: decoded.userId,
+      financialYear: getFinancialYear(new Date()),
+    });
+    const paymentRecord = await recordPayment({
       memberId,
       societyId: decoded.societyId,
       amount,
@@ -308,7 +320,7 @@ export async function POST(request) {
       actorRole: decoded.role,
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(paymentRecord, { status: 201 });
   } catch (error) {
     if (error instanceof PaymentServiceError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
