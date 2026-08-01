@@ -10,6 +10,17 @@ import cache from "@/lib/cache";
 import { generateBill } from "@/lib/billing/generationService";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import { notifyBillCreated } from "@/lib/v1/notify";
+import { mapLimit } from "@/lib/concurrency";
+import { ndjsonResponse } from "@/lib/ndjson-stream";
+
+// Each member's bill generation was previously awaited one at a time — for
+// 84 members at ~2.5s/member (several sequential Mongo round trips each,
+// crossing regions between the Vercel function and the DB) that serialized
+// to 3-4 minutes, right up against the 5-minute function limit, with zero
+// feedback to the admin waiting on it. Different members never touch each
+// other's Bill/Member/Transaction docs, so generating them concurrently is
+// safe — only cap concurrency to avoid exhausting the DB connection pool.
+const CONCURRENCY = 8;
 
 // Ledger V2: THIN WRAPPER over the shared GenerationService. Contains no
 // billing math of its own — charges/interest/totals are recomputed from
@@ -94,118 +105,125 @@ export async function POST(request) {
 
     const society = await Society.findById(societyId).lean();
 
-    const createdBills = [];
-    const errors = [];
+    async function generateOneMember(memberId) {
+      const bill = await generateBill({
+        societyId,
+        memberId,
+        year: billYear,
+        month,
+        performedBy: decoded.userId,
+        publishMode,
+        scheduledFor: scheduledPushDate,
+      });
 
-    for (const memberId of memberIds) {
-      try {
-        const bill = await generateBill({
+      const member = await Member.findById(memberId)
+        .select("flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary advanceCredit openingBalance")
+        .lean();
+      const breakdown =
+        bill.charges instanceof Map ? Object.fromEntries(bill.charges) : bill.charges || {};
+      const [unpaidBills, recentTransactions] = await Promise.all([
+        Bill.find({
           societyId,
           memberId,
-          year: billYear,
-          month,
-          performedBy: decoded.userId,
-          publishMode,
-          scheduledFor: scheduledPushDate,
-        });
+          status: { $in: ["Unpaid", "Partial", "Overdue"] },
+          billPeriodId: { $ne: billPeriodId },
+          isDeleted: { $ne: true },
+        })
+          .sort({ billYear: 1, billMonth: 1 })
+          .lean(),
+        Transaction.find({ societyId, memberId }).sort({ date: -1 }).limit(10).lean(),
+      ]);
+      const renderResult = renderBillHtml(null, society, member, {
+        breakdown,
+        totalAmount: bill.currentCharges,
+        previousBalance: parseFloat((bill.openingPrincipal + bill.openingInterest).toFixed(2)),
+        prevRemPrincipal: bill.openingPrincipal,
+        prevRemInt: bill.openingInterest,
+        precomputedCurrInt: bill.currentInterest,
+        precomputedMonthInterest: bill.billInterestBalance,
+        balanceAmount: bill.balanceAmount,
+        status: bill.status,
+        billPeriod: billPeriodId,
+        billDate: new Date(billYear, billMonth, 1),
+        dueDate: bill.dueDate,
+        unpaidBills,
+        recentTransactions,
+      });
+      await Bill.updateOne({ _id: bill._id }, { $set: { billHtml: renderResult.billHtml || renderResult.html } });
 
-        const member = await Member.findById(memberId)
-          .select("flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary advanceCredit openingBalance")
-          .lean();
-        const breakdown =
-          bill.charges instanceof Map ? Object.fromEntries(bill.charges) : bill.charges || {};
-        const [unpaidBills, recentTransactions] = await Promise.all([
-          Bill.find({
-            societyId,
-            memberId,
-            status: { $in: ["Unpaid", "Partial", "Overdue"] },
-            billPeriodId: { $ne: billPeriodId },
-            isDeleted: { $ne: true },
-          })
-            .sort({ billYear: 1, billMonth: 1 })
-            .lean(),
-          Transaction.find({ societyId, memberId }).sort({ date: -1 }).limit(10).lean(),
-        ]);
-        const renderResult = renderBillHtml(null, society, member, {
-          breakdown,
-          totalAmount: bill.currentCharges,
-          previousBalance: parseFloat((bill.openingPrincipal + bill.openingInterest).toFixed(2)),
-          prevRemPrincipal: bill.openingPrincipal,
-          prevRemInt: bill.openingInterest,
-          precomputedCurrInt: bill.currentInterest,
-          precomputedMonthInterest: bill.billInterestBalance,
-          balanceAmount: bill.balanceAmount,
-          status: bill.status,
-          billPeriod: billPeriodId,
-          billDate: new Date(billYear, billMonth, 1),
-          dueDate: bill.dueDate,
-          unpaidBills,
-          recentTransactions,
-        });
-        await Bill.updateOne({ _id: bill._id }, { $set: { billHtml: renderResult.billHtml || renderResult.html } });
+      const lastTxn = await Transaction.findOne({ memberId, societyId, isReversed: false })
+        .sort({ date: -1, createdAt: -1 })
+        .lean();
+      const prevBal = parseFloat((lastTxn?.balanceAfterTransaction ?? member?.openingBalance ?? 0).toFixed(2));
+      await Transaction.create({
+        transactionId: Transaction.generateTransactionId(),
+        date: bill.generatedAt || new Date(),
+        memberId,
+        societyId,
+        type: "Debit",
+        category: "Maintenance",
+        description: `Bill generated for ${billPeriodId}`,
+        amount: bill.totalBillDue,
+        balanceAfterTransaction: parseFloat((prevBal + bill.totalBillDue).toFixed(2)),
+        paymentMode: "System",
+        referenceId: bill._id,
+        referenceModel: "Bill",
+        billPeriodId,
+        createdBy: decoded.userId,
+      });
 
-        const lastTxn = await Transaction.findOne({ memberId, societyId, isReversed: false })
-          .sort({ date: -1, createdAt: -1 })
-          .lean();
-        const prevBal = parseFloat((lastTxn?.balanceAfterTransaction ?? member?.openingBalance ?? 0).toFixed(2));
-        await Transaction.create({
-          transactionId: Transaction.generateTransactionId(),
-          date: bill.generatedAt || new Date(),
-          memberId,
-          societyId,
-          type: "Debit",
-          category: "Maintenance",
-          description: `Bill generated for ${billPeriodId}`,
-          amount: bill.totalBillDue,
-          balanceAfterTransaction: parseFloat((prevBal + bill.totalBillDue).toFixed(2)),
-          paymentMode: "System",
-          referenceId: bill._id,
-          referenceModel: "Bill",
-          billPeriodId,
-          createdBy: decoded.userId,
-        });
-
-        // Apply any stored advance credit THROUGH the AllocationEngine — no
-        // independent advance math here. Skip Scheduled bills (not yet live).
-        if (bill.status !== "Scheduled" && (member?.advanceCredit || 0) > 0) {
-          const applied = Math.min(parseFloat(member.advanceCredit.toFixed(2)), bill.totalBillDue);
-          if (applied > 0) {
-            const ar = await applyPaymentToBill({ billId: bill._id, payment: applied, performedBy: decoded.userId });
-            await Bill.updateOne({ _id: bill._id }, { $inc: { advanceApplied: applied }, $set: { status: ar.balanceAmount > 0 ? "Unpaid" : "Paid" } });
-            await Member.updateOne({ _id: memberId }, { $inc: { advanceCredit: -applied } });
-          }
-        }
-
-        if (bill.status !== "Scheduled") await notifyBillCreated({ billId: bill._id, societyId, memberId, amount: bill.totalBillDue, period: billPeriodId });
-        createdBills.push(bill._id);
-      } catch (err) {
-        if (err.code === "P4_DUPLICATE") {
-          errors.push({ memberId, error: `Bill already exists for ${billPeriodId}` });
-        } else if (err.code === "MEMBER_NOT_FOUND") {
-          errors.push({ memberId, error: "Member not found" });
-        } else if (err.code && /^[BP]\d/.test(err.code)) {
-          errors.push({ memberId, error: `Invariant ${err.code}: ${err.message}` });
-        } else {
-          console.error(`Error creating bill for ${memberId}:`, err);
-          errors.push({ memberId, error: err.message });
+      // Apply any stored advance credit THROUGH the AllocationEngine — no
+      // independent advance math here. Skip Scheduled bills (not yet live).
+      if (bill.status !== "Scheduled" && (member?.advanceCredit || 0) > 0) {
+        const applied = Math.min(parseFloat(member.advanceCredit.toFixed(2)), bill.totalBillDue);
+        if (applied > 0) {
+          const ar = await applyPaymentToBill({ billId: bill._id, payment: applied, performedBy: decoded.userId });
+          await Bill.updateOne({ _id: bill._id }, { $inc: { advanceApplied: applied }, $set: { status: ar.balanceAmount > 0 ? "Unpaid" : "Paid" } });
+          await Member.updateOne({ _id: memberId }, { $inc: { advanceCredit: -applied } });
         }
       }
+
+      if (bill.status !== "Scheduled") await notifyBillCreated({ billId: bill._id, societyId, memberId, amount: bill.totalBillDue, period: billPeriodId });
+      return { billId: bill._id, flat: `${member?.wing || ""}-${member?.flatNo || ""}`, ownerName: member?.ownerName };
     }
 
-    await cache.delPattern(`billing:list:${societyId}:*`);
-    await cache.del(`billing:generated:${societyId}`);
-    await cache.del(`payments:outstanding:${societyId}`);
-    await cache.del(`admin:stats:global`);
+    function classifyError(err, memberId) {
+      if (err.code === "P4_DUPLICATE") return { memberId, error: `Bill already exists for ${billPeriodId}` };
+      if (err.code === "MEMBER_NOT_FOUND") return { memberId, error: "Member not found" };
+      if (err.code && /^[BP]\d/.test(err.code)) return { memberId, error: `Invariant ${err.code}: ${err.message}` };
+      console.error(`Error creating bill for ${memberId}:`, err);
+      return { memberId, error: err.message };
+    }
 
-    return NextResponse.json({
-      success: true,
-      message: `Generated ${createdBills.length} bill(s)`,
-      billPeriodId,
-      count: createdBills.length,
-      failed: errors.length,
-      errors: errors.length > 0 ? errors : undefined,
-      publishMode,
-      scheduledPushDate: publishMode === "schedule" ? scheduledPushDate : null,
+    return ndjsonResponse(async (emit) => {
+      const createdBills = [];
+      const errors = [];
+
+      await mapLimit(memberIds, CONCURRENCY, generateOneMember, (settled, memberId, done, total) => {
+        if (settled.status === "fulfilled") {
+          createdBills.push(settled.value.billId);
+          emit({ type: "progress", done, total, memberId, flat: settled.value.flat, ownerName: settled.value.ownerName, ok: true });
+        } else {
+          errors.push(classifyError(settled.reason, memberId));
+          emit({ type: "progress", done, total, memberId, ok: false, error: settled.reason.message });
+        }
+      });
+
+      await cache.delPattern(`billing:list:${societyId}:*`);
+      await cache.del(`billing:generated:${societyId}`);
+      await cache.del(`payments:outstanding:${societyId}`);
+      await cache.del(`admin:stats:global`);
+
+      return {
+        success: true,
+        message: `Generated ${createdBills.length} bill(s)`,
+        billPeriodId,
+        count: createdBills.length,
+        failed: errors.length,
+        errors: errors.length > 0 ? errors : undefined,
+        publishMode,
+        scheduledPushDate: publishMode === "schedule" ? scheduledPushDate : null,
+      };
     });
   } catch (error) {
     console.error("Generate final bills error:", error);

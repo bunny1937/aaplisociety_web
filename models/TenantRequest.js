@@ -27,12 +27,27 @@ const TenantRequestSchema = new mongoose.Schema(
     depositAmount: { type: Number, default: 0 },
     documents: TenantRequestDocumentsSchema,
     status: { type: String, enum: ["Pending", "Approved", "Rejected", "Closed"], default: "Pending", index: true },
+    // Mirrors the tenant User's isActive flag so GET /v1/tenant-requests can
+    // report login state without a join (see [id]/login/route.js). Was never
+    // declared here, so `request.loginEnabled = enabled; request.save()`
+    // silently dropped the assignment under Mongoose's default strict mode —
+    // the owner's toggle always reverted to OFF.
+    loginEnabled: { type: Boolean, default: false },
     rejectionReason: String,
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     approvedAt: Date,
     leaseExpiredAt: Date,
     // Owner-authored notes on the tenancy (visible to owner + admin).
     notes: [
+      new mongoose.Schema(
+        { text: String, at: { type: Date, default: Date.now }, by: String },
+        { _id: false },
+      ),
+    ],
+    // Two-way owner<->tenant message thread (see [id]/notes/route.js). Was
+    // never declared here, so `request.noteThread = [...]` + save() silently
+    // dropped every posted message under Mongoose's default strict mode.
+    noteThread: [
       new mongoose.Schema(
         { text: String, at: { type: Date, default: Date.now }, by: String },
         { _id: false },

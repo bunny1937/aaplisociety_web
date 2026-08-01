@@ -424,6 +424,9 @@ export default function BillTemplateDesigner() {
         societyData?.society?.config?.interestCalculationMethod || "SIMPLE",
       gracePeriodDays: societyData?.society?.config?.gracePeriodDays || 15,
       interestAmount: real?.interestAmount ?? 96.88,
+      // this month's NEW interest only — previousBalance already includes
+      // carried interest, so summing both would double-count it.
+      currentInterestOnly: real?.currentInterest ?? real?.interestAmount ?? 96.88,
       charges: real?.charges?.length ? real.charges : charges,
       subtotal: charges.reduce((s, c) => s + c.amount, 0),
       serviceTax: +(
@@ -437,7 +440,7 @@ export default function BillTemplateDesigner() {
         if (real?.totalAmount != null) return +Number(real.totalAmount).toFixed(2);
         return +(
           this.previousBalance +
-          this.interestAmount +
+          this.currentInterestOnly +
           this.currentBillTotal
         ).toFixed(2);
       },
@@ -558,7 +561,7 @@ export default function BillTemplateDesigner() {
             <div>
               <div style="font-size: 14px; color: ${template.totalColor}; margin-bottom: 5px;">TOTAL AMOUNT PAYABLE</div>
               <div style="font-size: 12px; color: #6b7280;">
-                (Previous: ₹${(sampleData.previousBalance + sampleData.interestAmount).toLocaleString("en-IN")} + Current: ₹${sampleData.currentBillTotal.toLocaleString("en-IN")})
+                (Previous: ₹${(sampleData.previousBalance + sampleData.currentInterestOnly).toLocaleString("en-IN")} + Current: ₹${sampleData.currentBillTotal.toLocaleString("en-IN")})
               </div>
             </div>
             <div style="font-size: ${template.totalSize}px; font-weight: 700; color: ${template.totalColor};">

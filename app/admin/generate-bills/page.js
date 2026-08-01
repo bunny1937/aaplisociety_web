@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { postNdjson } from "@/lib/ndjson-client";
 import styles from "@/styles/GenerateBills.module.css";
 import ExcelPreviewGrid from "../../components/ExcelPreviewGrid";
 import DropZone from "components/DropZone";
@@ -478,6 +479,7 @@ export default function GenerateBillsPage() {
   const [payPreview, setPayPreview] = useState(null);
   const [payBatchKey, setPayBatchKey] = useState(null);
   const [payConfirming, setPayConfirming] = useState(false);
+  const [payConfirmProgress, setPayConfirmProgress] = useState({ current: 0, total: 0 });
   const [payResults, setPayResults] = useState(null);
   const [autoGenState, setAutoGenState] = useState(null); // null | { status: "running"|"done"|"error", label, count, error }
   // Safe default after payment upload: generate only for successfully paid members.
@@ -840,7 +842,9 @@ if (!latestPeriodId) {
       if (nextPushMode === "schedule" && !nextPushDate) {
         throw new Error("Choose the date on which members should receive the generated bill");
       }
-      const result = await apiClient.post("/api/bills/generate-final", payload);
+      const result = await postNdjson("/api/bills/generate-final", payload, (p) =>
+        setAutoGenState((s) => (s ? { ...s, progress: { current: p.done, total: p.total } } : s)),
+      );
       const count = result.billsGenerated ?? result.count ?? 0;
       // Advance UI to next month
       setBillMonth(nextMonth);
@@ -898,19 +902,20 @@ if (!latestPeriodId) {
           recentTransactions: b.recentTransactions,
         })),
       };
+      const onProgress = (p) => setGenProgress({ current: p.done, total: p.total });
       let result;
       try {
-        result = await apiClient.post("/api/bills/generate-final", payload);
+        result = await postNdjson("/api/bills/generate-final", payload, onProgress);
       } catch (err) {
-        if (err.status === 409 || err.message?.includes("already exist")) {
+        if (err.message?.includes("already exist")) {
           const confirmed = window.confirm(
             `Bills for ${periodLabel} already exist.\n\nDo you want to DELETE the existing bills and regenerate?\n\nThis cannot be undone. Payments already recorded against these bills will NOT be deleted.`,
           );
           if (!confirmed) throw new Error("Generation cancelled");
-          result = await apiClient.post("/api/bills/generate-final", {
+          result = await postNdjson("/api/bills/generate-final", {
             ...payload,
             forceRegenerate: true,
-          });
+          }, onProgress);
         } else {
           throw err;
         }
@@ -2379,17 +2384,13 @@ ${
                       )
                         return;
                       setPayConfirming(true);
+                      setPayConfirmProgress({ current: 0, total: payPreview.validRows || 0 });
                       try {
-                        const res = await fetch(
+                        const data = await postNdjson(
                           "/api/billing/upload-payments?action=confirm",
-                          {
-                            method: "POST",
-                            credentials: "include",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ batchKey: payBatchKey }),
-                          },
+                          { batchKey: payBatchKey },
+                          (p) => setPayConfirmProgress({ current: p.done, total: p.total }),
                         );
-                        const data = await res.json();
                         if (!data.success)
                           throw new Error(data.error || "Confirm failed");
                         setPayResults(data);
@@ -2405,7 +2406,9 @@ ${
                     }}
                   >
                     {payConfirming
-                      ? "Processing..."
+                      ? payConfirmProgress.total
+                        ? `Processing... ${payConfirmProgress.current}/${payConfirmProgress.total}`
+                        : "Processing..."
                       : "Confirm & Record Payments"}
                   </button>
                   <button
@@ -2419,6 +2422,18 @@ ${
                     Cancel
                   </button>
                 </div>
+                {payConfirming && payConfirmProgress.total > 0 && (
+                  <div style={{ width: 220, height: 6, background: "#e5e7eb", borderRadius: 3, overflow: "hidden", marginTop: "0.75rem" }}>
+                    <div
+                      style={{
+                        height: "100%",
+                        background: "#16a34a",
+                        width: `${(payConfirmProgress.current / payConfirmProgress.total) * 100}%`,
+                        transition: "width 0.2s",
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             )}
             {/* Payment results */}
@@ -2502,9 +2517,23 @@ ${
                     }}
                   >
                     {autoGenState?.status === "running"
-                      ? "Generating..."
+                      ? autoGenState.progress?.total
+                        ? `Generating... ${autoGenState.progress.current}/${autoGenState.progress.total}`
+                        : "Generating..."
                       : `Auto-Generate ${new Date(billYear, billMonth + 1, 1).toLocaleString("en-IN", { month: "short", year: "numeric" })} Bills`}
                   </button>
+                  {autoGenState?.status === "running" && autoGenState.progress?.total > 0 && (
+                    <div style={{ width: 160, height: 6, background: "#e5e7eb", borderRadius: 3, overflow: "hidden" }}>
+                      <div
+                        style={{
+                          height: "100%",
+                          background: "#2563eb",
+                          width: `${(autoGenState.progress.current / autoGenState.progress.total) * 100}%`,
+                          transition: "width 0.2s",
+                        }}
+                      />
+                    </div>
+                  )}
                   {autoGenState?.status === "done" && (
                     <span style={{ color: "#16a34a", fontWeight: 600, fontSize: 14 }}>
                       ✅ {autoGenState.count} bills generated for {autoGenState.label}

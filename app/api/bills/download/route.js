@@ -150,10 +150,14 @@ export async function GET(request) {
     );
     const previousBalance = Number(bill.previousBalance || 0);
     const interestAmount = Number(bill.interestAmount || 0);
+    // previousBalance already includes carried interest (openingInterest);
+    // only add this month's NEW interest, not the full interestAmount
+    // (which also includes that same carried interest) — see bill-pdf-fields.js.
+    const currentInterestOnly = Number(bill.currentInterest ?? interestAmount);
     const totalPayable = +(
       currentBillTotal +
       previousBalance +
-      interestAmount
+      currentInterestOnly
     ).toFixed(2);
     // ─── Fetch previous bill HTML for ALL cases (page 3 prev receipt) ───
     const prevBill = await Bill.findOne({

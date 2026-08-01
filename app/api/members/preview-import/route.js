@@ -75,9 +75,15 @@ async function validateExcelData(workbook, societyId, isEnhanced) {
     return { issues: [{ type: 'CRITICAL', message: 'Basic Info sheet not found' }], validCount };
   }
   // Get existing members for duplicate check
-  const existingMembers = await Member.find({ societyId }).select('flatNo wing emailPrimary contactNumber');
+  const existingMembers = await Member.find({ societyId }).select('flatNo wing emailPrimary contactNumber ownerName');
   const existingFlats = new Set(existingMembers.map(m => `${m.wing || ''}-${m.flatNo}`));
   const existingEmails = new Set(existingMembers.map(m => m.emailPrimary));
+  // Same email is legitimate when it's the same person owning/renting a
+  // second flat in the society — only a real conflict when a different
+  // owner name reuses the email (copy-paste mistake).
+  const existingEmailOwner = new Map(
+    existingMembers.map(m => [m.emailPrimary, String(m.ownerName || '').trim().toLowerCase()]),
+  );
   const existingPhones = new Set(existingMembers.map(m => m.contactNumber));
   // Parse headers
   const headerRow = basicSheet.getRow(1);
@@ -87,7 +93,7 @@ async function validateExcelData(workbook, societyId, isEnhanced) {
   });
   // Track duplicates within file
   const fileFlats = new Set();
-  const fileEmails = new Set();
+  const fileEmails = new Map(); // email -> normalized ownerName it was first seen with
   const filePhones = new Set();
   // Validate each row
   basicSheet.eachRow((row, rowNumber) => {
@@ -142,8 +148,9 @@ async function validateExcelData(workbook, societyId, isEnhanced) {
       cellIssues['flatNo'] = { type: 'DUPLICATE_DB', message: `Flat ${flatKey} already exists in database` };
       validCount.duplicates++;
     }
-    if (existingEmails.has(emailPrimary)) {
-      cellIssues['emailPrimary'] = { type: 'DUPLICATE_DB', message: 'Email already exists in database' };
+    const ownerNameNorm = ownerName.toLowerCase();
+    if (existingEmails.has(emailPrimary) && existingEmailOwner.get(emailPrimary) !== ownerNameNorm) {
+      cellIssues['emailPrimary'] = { type: 'DUPLICATE_DB', message: 'Email already exists in database for a different owner' };
       validCount.duplicates++;
     }
     if (existingPhones.has(contactNumber)) {
@@ -157,11 +164,12 @@ async function validateExcelData(workbook, societyId, isEnhanced) {
     } else {
       fileFlats.add(flatKey);
     }
-    if (fileEmails.has(emailPrimary)) {
-      cellIssues['emailPrimary'] = { type: 'DUPLICATE_FILE', message: `Duplicate email in file` };
+    const priorFileOwner = fileEmails.get(emailPrimary);
+    if (priorFileOwner !== undefined && priorFileOwner !== ownerNameNorm) {
+      cellIssues['emailPrimary'] = { type: 'DUPLICATE_FILE', message: `Duplicate email in file for a different owner` };
       validCount.duplicates++;
     } else {
-      fileEmails.add(emailPrimary);
+      fileEmails.set(emailPrimary, ownerNameNorm);
     }
     if (filePhones.has(contactNumber)) {
       cellIssues['contactNumber'] = { type: 'DUPLICATE_FILE', message: `Duplicate phone in file` };

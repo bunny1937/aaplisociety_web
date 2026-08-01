@@ -165,7 +165,7 @@ function parseMemberRows(
   const members = [];
   const errors = [];
   const seenFlats = new Set();
-  const seenEmails = new Set();
+  const seenEmails = new Map(); // email -> normalized ownerName it was first seen with
   for (let i = 0; i < basicInfoRows.length; i++) {
     const row = basicInfoRows[i];
     // The template separates real data from the trailing instructions/notes
@@ -209,10 +209,20 @@ function parseMemberRows(
       seenFlats.add(flatKey);
     }
     if (emailRaw) {
-      if (seenEmails.has(emailRaw)) {
-        rowErrors.push(`Duplicate email "${emailRaw}" in member sheet`);
+      // One person can legitimately own/rent multiple flats in the same
+      // society and reuse the same email across those rows — only flag it
+      // as a mistake when the SAME email shows up under a DIFFERENT owner
+      // name (the actual signal of a copy-paste error), not on every reuse.
+      const ownerNameNorm = String(row["ownerName*"] || row["ownerName"] || "")
+        .trim()
+        .toLowerCase();
+      const priorOwnerName = seenEmails.get(emailRaw);
+      if (priorOwnerName !== undefined && priorOwnerName !== ownerNameNorm) {
+        rowErrors.push(
+          `Duplicate email "${emailRaw}" in member sheet (used by a different owner name)`,
+        );
       } else {
-        seenEmails.add(emailRaw);
+        seenEmails.set(emailRaw, ownerNameNorm);
       }
     }
     if (rowErrors.length) {

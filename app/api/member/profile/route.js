@@ -23,7 +23,16 @@ export async function GET(request) {
     ]);
     if (!member)
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
-    return NextResponse.json({ success: true, member, society });
+    // Member is the flat's shared record (owner-level fields at the top
+    // level; the tenant's own info lives in member.currentTenant). The page
+    // needs to know which side is looking so it can show the caller their
+    // OWN identity instead of always defaulting to the owner's.
+    return NextResponse.json({
+      success: true,
+      member,
+      society,
+      viewerOccupancyType: decoded.occupancyType || "Owner",
+    });
   } catch (error) {
     return NextResponse.json(
       { error: "Server error", details: error.message },

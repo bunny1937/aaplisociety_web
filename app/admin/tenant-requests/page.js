@@ -179,8 +179,8 @@ export default function ManageTenantsPage() {
                   <div>
                     <div style={S.tenant}>{live.name || "Tenant"}</div>
                     <div style={S.meta}>
-                      {live.phoneNumber || live.phone || DASH}
-                      {live.rentAmount ? ` / Rs ${live.rentAmount}/mo` : ""}
+                      {live.contactNumber || live.phoneNumber || live.phone || DASH}
+                      {live.rentPerMonth ? ` / Rs ${live.rentPerMonth}/mo` : ""}
                       <br />
                       Lease {d(live.leaseStartDate)} to {d(live.leaseEndDate)}
                     </div>
@@ -241,7 +241,7 @@ export default function ManageTenantsPage() {
                 <div style={S.section}>Current tenant</div>
                 <div style={S.dl}>
                   <div style={S.dt}>Name</div><div style={S.dd}>{detail.flat.currentTenant.name || DASH}</div>
-                  <div style={S.dt}>Phone</div><div style={S.dd}>{detail.flat.currentTenant.phoneNumber || detail.flat.currentTenant.phone || DASH}</div>
+                  <div style={S.dt}>Phone</div><div style={S.dd}>{detail.flat.currentTenant.contactNumber || detail.flat.currentTenant.phoneNumber || detail.flat.currentTenant.phone || DASH}</div>
                   <div style={S.dt}>Email</div><div style={S.dd}>{detail.flat.currentTenant.email || DASH}</div>
                   <div style={S.dt}>Rent</div><div style={S.dd}>{detail.flat.currentTenant.rentAmount ? `Rs ${detail.flat.currentTenant.rentAmount}/mo` : DASH}</div>
                   <div style={S.dt}>Deposit</div><div style={S.dd}>{detail.flat.currentTenant.depositAmount ? `Rs ${detail.flat.currentTenant.depositAmount}` : DASH}</div>

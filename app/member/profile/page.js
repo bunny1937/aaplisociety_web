@@ -35,6 +35,14 @@ export default function MemberProfilePage() {
     );
   const member = data?.member;
   const society = data?.society;
+  // A tenant viewing this page must see THEIR OWN identity/contact, not the
+  // flat owner's — member is the shared flat record, and the tenant's own
+  // details live in member.currentTenant.
+  const isTenantViewer = data?.viewerOccupancyType === "Tenant";
+  const tenantSelf = isTenantViewer ? member?.currentTenant : null;
+  const displayName = tenantSelf?.name || member?.ownerName;
+  const displayContact = tenantSelf?.contactNumber || member?.contactNumber;
+  const displayEmail = tenantSelf?.email || member?.emailPrimary;
   if (!member)
     return (
       <div style={{ padding: "2rem", color: "#6B7280" }}>
@@ -120,7 +128,7 @@ export default function MemberProfilePage() {
           <div
             style={{ fontSize: "24px", fontWeight: "700", marginBottom: "6px" }}
           >
-            {member.ownerName}
+            {displayName}
           </div>
           <div style={{ fontSize: "14px", opacity: 0.85 }}>
             {member.membershipNumber} • {member.membershipStatus}
@@ -181,8 +189,8 @@ export default function MemberProfilePage() {
       </Section>
       {/* Contact Info */}
       <Section title="Contact Information" icon="📞">
-        <InfoRow label="Primary Contact" value={member.contactNumber} />
-        <InfoRow label="Primary Email" value={member.emailPrimary} />
+        <InfoRow label="Primary Contact" value={displayContact} />
+        <InfoRow label="Primary Email" value={displayEmail} />
         {editing ? (
           <>
             <div

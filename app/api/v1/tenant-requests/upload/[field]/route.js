@@ -1,6 +1,5 @@
 import { withRoute, ApiError, json } from "@/lib/v1/http";
 import { getClaims, requireTenant } from "@/lib/v1/auth";
-import { OCCUPANCY_TYPES } from "@/lib/v1/constants";
 import { detectFileType } from "@/lib/v1/fileSignature";
 import { buildKey, uploadBuffer } from "@/lib/v1/storage";
 
@@ -10,9 +9,17 @@ export const dynamic = "force-dynamic";
 const FIELDS = { contract: "contract", signature: "signature", aadhaar: "aadhaar", policeVerification: "police-verification" };
 const MAX_BYTES = 10 * 1024 * 1024;
 
-// POST /v1/tenant-requests/upload/:field — owner uploads one tenant document
+// POST /v1/tenant-requests/upload/:field — uploads one tenant document
 // (multipart, field "file"). Returns the object key to embed in the request
 // body. Replaces Multer with req.formData().
+//
+// Used by two different flows that both need it: the owner submitting a new
+// tenant's onboarding documents (contract/aadhaar/police-verification), and
+// an already-approved tenant uploading their own documents from "My
+// Documents". This route only stages a file into storage and hands back its
+// key — it does not write onto any specific TenantRequest — so there is no
+// cross-tenant risk in letting either side call it. The tenant-only block
+// here previously locked tenants out of their own document uploads entirely.
 export const POST = withRoute(async (req, ctx) => {
   const { field } = await ctx.params;
   const folderPart = FIELDS[field];
@@ -20,8 +27,8 @@ export const POST = withRoute(async (req, ctx) => {
 
   const claims = getClaims(req);
   const societyId = requireTenant(claims);
-  if (!claims.memberId || claims.occupancyType === OCCUPANCY_TYPES.TENANT) {
-    throw new ApiError(403, "Only owners can upload tenant documents");
+  if (!claims.memberId) {
+    throw new ApiError(403, "Only residents can upload tenant documents");
   }
 
   const form = await req.formData();

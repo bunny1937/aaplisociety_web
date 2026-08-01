@@ -14,6 +14,15 @@ import crypto from "node:crypto";
 import cache from "@/lib/cache";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import { notifyPaymentReceived } from "@/lib/v1/notify";
+import { mapLimit } from "@/lib/concurrency";
+import { ndjsonResponse } from "@/lib/ndjson-stream";
+
+// Confirm was previously one sequential `for` loop over every payment row —
+// for 84 rows at several Mongo round trips each (member/bill lookups,
+// transaction + receipt writes, notification) that serialized to minutes.
+// Each row targets a different member/bill, so processing rows concurrently
+// is safe; only cap concurrency to protect the DB connection pool.
+const CONCURRENCY = 8;
 function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
 }
@@ -354,154 +363,146 @@ export async function POST(request) {
         importRecord = await PaymentImport.create(importPayload);
       }
 
-      const importResults = [];
-      let totalInterestCleared = 0;
-      let totalPrincipalCleared = 0;
-      let totalAdvanceCredit = 0;
-      let totalAmountProcessed = 0;
-      let successCount = 0;
-      let failCount = 0;
-      let skippedCount = 0;
+      async function processRow(row) {
+        const member = await Member.findById(row.memberId).lean();
+        if (!member) throw new Error("Member not found");
 
-      for (const row of validRows) {
-        try {
-          const member = await Member.findById(row.memberId).lean();
-          if (!member) throw new Error("Member not found");
+        // The single canonical bill for this member + period (Ledger V2).
+        // Root-cause fix: bulk-onboarded societies' current bills ARE tagged
+        // importedFrom:"BulkImport", so the old confirm query (which excluded
+        // those + isLocked) found nothing and threw "No live bill found",
+        // even though the preview showed the bill as payable. Match the same
+        // bill the preview did: the latest non-archived, non-deleted bill.
+        const bill = await Bill.findOne({
+          memberId: row.memberId,
+          societyId: dec.societyId,
+          billPeriodId: row.billPeriodId,
+          isHistoricalArchive: { $ne: true },
+          isDeleted: { $ne: true },
+        })
+          .sort({ updatedAt: -1 })
+          .select("_id balanceAmount status billPeriodId");
+        if (!bill) throw new Error(`No live bill found for ${row.billPeriodId}`);
 
-          // The single canonical bill for this member + period (Ledger V2).
-          // Root-cause fix: bulk-onboarded societies' current bills ARE tagged
-          // importedFrom:"BulkImport", so the old confirm query (which excluded
-          // those + isLocked) found nothing and threw "No live bill found",
-          // even though the preview showed the bill as payable. Match the same
-          // bill the preview did: the latest non-archived, non-deleted bill.
-          const bill = await Bill.findOne({
-            memberId: row.memberId,
-            societyId: dec.societyId,
-            billPeriodId: row.billPeriodId,
-            isHistoricalArchive: { $ne: true },
-            isDeleted: { $ne: true },
-          })
-            .sort({ updatedAt: -1 })
-            .select("_id balanceAmount status billPeriodId");
-          if (!bill) throw new Error(`No live bill found for ${row.billPeriodId}`);
+        const balanceBefore = twoDp(bill.balanceAmount);
 
-          const balanceBefore = twoDp(bill.balanceAmount);
+        // ALL allocation math + audit + advance credit happen inside the
+        // engine, atomically and idempotently (keyed on billId + importId).
+        const result = await applyPaymentToBill({
+          billId: bill._id,
+          payment: twoDp(row.amountPaid),
+          paymentImportId: importRecord._id,
+          performedBy: dec.userId,
+        });
 
-          // ALL allocation math + audit + advance credit happen inside the
-          // engine, atomically and idempotently (keyed on billId + importId).
-          const result = await applyPaymentToBill({
-            billId: bill._id,
-            payment: twoDp(row.amountPaid),
-            paymentImportId: importRecord._id,
-            performedBy: dec.userId,
-          });
-
-          if (result.skipped) {
-            skippedCount++;
-            importResults.push({
+        if (result.skipped) {
+          return {
+            kind: "skipped",
+            entry: {
               memberId: row.memberId,
               flat: row.flat,
               memberName: row.memberName,
               amountPaid: row.amountPaid,
               status: "Skipped",
               errorMessage: `Skipped (${result.skipped})`,
-            });
-            continue;
-          }
+            },
+          };
+        }
 
-          // The Excel confirmation is the finalization step: allocation just
-          // happened (status is now Paid/Partial), so clear any prior
-          // "Payment Done" acknowledgement marker on this bill.
-          await Bill.updateOne({ _id: bill._id }, { $set: { pendingPayment: null } });
-          const intClr = twoDp(result.interestPaid);
-          const prinClr = twoDp(result.principalPaid);
-          const advanceCredit = twoDp(result.advanceCredit);
+        // The Excel confirmation is the finalization step: allocation just
+        // happened (status is now Paid/Partial), so clear any prior
+        // "Payment Done" acknowledgement marker on this bill.
+        await Bill.updateOne({ _id: bill._id }, { $set: { pendingPayment: null } });
+        const intClr = twoDp(result.interestPaid);
+        const prinClr = twoDp(result.principalPaid);
+        const advanceCredit = twoDp(result.advanceCredit);
 
-          // Ledger transaction — created ONLY when a payment was actually
-          // applied, so duplicates/retries never create duplicate transactions.
-          const lastTxn = await Transaction.findOne({
-            memberId: row.memberId,
-            societyId: dec.societyId,
-            isReversed: false,
-          })
-            .sort({ date: -1, createdAt: -1 })
-            .lean();
-          const prevBal = twoDp(
-            lastTxn?.balanceAfterTransaction ?? member.openingBalance ?? 0,
+        // Ledger transaction — created ONLY when a payment was actually
+        // applied, so duplicates/retries never create duplicate transactions.
+        const lastTxn = await Transaction.findOne({
+          memberId: row.memberId,
+          societyId: dec.societyId,
+          isReversed: false,
+        })
+          .sort({ date: -1, createdAt: -1 })
+          .lean();
+        const prevBal = twoDp(
+          lastTxn?.balanceAfterTransaction ?? member.openingBalance ?? 0,
+        );
+        const newBal = twoDp(prevBal - row.amountPaid);
+        const txnId = Transaction.generateTransactionId();
+        const paymentTxn = await Transaction.create({
+          transactionId: txnId,
+          date: new Date(row.paymentDate),
+          memberId: row.memberId,
+          societyId: dec.societyId,
+          type: "Credit",
+          category: "Payment",
+          description: `Payment via Excel for ${row.billPeriodId}${row.remarks ? ` - ${row.remarks}` : ""}`,
+          amount: row.amountPaid,
+          interestCleared: intClr,
+          principalCleared: prinClr,
+          balanceAfterTransaction: newBal,
+          paymentMode: row.paymentMethod || "Cash",
+          chequeNo: row.chequeNo,
+          bankName: row.bankName,
+          upiId: row.upiId,
+          notes: row.remarks,
+          createdBy: dec.userId,
+          billPeriodId: row.billPeriodId,
+          financialYear: getFinancialYear(new Date(row.paymentDate)),
+          paymentImportId: importRecord._id,
+          paymentBreakdown: { interestCleared: intClr, principalCleared: prinClr, advanceCredit },
+        });
+
+        // Receipt for the bill touched.
+        const amountApplied = twoDp(intClr + prinClr);
+        const receiptNos = [];
+        if (amountApplied > 0) {
+          const nameParts = (member.ownerName || "member").trim().split(/\s+/);
+          const nameSlug =
+            nameParts.length > 1
+              ? `${nameParts[0]}_${nameParts[nameParts.length - 1]}`
+              : nameParts[0];
+          const flatSlug = `${member.wing || ""}-${member.flatNo || ""}`;
+          const filename = `${nameSlug}_${flatSlug}_${bill.billPeriodId}_receipt`.replace(
+            /[^a-zA-Z0-9_\-]/g,
+            "_",
           );
-          const newBal = twoDp(prevBal - row.amountPaid);
-          const txnId = Transaction.generateTransactionId();
-          const paymentTxn = await Transaction.create({
-            transactionId: txnId,
-            date: new Date(row.paymentDate),
+          const receiptNo = `RCP-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+          await Receipt.create({
+            receiptNo,
+            filename,
+            billId: bill._id,
+            billPeriodId: bill.billPeriodId,
             memberId: row.memberId,
             societyId: dec.societyId,
-            type: "Credit",
-            category: "Payment",
-            description: `Payment via Excel for ${row.billPeriodId}${row.remarks ? ` - ${row.remarks}` : ""}`,
-            amount: row.amountPaid,
-            interestCleared: intClr,
-            principalCleared: prinClr,
-            balanceAfterTransaction: newBal,
+            amount: twoDp(row.amountPaid),
+            amountReceived: twoDp(row.amountPaid),
+            amountApplied,
+            interestApplied: intClr,
+            principalApplied: prinClr,
+            advanceCreditCreated: advanceCredit,
+            remainingBalance: twoDp(result.balanceAmount),
+            settlementStatus: result.balanceAmount > 0 ? "Partial" : "Paid",
+            previousBalanceSnapshot: balanceBefore,
             paymentMode: row.paymentMethod || "Cash",
-            chequeNo: row.chequeNo,
-            bankName: row.bankName,
-            upiId: row.upiId,
+            paidAt: new Date(row.paymentDate),
+            transactionId: txnId,
             notes: row.remarks,
-            createdBy: dec.userId,
-            billPeriodId: row.billPeriodId,
-            financialYear: getFinancialYear(new Date(row.paymentDate)),
-            paymentImportId: importRecord._id,
-            paymentBreakdown: { interestCleared: intClr, principalCleared: prinClr, advanceCredit },
+            status: "Generated",
           });
+          receiptNos.push(receiptNo);
+        }
+        await notifyPaymentReceived({ transactionId: paymentTxn._id, societyId: dec.societyId, memberId: row.memberId, amount: twoDp(row.amountPaid), appliedAmount: amountApplied, advanceCredit, remainingBalance: twoDp(result.balanceAmount), period: row.billPeriodId });
 
-          // Receipt for the bill touched.
-          const amountApplied = twoDp(intClr + prinClr);
-          const receiptNos = [];
-          if (amountApplied > 0) {
-            const nameParts = (member.ownerName || "member").trim().split(/\s+/);
-            const nameSlug =
-              nameParts.length > 1
-                ? `${nameParts[0]}_${nameParts[nameParts.length - 1]}`
-                : nameParts[0];
-            const flatSlug = `${member.wing || ""}-${member.flatNo || ""}`;
-            const filename = `${nameSlug}_${flatSlug}_${bill.billPeriodId}_receipt`.replace(
-              /[^a-zA-Z0-9_\-]/g,
-              "_",
-            );
-            const receiptNo = `RCP-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-            await Receipt.create({
-              receiptNo,
-              filename,
-              billId: bill._id,
-              billPeriodId: bill.billPeriodId,
-              memberId: row.memberId,
-              societyId: dec.societyId,
-              amount: twoDp(row.amountPaid),
-              amountReceived: twoDp(row.amountPaid),
-              amountApplied,
-              interestApplied: intClr,
-              principalApplied: prinClr,
-              advanceCreditCreated: advanceCredit,
-              remainingBalance: twoDp(result.balanceAmount),
-              settlementStatus: result.balanceAmount > 0 ? "Partial" : "Paid",
-              previousBalanceSnapshot: balanceBefore,
-              paymentMode: row.paymentMethod || "Cash",
-              paidAt: new Date(row.paymentDate),
-              transactionId: txnId,
-              notes: row.remarks,
-              status: "Generated",
-            });
-            receiptNos.push(receiptNo);
-          }
-          await notifyPaymentReceived({ transactionId: paymentTxn._id, societyId: dec.societyId, memberId: row.memberId, amount: twoDp(row.amountPaid), appliedAmount: amountApplied, advanceCredit, remainingBalance: twoDp(result.balanceAmount), period: row.billPeriodId });
-
-          totalInterestCleared += intClr;
-          totalPrincipalCleared += prinClr;
-          totalAdvanceCredit += advanceCredit;
-          totalAmountProcessed += row.amountPaid;
-          successCount++;
-          importResults.push({
+        return {
+          kind: "success",
+          intClr,
+          prinClr,
+          advanceCredit,
+          amountPaid: row.amountPaid,
+          entry: {
             memberId: row.memberId,
             flat: row.flat,
             memberName: row.memberName,
@@ -512,72 +513,101 @@ export async function POST(request) {
             billId: bill._id,
             receiptNos,
             status: "Success",
-          });
-        } catch (err) {
-          failCount++;
-          importResults.push({
-            memberId: row.memberId,
-            flat: row.flat,
-            memberName: row.memberName,
-            amountPaid: row.amountPaid,
-            status: "Failed",
-            errorMessage: err.message,
-          });
-        }
+          },
+        };
       }
 
-      await PaymentImport.updateOne(
-        { _id: importRecord._id },
-        {
-          $set: {
-            successRows: successCount,
-            failedRows: failCount,
-            skippedRows: skippedCount,
-            totalAmountUploaded: twoDp(totalAmountProcessed),
-            totalInterestCleared: twoDp(totalInterestCleared),
-            totalPrincipalCleared: twoDp(totalPrincipalCleared),
-            totalAdvanceCredit: twoDp(totalAdvanceCredit),
-            rows: importResults.map((r) => ({
-              memberId: r.memberId,
-              flatNo: r.flat?.split("-")[1],
-              wing: r.flat?.split("-")[0],
-              ownerName: r.memberName,
-              amountPaid: r.amountPaid,
-              interestCleared: r.interestCleared || 0,
-              principalCleared: r.principalCleared || 0,
-              advanceCredit: r.advanceCredit || 0,
-              billId: r.billId,
-              status: r.status,
-              errorMessage: r.errorMessage,
-            })),
-            notes,
-            status: "Completed",
+      return ndjsonResponse(async (emit) => {
+        const importResults = [];
+        let totalInterestCleared = 0;
+        let totalPrincipalCleared = 0;
+        let totalAdvanceCredit = 0;
+        let totalAmountProcessed = 0;
+        let successCount = 0;
+        let failCount = 0;
+        let skippedCount = 0;
+
+        await mapLimit(validRows, CONCURRENCY, processRow, (settled, row, done, total) => {
+          if (settled.status === "fulfilled") {
+            const r = settled.value;
+            importResults.push(r.entry);
+            if (r.kind === "skipped") {
+              skippedCount++;
+            } else {
+              totalInterestCleared += r.intClr;
+              totalPrincipalCleared += r.prinClr;
+              totalAdvanceCredit += r.advanceCredit;
+              totalAmountProcessed += r.amountPaid;
+              successCount++;
+            }
+            emit({ type: "progress", done, total, flat: row.flat, memberName: row.memberName, ok: r.kind !== "failed", status: r.entry.status });
+          } else {
+            failCount++;
+            importResults.push({
+              memberId: row.memberId,
+              flat: row.flat,
+              memberName: row.memberName,
+              amountPaid: row.amountPaid,
+              status: "Failed",
+              errorMessage: settled.reason.message,
+            });
+            emit({ type: "progress", done, total, flat: row.flat, memberName: row.memberName, ok: false, error: settled.reason.message });
+          }
+        });
+
+        await PaymentImport.updateOne(
+          { _id: importRecord._id },
+          {
+            $set: {
+              successRows: successCount,
+              failedRows: failCount,
+              skippedRows: skippedCount,
+              totalAmountUploaded: twoDp(totalAmountProcessed),
+              totalInterestCleared: twoDp(totalInterestCleared),
+              totalPrincipalCleared: twoDp(totalPrincipalCleared),
+              totalAdvanceCredit: twoDp(totalAdvanceCredit),
+              rows: importResults.map((r) => ({
+                memberId: r.memberId,
+                flatNo: r.flat?.split("-")[1],
+                wing: r.flat?.split("-")[0],
+                ownerName: r.memberName,
+                amountPaid: r.amountPaid,
+                interestCleared: r.interestCleared || 0,
+                principalCleared: r.principalCleared || 0,
+                advanceCredit: r.advanceCredit || 0,
+                billId: r.billId,
+                status: r.status,
+                errorMessage: r.errorMessage,
+              })),
+              notes,
+              status: "Completed",
+            },
           },
-        },
-      );
+        );
 
-      // NOTE (behaviour change): the previous silent `Bill.updateMany(...)` that
-      // zeroed historical BulkImport bills has been REMOVED (§17(2) forbids
-      // silent recompute-overwrites). History corrections now go exclusively
-      // through the audited /superadmin/fix-history-bills workflow.
+        // NOTE (behaviour change): the previous silent `Bill.updateMany(...)` that
+        // zeroed historical BulkImport bills has been REMOVED (§17(2) forbids
+        // silent recompute-overwrites). History corrections now go exclusively
+        // through the audited /superadmin/fix-history-bills workflow.
 
-      await cache.delPattern(`billing:list:${dec.societyId}:*`);
-      await cache.del(`payments:outstanding:${dec.societyId}`);
+        await cache.delPattern(`billing:list:${dec.societyId}:*`);
+        await cache.del(`payments:outstanding:${dec.societyId}`);
 
-      delete staged[batchKey];
-      return NextResponse.json({
-        success: true,
-        importId: importRecord._id,
-        billPeriodId: periodId,
-        totalRows: validRows.length,
-        successRows: successCount,
-        failedRows: failCount,
-        skippedRows: skippedCount,
-        totalAmountProcessed: twoDp(totalAmountProcessed),
-        totalInterestCleared: twoDp(totalInterestCleared),
-        totalPrincipalCleared: twoDp(totalPrincipalCleared),
-        totalAdvanceCredit: twoDp(totalAdvanceCredit),
-        results: importResults,
+        delete staged[batchKey];
+        return {
+          success: true,
+          importId: importRecord._id,
+          billPeriodId: periodId,
+          totalRows: validRows.length,
+          successRows: successCount,
+          failedRows: failCount,
+          skippedRows: skippedCount,
+          totalAmountProcessed: twoDp(totalAmountProcessed),
+          totalInterestCleared: twoDp(totalInterestCleared),
+          totalPrincipalCleared: twoDp(totalPrincipalCleared),
+          totalAdvanceCredit: twoDp(totalAdvanceCredit),
+          results: importResults,
+        };
       });
     }
     return NextResponse.json(

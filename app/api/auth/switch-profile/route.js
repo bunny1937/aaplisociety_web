@@ -64,6 +64,7 @@ export async function POST(request) {
       memberId: profile.memberId,
       societyId: profile.societyId,
       role: profile.role,
+      occupancyType: profile.occupancyType,
     });
     const response = NextResponse.json({
       success: true,
