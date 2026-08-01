@@ -7,6 +7,7 @@ import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import { normalizeBill, newReceiptNo, newTransactionId } from "@/lib/v1/billUtils";
 import { periodLabelFrom } from "@/lib/v1/periodLabel";
 import { notifyPaymentReceived } from "@/lib/v1/notify";
+import { postPaymentToLedger } from "@/lib/accounting/paymentLedgerPosting";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,6 +111,20 @@ export const POST = withRoute(async (req, ctx) => {
 
   if (advanceCredit > 0) {
     await Member.updateOne({ _id: bill.memberId }, { $inc: { advanceCredit } });
+  }
+
+  // Phase 2.6 producer-wiring (docs/accounting-system-ARD.md §8 build note):
+  // no caller-owned session here either (Payment/Transaction/Receipt above
+  // are already written outside a shared transaction) — same smaller
+  // atomicity window as billing-simulator/pay-real, not a regression.
+  try {
+    await postPaymentToLedger(societyId, {
+      transaction,
+      paymentMode,
+      actorUserId: claims.userId,
+    });
+  } catch (err) {
+    throw new ApiError(err.status || 500, err.message);
   }
 
   await notifyPaymentReceived({ transactionId: transaction._id, societyId, memberId: bill.memberId, amount });

@@ -2,7 +2,151 @@
  * excelValidator.js — pure validation for bill and payment Excel templates.
  * No DB calls. All DB lookups happen in the route; pass pre-fetched sets here.
  */
+import { calculateMemberCharges } from "../lib/calculate-member-bill.js";
 const PAYMENT_METHODS = new Set(["Cash", "Cheque", "Online", "NEFT", "UPI"]);
+/**
+ * classifyBillUploadRows — pure per-row classification for the unified
+ * bill-generation template. A single upload may legitimately mix a flat that
+ * needs a new bill (mode GENERATE) with a flat that's already billed for its
+ * own row-period (mode PAYMENT — routed to the separate payment-recording
+ * flow instead of erroring out the whole file). No DB calls — everything
+ * needed (members, heads, already-billed set) is pre-fetched by the caller.
+ *
+ * @param {object[]} dataRows        — parsed Excel data rows (post instruction-row filter)
+ * @param {object}   opts
+ * @param {Map}      opts.wingFlatMap     — Map<"wing-flatno", member>
+ * @param {object}   opts.memberMap       — { [memberId]: member }
+ * @param {object[]} opts.heads           — active BillingHeads (sorted)
+ * @param {Set}      opts.alreadyBilledSet — Set of "memberId|billPeriodId"
+ * @param {string}   opts.defaultPeriodId  — fallback period (e.g. "2026-08") for rows with blank Period
+ *
+ * @returns {{ issues, validBills, alreadyBilledRows, comparison }}
+ */
+export function classifyBillUploadRows(dataRows, { wingFlatMap, memberMap, heads, alreadyBilledSet, defaultPeriodId }) {
+  const issues = [];
+  const validBills = [];
+  const alreadyBilledRows = [];
+  const seenRowKeys = new Set(); // "memberId|period" — dup check is per row-period, not per file
+  const autoPreviewMap = {};
+  for (const memberId of Object.keys(memberMap)) {
+    const { subtotal } = calculateMemberCharges(memberMap[memberId], heads);
+    autoPreviewMap[memberId] = subtotal;
+  }
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    const rowNum = i + 2;
+    const wingFlatRaw = String(row["Wing-FlatNo"] || "").trim();
+    let wing, flatNo;
+    if (wingFlatRaw) {
+      const dashIdx = wingFlatRaw.indexOf("-");
+      wing = dashIdx > 0 ? wingFlatRaw.slice(0, dashIdx).trim() : wingFlatRaw;
+      flatNo = dashIdx > 0 ? wingFlatRaw.slice(dashIdx + 1).trim() : "";
+    } else {
+      wing = String(row.Wing || "").trim();
+      flatNo = String(row.FlatNo || "").trim();
+    }
+    const flatKey = `${wing.toLowerCase()}-${flatNo.toLowerCase()}`;
+    const member = wingFlatMap[flatKey];
+    const memberId = member?._id ? String(member._id) : undefined;
+    const periodRaw = String(row.Period || "").trim();
+    const rowPeriodId = /^\d{4}-(0[1-9]|1[0-2])$/.test(periodRaw) ? periodRaw : defaultPeriodId;
+    const [rowYearStr, rowMonthStr] = rowPeriodId.split("-");
+    const rowMonth = parseInt(rowMonthStr);
+    const rowYear = parseInt(rowYearStr);
+    const excelTotal = parseFloat(row.CurrentCharges ?? row.Total) || 0;
+    if (wing.startsWith("⚠") || wingFlatRaw.startsWith("⚠") || (!wing && !flatNo)) continue;
+    if (!member) {
+      issues.push({
+        row: rowNum,
+        type: "error",
+        message: `Flat "${wing}-${flatNo}" not found in system`,
+        fix: "Use the Download Template option — do not change Wing or FlatNo.",
+      });
+      continue;
+    }
+    if (periodRaw && !/^\d{4}-(0[1-9]|1[0-2])$/.test(periodRaw)) {
+      issues.push({
+        row: rowNum,
+        type: "error",
+        message: `Invalid Period "${periodRaw}" for ${wing}-${flatNo} — expected YYYY-MM`,
+        fix: `Set Period to a valid year-month, e.g. ${defaultPeriodId}.`,
+      });
+      continue;
+    }
+    const rowKey = `${memberId}|${rowPeriodId}`;
+    if (seenRowKeys.has(rowKey)) {
+      issues.push({
+        row: rowNum,
+        type: "duplicate",
+        message: `Duplicate entry for ${wing}-${flatNo} (${rowPeriodId})`,
+        fix: "Remove the duplicate row.",
+      });
+      continue;
+    }
+    seenRowKeys.add(rowKey);
+    if (alreadyBilledSet.has(rowKey)) {
+      alreadyBilledRows.push({
+        row: rowNum,
+        memberId,
+        flat: `${wing}-${flatNo}`,
+        name: member.ownerName,
+        billPeriodId: rowPeriodId,
+      });
+      continue;
+    }
+    if (excelTotal < 0) {
+      issues.push({
+        row: rowNum,
+        type: "warning",
+        message: `Total is negative (${excelTotal}) for ${wing}-${flatNo}`,
+        fix: "Check if charge amounts are correct. Negative total is unusual.",
+      });
+    }
+    if (excelTotal === 0) {
+      issues.push({
+        row: rowNum,
+        type: "warning",
+        message: `Total is ₹0 for ${wing}-${flatNo}`,
+        fix: "Verify if this member truly has zero charges this month, or check charge columns.",
+      });
+    }
+    const charges = {};
+    for (const h of heads) {
+      if (row[h.headName] !== "" && row[h.headName] !== undefined) {
+        charges[h.headName] = parseFloat(row[h.headName]) || 0;
+      }
+    }
+    const excelCurrentInterest = parseFloat(row["CurrentInterest"]) || 0;
+    const excelOpeningPrincipal = parseFloat(row["OpeningPrincipal"]) || 0;
+    const excelOpeningInterest = parseFloat(row["OpeningInterest"]) || 0;
+    validBills.push({
+      memberId,
+      billPeriodId: rowPeriodId,
+      billMonth: rowMonth - 1, // 0-indexed, matches generate-from-excel contract
+      billYear: rowYear,
+      charges,
+      subtotal: excelTotal,
+      grandTotal: excelTotal,
+      interestAmount: excelCurrentInterest,
+      previousBalance: excelOpeningPrincipal + excelOpeningInterest,
+      unpaidBills: [],
+      recentTransactions: [],
+    });
+  }
+  const comparison = validBills.map((b) => {
+    const m = memberMap[b.memberId];
+    const autoTotal = autoPreviewMap[b.memberId] || 0;
+    return {
+      memberId: b.memberId,
+      flat: `${m.wing}-${m.flatNo}`,
+      name: m.ownerName,
+      excelTotal: b.subtotal,
+      autoTotal,
+      hasDiff: Math.abs(b.subtotal - autoTotal) > 0.5,
+    };
+  });
+  return { issues, validBills, alreadyBilledRows, comparison };
+}
 /**
  * validateBillRows — validate bill generation template rows.
  *
@@ -54,10 +198,13 @@ export function validateBillRows(rows, { wingFlatMap, billPeriodId, expectedColu
       seenFlats.set(flatKey, rowNum);
       okCell("Wing-FlatNo", wingFlatRaw || `${wing}-${flatNo}`);
     }
-    // Period
+    // Period — each row carries its own period (mixed periods in one file are
+    // valid: e.g. one flat catching up on last month while another starts a
+    // new month). Only the format is validated here; existence/duplicate
+    // checks against DB state happen in the route.
     const period = String(raw["Period"] || "").trim();
-    if (billPeriodId && period && period !== billPeriodId) {
-      markCell("Period", period, "error", `Period must be ${billPeriodId}`);
+    if (period && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      markCell("Period", period, "error", `Invalid Period format "${period}" — expected YYYY-MM`);
     } else {
       okCell("Period", period || billPeriodId);
     }

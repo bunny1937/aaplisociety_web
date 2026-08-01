@@ -6,6 +6,7 @@ import Transaction from "@/models/Transaction";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { getFinancialYear } from "@/lib/date-utils";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import { postPaymentToLedger } from "@/lib/accounting/paymentLedgerPosting";
 
 function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
@@ -84,6 +85,21 @@ export async function POST(request) {
       },
     });
 
+    // Phase 2.6 producer-wiring (docs/accounting-system-ARD.md §8 build note):
+    // this route has no caller-owned session (applyPaymentToBill owns and
+    // closes its own transaction internally), so the ledger post runs in the
+    // engine's own separate transaction right after the Transaction commits —
+    // a smaller atomicity window than PaymentService's fully joined-session
+    // version, but not worse than this route's pre-existing lack of
+    // end-to-end session wrapping across Bill + Transaction.
+    await postPaymentToLedger(decoded.societyId, {
+      transaction: txn,
+      paymentMode: paymentMethod,
+      paymentDate,
+      notes: remarks,
+      actorUserId: decoded.userId,
+    });
+
     return NextResponse.json({
       success: true,
       transactionId: txn.transactionId,
@@ -97,6 +113,7 @@ export async function POST(request) {
     });
   } catch (err) {
     console.error("pay-real error:", err);
+    if (err.status) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
     return NextResponse.json({ error: "Internal server error", details: err.message }, { status: 500 });
   }
 }

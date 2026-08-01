@@ -2165,12 +2165,17 @@ ${
                     </div>
                   </div>
                 )}
-                {/* Action buttons */}
+                {/* Action buttons — Generate and Record-Payments are two
+                    independent actions. A single upload can mix flats that
+                    need a new bill with flats that are already billed and
+                    just need a payment recorded; each row is routed by the
+                    validator (excelValidation.bills = generate rows only,
+                    excelValidation.alreadyBilledRows = payment-only rows). */}
                 {(() => {
-                  const isPaymentOnly =
-                    excelValidation.uploadMode === "PAYMENT_ONLY";
                   const hasPayments = excelValidation.hasPaymentData;
                   const hasErrors = (excelValidation.errorCount || 0) > 0;
+                  const alreadyBilledRows = excelValidation.alreadyBilledRows || [];
+                  const hasGenerateRows = (excelValidation.bills || []).length > 0;
                   const doGenerateBills = async () => {
                     setExcelImporting(true);
                     try {
@@ -2238,98 +2243,75 @@ ${
                       >
                         Re-upload
                       </button>
-                      {isPaymentOnly &&
-                        // Bills already exist — payment-only mode
-                        (hasPayments ? (
-                          <button
-                            className="btn btn-success"
-                            disabled={excelImporting || hasErrors}
-                            style={{ opacity: hasErrors ? 0.5 : 1 }}
-                            onClick={async () => {
-                              setExcelImporting(true);
-                              try {
-                                await doPaymentPreview();
-                              } catch (e) {
-                                alert("Failed: " + e.message);
-                              } finally {
-                                setExcelImporting(false);
-                              }
-                            }}
-                          >
-                            {excelImporting
-                              ? "Loading..."
-                              : `💳 Preview Payments (${excelValidation.validCount} rows)`}
-                          </button>
-                        ) : (
-                          <div
-                            style={{
-                              fontSize: "0.85rem",
-                              color: "#6b7280",
-                              padding: "0.5rem",
-                            }}
-                          >
-                            Bills already generated. Fill
-                            AmountPaid/PaymentMethod/PaymentDate then re-upload
-                            to record payments.
-                          </div>
-                        ))}
-                      {!isPaymentOnly && (
-                        <>
-                          <button
-                            className={`btn ${canGenerate ? "btn-success" : "btn-secondary"}`}
-                            style={{
-                              opacity: canGenerate ? 1 : 0.5,
-                              cursor: canGenerate ? "pointer" : "not-allowed",
-                            }}
-                            disabled={!canGenerate || excelImporting}
-                            onClick={async () => {
-                              setExcelImporting(true);
-                              try {
-                                const count = await doGenerateBills();
-                                alert(`${count} bills generated.`);
-                                setBillsGeneratedForPeriod(periodLabel);
-                                setExcelFile(null);
-                                setExcelValidation(null);
-                              } catch (e) {
-                                alert("Failed: " + e.message);
-                              } finally {
-                                setExcelImporting(false);
-                              }
-                            }}
-                          >
-                            {excelImporting
-                              ? "Generating..."
-                              : !canGenerate
-                                ? `Fix ${diffIssues.length} conflict(s) & re-upload`
-                                : `Generate ${excelValidation.validCount} Bills`}
-                          </button>
-                          {hasPayments && canGenerate && (
-                            <button
-                              className="btn btn-primary"
-                              disabled={excelImporting}
-                              onClick={async () => {
-                                setExcelImporting(true);
-                                try {
-                                  const count = await doGenerateBills();
-                                  setBillsGeneratedForPeriod(periodLabel);
-                                  await doPaymentPreview();
-                                  alert(
-                                    `${count} bills generated. Confirm payments below.`,
-                                  );
-                                  queryClient.invalidateQueries(["bills-list"]);
-                                } catch (e) {
-                                  alert("Failed: " + e.message);
-                                } finally {
-                                  setExcelImporting(false);
-                                }
-                              }}
-                            >
-                              {excelImporting
-                                ? "Processing..."
-                                : `Generate Bills + Record Payments`}
-                            </button>
-                          )}
-                        </>
+                      {hasGenerateRows && (
+                        <button
+                          className={`btn ${canGenerate ? "btn-success" : "btn-secondary"}`}
+                          style={{
+                            opacity: canGenerate ? 1 : 0.5,
+                            cursor: canGenerate ? "pointer" : "not-allowed",
+                          }}
+                          disabled={!canGenerate || excelImporting}
+                          onClick={async () => {
+                            setExcelImporting(true);
+                            try {
+                              const count = await doGenerateBills();
+                              alert(`${count} bills generated.`);
+                              setBillsGeneratedForPeriod(periodLabel);
+                              setExcelFile(null);
+                              setExcelValidation(null);
+                            } catch (e) {
+                              alert("Failed: " + e.message);
+                            } finally {
+                              setExcelImporting(false);
+                            }
+                          }}
+                        >
+                          {excelImporting
+                            ? "Generating..."
+                            : !canGenerate
+                              ? `Fix ${diffIssues.length} conflict(s) & re-upload`
+                              : `Generate ${excelValidation.bills.length} Bill(s)`}
+                        </button>
+                      )}
+                      {/* Record-Payments is independent of generation — usable
+                          whenever any row (already-billed or just-generated)
+                          has AmountPaid filled, for one member or all of them
+                          in a single confirm. Not gated on whether OTHER rows
+                          in the same file still need bills generated. */}
+                      {hasPayments && (
+                        <button
+                          className="btn btn-primary"
+                          disabled={excelImporting || hasErrors}
+                          style={{ opacity: hasErrors ? 0.5 : 1 }}
+                          onClick={async () => {
+                            setExcelImporting(true);
+                            try {
+                              await doPaymentPreview();
+                            } catch (e) {
+                              alert("Failed: " + e.message);
+                            } finally {
+                              setExcelImporting(false);
+                            }
+                          }}
+                        >
+                          {excelImporting
+                            ? "Loading..."
+                            : `💳 Preview & Record Payments`}
+                        </button>
+                      )}
+                      {!hasGenerateRows && !hasPayments && alreadyBilledRows.length > 0 && (
+                        <div
+                          style={{
+                            fontSize: "0.85rem",
+                            color: "#6b7280",
+                            padding: "0.5rem",
+                          }}
+                        >
+                          {alreadyBilledRows.length} flat(s) already billed for
+                          their period ({alreadyBilledRows.map((r) => r.flat).join(", ")}).
+                          Fill AmountPaid/PaymentMethod/PaymentDate then re-upload
+                          to record payments.
+                        </div>
                       )}
                     </div>
                   );

@@ -74,22 +74,39 @@ function BillPdfTab({ bill }) {
   // Always fetch from the server so the CURRENT saved template is applied
   // (the server re-renders live for non-locked bills). Stored billHtml is only
   // used as an offline fallback if the request fails.
+  //
+  // /api/bills/download returns text/html for the default renderer but a raw
+  // application/pdf whenever the society has a custom uploaded PDF/image bill
+  // template configured (see Case 1/1b in that route) — previously this tab
+  // only knew how to inline HTML and threw on the PDF response, always
+  // showing the "use Print button" placeholder for any society running a
+  // custom template. A PDF blob renders fine in an <iframe>, so branch on
+  // content-type instead of assuming HTML.
   const [html, setHtml] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   useEffect(() => {
     setLoading(true);
+    setPdfUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     fetch(`/api/bills/download?id=${bill._id}`, { credentials: "include" })
       .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to load bill");
         const ct = res.headers.get("content-type") || "";
-        if (ct.includes("text/html")) return res.text();
-        throw new Error("PDF template — use Print button to download");
+        if (ct.includes("text/html")) return { kind: "html", value: await res.text() };
+        if (ct.includes("application/pdf")) return { kind: "pdf", value: await res.blob() };
+        throw new Error("Unrecognized bill content — use Print button to download");
       })
-      .then((h) => { setHtml(h); setLoading(false); })
+      .then((result) => {
+        if (result.kind === "html") { setHtml(result.value); setLoading(false); return; }
+        setPdfUrl(URL.createObjectURL(result.value));
+        setLoading(false);
+      })
       .catch((e) => {
         if (bill.billHtml) { setHtml(bill.billHtml); setLoading(false); return; }
         setError(e.message); setLoading(false);
       });
+    return () => setPdfUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return prev; });
   }, [bill._id]);
   // Must run unconditionally, before any early return below - a hook called
   // only on some renders (e.g. skipped while `loading` is true on first
@@ -105,6 +122,9 @@ function BillPdfTab({ bill }) {
       <div style={{ fontSize: 32 }}>📄</div>
       <p style={{ color: "#6b7280", marginTop: 8 }}>{error}</p>
     </div>
+  );
+  if (pdfUrl) return (
+    <iframe src={pdfUrl} title="Bill PDF" style={{ width: "100%", height: "80vh", border: "none" }} />
   );
   if (!html) return (
     <div style={{ padding: 60, textAlign: "center" }}>

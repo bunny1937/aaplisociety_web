@@ -7,6 +7,7 @@ import { requireRoles } from "@/lib/authz";
 import Bill from "@/models/Bill";
 import Member from "@/models/Member";
 import User from "@/models/User";
+import { normalizeBillCharges } from "@/lib/bill-charge-normalizer";
 void User;
 
 export const dynamic = "force-dynamic";
@@ -47,14 +48,7 @@ export async function GET(request) {
     }
 
     // Normalise charge rows across the shapes bills have used over time.
-    const charges =
-      (bill.charges || bill.billItems || bill.heads || []).map((c) => ({
-        name: c.name || c.headName || c.description || "Charge",
-        amount: Number(c.amount ?? c.value ?? 0),
-        rate: c.rate,
-        perSqFt: Boolean(c.perSqFt || c.calculationType === "Per Sq Ft"),
-        fixed: Boolean(c.fixed || c.calculationType === "Fixed"),
-      })) || [];
+    const charges = normalizeBillCharges(bill.charges ?? bill.billItems ?? bill.heads);
 
     const due = bill.dueDate ? new Date(bill.dueDate) : null;
     const daysOverdue = due ? Math.max(0, Math.floor((Date.now() - due.getTime()) / 86400000)) : 0;

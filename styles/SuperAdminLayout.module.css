@@ -159,10 +159,15 @@
    MAIN AREA
 ══════════════════════════════════════════════════ */
 .mainWrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+      flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    margin-left: 240px;
+      overflow-x: hidden;
+
+    padding: 1rem 0;
+    animation: Dashboard_fadeSlideIn__1Si69 0.18s ease;
 }
 /* ── Top Header — white with search ─────────────── */
 .topHeader {

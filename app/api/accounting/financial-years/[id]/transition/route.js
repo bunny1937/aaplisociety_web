@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { requireAccountingClose } from "@/lib/authz";
+import { FinancialYearServiceError } from "@/lib/services/FinancialYearService";
 import {
-  transitionFinancialYear,
-  FinancialYearServiceError,
-} from "@/lib/services/FinancialYearService";
+  advanceFinancialYear,
+  FinancialClosingServiceError,
+} from "@/lib/services/FinancialClosingService";
 
 // POST /api/accounting/financial-years/:id/transition
 // Advances a Financial Year exactly one step forward through its 5-state
 // workflow (Draft -> Reviewed -> Auditor Review -> Approved -> Locked).
-// Admin/Secretary only — see docs/accounting-system-ARD.md §6.6.
+// Admin/Secretary only — see docs/accounting-system-ARD.md §6.6. The final
+// Approved -> Locked step is additionally gated by the Closing Wizard's
+// checklist (Phase 2.17, §8) via advanceFinancialYear().
 export async function POST(request, ctx) {
   const auth = requireAccountingClose(request);
   if (!auth.valid) return auth;
@@ -17,16 +20,14 @@ export async function POST(request, ctx) {
     await connectDB();
     const { id } = await ctx.params;
     const { note } = await request.json().catch(() => ({}));
-    const fy = await transitionFinancialYear({
-      societyId: auth.user.societyId,
-      id,
+    const fy = await advanceFinancialYear(auth.user.societyId, id, {
       byUserId: auth.user.userId,
       byRole: auth.user.role,
       note,
     });
     return NextResponse.json({ financialYear: fy });
   } catch (error) {
-    if (error instanceof FinancialYearServiceError) {
+    if (error instanceof FinancialYearServiceError || error instanceof FinancialClosingServiceError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("Transition financial year error:", error);

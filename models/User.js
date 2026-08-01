@@ -74,6 +74,7 @@ const UserSchema = new mongoose.Schema(
         "Admin",
         "Secretary",
         "Accountant",
+        "Auditor",
         "Member",
         "Security",
       ],

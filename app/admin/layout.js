@@ -20,6 +20,9 @@ import {
   MessageSquare,
   UserCheck,
   FileEdit,
+  Zap,
+  TrendingUp,
+  ClipboardCheck,
 } from "lucide-react";
 export default function AdminLayout({ children }) {
   const navigation = [
@@ -105,6 +108,46 @@ export default function AdminLayout({ children }) {
           name: "Audit Report",
           path: "/admin/audit",
           icon: <ClipboardList size={16} />,
+        },
+      ],
+    },
+    {
+      title: "tests",
+      items: [
+        {
+          name: "Test Page",
+          path: "/admin/accounting-lab",
+          icon: <ClipboardList size={16} />,
+        },
+      ],
+    },
+    {
+      title: "Financial Statements",
+      items: [
+        {
+          name: "Opening Balances",
+          path: "/admin/opening-balances",
+          icon: <Database size={16} />,
+        },
+        {
+          name: "Generate Statements",
+          path: "/admin/generate-statements",
+          icon: <Zap size={16} />,
+        },
+        {
+          name: "Income & Expenditure",
+          path: "/admin/income-expenditure",
+          icon: <TrendingUp size={16} />,
+        },
+        {
+          name: "Assets & Liabilities",
+          path: "/admin/assets-liabilities",
+          icon: <BarChart3 size={16} />,
+        },
+        {
+          name: "Trial Balance & Validation",
+          path: "/admin/other-statements",
+          icon: <ClipboardCheck size={16} />,
         },
       ],
     },

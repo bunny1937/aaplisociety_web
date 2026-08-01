@@ -14,6 +14,8 @@ const SOURCE_MODULES = [
   "Billing",
   "Payments",
   "Assets",
+  "Liabilities",
+  "Funds",
   "Interest",
   "Manual",
   "Auditor",
@@ -57,7 +59,12 @@ const VoucherSchema = new mongoose.Schema(
     // the original (§6.7) — bidirectional link between the two.
     reversalOfVoucherId: { type: mongoose.Schema.Types.ObjectId, ref: "Voucher", default: null },
     reversedByVoucherId: { type: mongoose.Schema.Types.ObjectId, ref: "Voucher", default: null },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    // Not required: cron/system-triggered postings (e.g. BillGenerated from a
+    // scheduled bill run) have no human actor. JournalEntry.createdBy is
+    // already optional for the same reason — Voucher was the one place that
+    // hadn't caught up, which broke the first system-triggered posting this
+    // was tried against.
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true },

@@ -266,6 +266,10 @@ const SocietySchema = new mongoose.Schema(
         defaultBankAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
         memberReceivableAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
         roundOffAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
+        // Liability credited when a member pays MORE than their outstanding
+        // dues. Without this, over-collection was credited to Member
+        // Receivable and drove that asset negative on the Balance Sheet.
+        memberAdvanceAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "ChartOfAccount" },
       },
       depreciationPolicy: {
         method: { type: String, enum: ["StraightLine", "WDV"], default: "StraightLine" },
@@ -304,6 +308,19 @@ const SocietySchema = new mongoose.Schema(
       documentLockingRules: {
         lockVouchersAfterApproval: { type: Boolean, default: true },
         allowBackdatedEntriesInDraftFY: { type: Boolean, default: true },
+      },
+      // Phase 2.20 (§6.14) — weights for the Accounting Health Dashboard's
+      // single 0-100 composite score. Must sum to 100; AccountingHealthService
+      // validates this at read time rather than enforcing it here, so a
+      // partially-edited config never hard-fails a save.
+      healthScoreWeights: {
+        trialBalance: { type: Number, default: 30 },
+        openingBalance: { type: Number, default: 15 },
+        draftVouchers: { type: Number, default: 10 },
+        depreciation: { type: Number, default: 15 },
+        bankReconciliation: { type: Number, default: 15 },
+        scheduleCoverage: { type: Number, default: 10 },
+        otherValidations: { type: Number, default: 5 },
       },
     },
     // Matrix Config

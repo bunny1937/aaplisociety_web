@@ -9,7 +9,8 @@ node_modules/
 out/
 build/
 dist/
-docs/
+docs
+.claude
 scripts/
 *.xlsx
 public/uploads/
@@ -20,6 +21,7 @@ society_web.md
 CHANGED_FILES.txt
 db-export-2026-07-23.zip
 .vscode
+
 # BillHistory_*.xlsx
 # BulkImport_Template.xlsx
 transactions_*.xlsx
@@ -106,5 +108,7 @@ allure-results
 playwright-report
 test-results
 tests
+.env.test
 *.tsbuildinfo
 .jest-cache
+screenshots
