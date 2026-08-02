@@ -48,6 +48,20 @@ export const GET = withRoute(async (req) => {
       const guard = v.assignedGuardId || v.enteredBy;
       v.guardPhone = guard?.phone || null;
       v.guardName = guard?.name || guard?.username || null;
+      // The Flutter guard screens (gate_tab.dart's SOS card and "Awaiting
+      // approval" card in particular) read flatNo/wing/ownerName/
+      // contactNumber at the TOP LEVEL of each visitor row — but .populate()
+      // only nests those under v.memberId. Nothing flattened them, so every
+      // one of those reads was silently undefined; SOS is the one place with
+      // no other source of flat info to fall back on, hence "no flat
+      // recorded" specifically there.
+      const member = v.memberId;
+      if (member && typeof member === "object") {
+        v.flatNo = member.flatNo;
+        v.wing = member.wing;
+        v.ownerName = member.ownerName;
+        v.contactNumber = member.contactNumber;
+      }
     }),
   );
 

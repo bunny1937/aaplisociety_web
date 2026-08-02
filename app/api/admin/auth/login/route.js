@@ -49,6 +49,18 @@ export async function POST(request) {
         { status: 401 },
       );
     }
+    // ✅ SECURITY 4b: SuperAdmin role is restricted to one allowed email —
+    // a DB record with role SuperAdmin is not enough on its own.
+    const allowedSuperAdminEmail = (
+      process.env.SUPERADMIN_ALLOWED_EMAIL || "aaplisociety2025@gmail.com"
+    ).toLowerCase();
+    if (
+      admin.role === "SuperAdmin" &&
+      admin.email.toLowerCase() !== allowedSuperAdminEmail
+    ) {
+      console.warn(`🚨 Unauthorized SuperAdmin login attempt: ${email}`);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
     // ✅ SUCCESS: Clear rate limit
     clearRateLimit(email);
     // Update login info

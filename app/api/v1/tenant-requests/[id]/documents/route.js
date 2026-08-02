@@ -13,7 +13,7 @@ async function tenancyForCaller(req, id) {
   const claims = getClaims(req);
   const societyId = requireTenant(claims);
   if (!claims.memberId) throw new ApiError(403, "Only residents can manage tenancy documents");
-  const request = await TenantRequest.findOne({ _id: id, societyId });
+  const request = await TenantRequest.findOne({ _id: id, societyId }).lean();
   if (!request) throw new ApiError(404, "Tenant request not found");
   if (String(request.memberId) !== String(claims.memberId)) throw new ApiError(403, "Not your tenancy");
   return { claims, societyId, request };
@@ -35,8 +35,14 @@ export const POST = withRoute(async (req, ctx) => {
   const key = FIELD_MAP[body.field];
   if (!key) throw new ApiError(400, `Unknown document field: ${body.field}`);
   if (!body.key) throw new ApiError(400, "Missing uploaded object key");
-  const existing = request.documents?.toObject?.() ?? request.documents ?? {};
-  request.documents = { ...existing, [key]: body.key };
-  await request.save();
-  return json({ documents: request.documents, message: "Document attached" });
+  // Targeted updateOne, not request.save() — a full-document .save() on an
+  // older TenantRequest (e.g. one created before a schema field like
+  // loginEnabled/noteThread existed) re-validates the ENTIRE document and can
+  // 500 on something completely unrelated to the one field being changed.
+  await TenantRequest.updateOne(
+    { _id: request._id },
+    { $set: { [`documents.${key}`]: body.key } },
+  );
+  const updated = await TenantRequest.findById(request._id).select("documents").lean();
+  return json({ documents: updated?.documents || {}, message: "Document attached" });
 });

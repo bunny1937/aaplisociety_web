@@ -41,7 +41,9 @@ async function findTenantUser(request) {
       { $or: or },
       { $or: [{ memberId: request.memberId }, { "profiles.memberId": request.memberId }] },
     ],
-  });
+  })
+    .select("_id")
+    .lean();
 }
 
 export const PATCH = withRoute(async (req, ctx) => {
@@ -66,20 +68,25 @@ export const PATCH = withRoute(async (req, ctx) => {
     throw new ApiError(404, "No tenant login found for this tenancy. Ask the society admin to re-issue it.");
   }
 
-  tenantUser.isActive = enabled;
-  await tenantUser.save();
+  // Targeted updateOne, not tenantUser.save() — a full-document .save() on a
+  // User re-validates EVERY field on the document, and a bulk-imported tenant
+  // User (built by scripts, not this app's own signup flow) can easily be
+  // missing/mismatched on some unrelated field, turning a one-field toggle
+  // into a 500 from an unrelated ValidationError. Same reasoning below for
+  // the TenantRequest update.
+  await User.updateOne({ _id: tenantUser._id }, { $set: { isActive: enabled } });
 
-  request.loginEnabled = enabled;
-  request.notes = [
-    ...(request.notes || []),
-    { text: enabled ? "Tenant login enabled by owner" : "Tenant login disabled by owner", at: new Date(), by: "Owner" },
-  ];
-  await request.save();
+  const noteEntry = { text: enabled ? "Tenant login enabled by owner" : "Tenant login disabled by owner", at: new Date(), by: "Owner" };
+  await TenantRequest.updateOne(
+    { _id: request._id },
+    { $set: { loginEnabled: enabled }, $push: { notes: noteEntry } },
+  );
+  const updated = await TenantRequest.findById(request._id).lean();
 
   return json({
     ok: true,
     loginEnabled: enabled,
-    tenantRequest: { ...request.toObject(), _id: String(request._id) },
+    tenantRequest: { ...updated, _id: String(updated._id) },
     message: enabled ? "Tenant login enabled" : "Tenant login disabled",
   });
 });

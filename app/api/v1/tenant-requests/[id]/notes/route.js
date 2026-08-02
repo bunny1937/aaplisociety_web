@@ -29,7 +29,7 @@ async function tenancyForCaller(req, id) {
   const claims = getClaims(req);
   const societyId = requireTenant(claims);
   if (!claims.memberId) throw new ApiError(403, "Only residents can use tenancy notes");
-  const request = await TenantRequest.findOne({ _id: id, societyId });
+  const request = await TenantRequest.findOne({ _id: id, societyId }).lean();
   if (!request) throw new ApiError(404, "Tenant request not found");
   if (String(request.memberId) !== String(claims.memberId)) throw new ApiError(403, "Not your tenancy");
   return { claims, societyId, request, isTenant: claims.occupancyType === "Tenant" };
@@ -63,10 +63,13 @@ export const POST = withRoute(async (req, ctx) => {
   if (!text) throw new ApiError(400, "Note cannot be empty");
   if (text.length > 1000) throw new ApiError(400, "Note is too long (1000 characters max)");
 
+  // Targeted $push, not request.save() — a full-document .save() on an older
+  // TenantRequest re-validates every field on the document and can 500 on
+  // something unrelated to the note being posted (see documents/route.js).
   const entry = { text, at: new Date(), by: isTenant ? "Tenant" : "Owner" };
-  request.noteThread = [...(Array.isArray(request.noteThread) ? request.noteThread : []), entry];
-  request.markModified("noteThread");
-  await request.save();
+  await TenantRequest.updateOne({ _id: request._id }, { $push: { noteThread: entry } });
+  const updated = await TenantRequest.findById(request._id).select("noteThread").lean();
+  request.noteThread = updated?.noteThread || [];
 
   await notifyTenancyNote({
     societyId,
