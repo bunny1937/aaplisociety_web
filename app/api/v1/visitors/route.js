@@ -62,6 +62,34 @@ export const GET = withRoute(async (req) => {
         v.ownerName = member.ownerName;
         v.contactNumber = member.contactNumber;
       }
+
+      // SOS acknowledgement state.
+      //
+      // The resident's "We are safe - silence the alarm" card decides whether
+      // it is still armed by looking at `sosAck.at`. But an SOS can be closed
+      // out in more than one way: the GUARD acknowledges it at the gate, or the
+      // record's status moves to Resolved. Those paths never wrote `sosAck`, so
+      // the row came back looking un-acknowledged and the alert re-armed on
+      // every refresh - an emergency the guard had handled hours earlier kept
+      // reappearing, and pressing "we are safe" again fixed nothing because the
+      // field the app watched was not the field being written.
+      //
+      // Normalise all of them into one shape the client can trust.
+      const ackAt =
+        v.sosAck?.at ||
+        v.sosAcknowledgedAt ||
+        v.resolvedAt ||
+        (v.sosResolved === true ? v.updatedAt : null) ||
+        (/^(resolved|handled|closed|acknowledged|safe)$/i.test(String(v.sosStatus || ""))
+          ? v.updatedAt
+          : null);
+      if (ackAt) {
+        v.sosAck = {
+          at: ackAt,
+          by: v.sosAck?.by || v.sosAcknowledgedBy || "Resolved",
+        };
+        v.sosResolved = true;
+      }
     }),
   );
 
