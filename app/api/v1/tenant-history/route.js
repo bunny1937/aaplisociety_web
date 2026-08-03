@@ -1,10 +1,13 @@
 import { withRoute, ApiError, json, zodError } from "@/lib/v1/http";
 import { getClaims, requireTenant } from "@/lib/v1/auth";
 import { tenantHistoryCreateSchema } from "@/lib/v1/schemas";
-import { Member, TenantRequest } from "@/lib/v1/models";
+import { Member, TenantRequest, User } from "@/lib/v1/models";
 import { SOCIETY_ADMIN_ROLES, OCCUPANCY_TYPES } from "@/lib/v1/constants";
+import { resolveLoginEnabledMany } from "@/lib/v1/tenancyState";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
 const dto = (t) => t ? ({
   _id: t._id ? String(t._id) : null,
   tenantName: t.tenantName ?? t.name ?? null,
@@ -18,28 +21,31 @@ const dto = (t) => t ? ({
 }) : null;
 
 // ---------------------------------------------------------------------------
-// THE bug behind most of the owner-side tenancy complaints.
+// The embedded Member.currentTenant snapshot is the source of truth for the
+// lease TERMS; the matching TenantRequest supplies the live operational state.
 //
-// `dto()` above is a whitelist, and it whitelists away every field the owner
-// app's My Tenant screen actually drives its controls from:
+// WHAT CHANGED IN THIS PASS
 //
-//   * loginEnabled -> the "Tenant app login" switch read `tenancy.loginEnabled`,
-//     got undefined, and therefore rendered OFF and grey forever. Toggling it
-//     really did work server-side (PATCH .../login flips it), but the very next
-//     refetch came back through this DTO with the flag stripped again, so the
-//     switch snapped straight back to disabled. That is the exact "it says
-//     enabled now but it still shows disabled" loop.
-//   * documents -> missingDocs() saw no documents at all, so a tenant who had
-//     uploaded one was still reported as missing it, and there was nothing to
-//     open.
-//   * noteThread -> the owner could never read the note their tenant sent, even
-//     though they got the push for it.
-//   * _id / status -> member.currentTenant is an embedded subdocument with no
-//     TenantRequest id, so every action that needs a request id (login toggle,
-//     documents, notes) had nothing to address.
+// `loginEnabled` used to be reported as `null` whenever the TenantRequest had
+// no mirrored boolean:
 //
-// The embedded snapshot stays the source of truth for the lease TERMS; the
-// matching TenantRequest supplies the live operational state.
+//     loginEnabled: typeof req.loginEnabled === "boolean" ? req.loginEnabled : null
+//
+// The intent was "unknown, let the app decide", but the app's resolver then
+// fell through a chain that ends at the tenancy status, and for a tenancy
+// whose status string is anything other than a literal "approved"/"active" it
+// lands on FALSE. Result: an owner staring at a greyed-out switch for a tenant
+// who has been logging in for weeks, and being invited to "enable" a login that
+// was never disabled.
+//
+// null was never a good answer. The real answer is one query away, on the flag
+// the auth layer actually enforces: User.isActive. resolveLoginEnabledMany()
+// answers it for every tenancy in ONE batched users query.
+//
+// `ownerName`/`ownerPhone` are also filled from the owner's Member row now.
+// They were read off the TenantRequest, where they have never been written,
+// which is why the tenant app's Flat owner card said "No number on record".
+// ---------------------------------------------------------------------------
 const ACTIVE_STATUSES = ["Approved", "Active"];
 
 function activeRequestFor(currentTenant, requests) {
@@ -62,40 +68,78 @@ function activeRequestFor(currentTenant, requests) {
   return live.length === 1 ? live[0] : null;
 }
 
-function withLiveState(currentTenant, requests) {
+function withLiveState(currentTenant, requests, loginMap, owner) {
   const base = dto(currentTenant);
   if (!base) return null;
+
+  // The landlord's real name and number, from the members collection.
+  const ownerName = owner?.ownerName ?? null;
+  const ownerPhone =
+    owner?.contactNumber || owner?.whatsappNumber || owner?.alternateContact || null;
+
   const req = activeRequestFor(currentTenant, requests);
-  if (!req) return { ...base, documents: {}, noteThread: [], loginEnabled: null, status: null };
+  if (!req) {
+    return {
+      ...base,
+      documents: {},
+      noteThread: [],
+      unreadFromTenant: 0,
+      loginEnabled: false,
+      status: null,
+      ownerName,
+      ownerPhone,
+    };
+  }
   return {
     ...base,
     // The id every owner-side action needs.
     _id: String(req._id),
     status: req.status ?? null,
-    // `loginEnabled` is only mirrored onto the request from the day the login
-    // route first ran. For a tenancy approved before that, absence does NOT
-    // mean "disabled" - an approved tenancy has a working login by definition.
-    // Reporting null lets the app show the true default instead of a wrong OFF.
-    loginEnabled: typeof req.loginEnabled === "boolean" ? req.loginEnabled : null,
+    // A real boolean, resolved from the tenant User's isActive. Never null.
+    loginEnabled: loginMap.get(String(req._id)) ?? false,
+    // Now includes the *Review verdicts, which Mongoose used to silently drop
+    // on write because they were not declared on the documents sub-schema.
     documents: req.documents ?? {},
     noteThread: Array.isArray(req.noteThread) ? req.noteThread : [],
-    ownerName: req.ownerName ?? base.ownerName ?? null,
-    ownerPhone: req.ownerPhone ?? base.ownerPhone ?? null,
+    // Unread count for the owner, so the Messages chip can carry a badge
+    // instead of the owner having to open the thread to discover a new note.
+    unreadFromTenant: Array.isArray(req.noteThread)
+      ? req.noteThread.filter((n) => n?.by === "Tenant").length
+      : 0,
+    ownerName: req.ownerName || ownerName,
+    ownerPhone: req.ownerPhone || ownerPhone,
   };
 }
+
 export const GET = withRoute(async (req) => {
   const claims = getClaims(req); const societyId = requireTenant(claims); const url = new URL(req.url);
   let memberId = claims.memberId;
   if (SOCIETY_ADMIN_ROLES.includes(claims.role) && url.searchParams.get("memberId")) memberId = url.searchParams.get("memberId");
   if (!memberId) return json({ currentTenant: null, history: [], requests: [] });
+
   const [member, requests] = await Promise.all([
-    Member.findOne({ _id: memberId, societyId }).select("currentTenant tenantHistory").lean(),
+    Member.findOne({ _id: memberId, societyId })
+      .select("currentTenant tenantHistory ownerName contactNumber alternateContact whatsappNumber")
+      .lean(),
     TenantRequest.find({ memberId, societyId }).sort({ createdAt: -1 }).lean(),
   ]);
-  return json({ currentTenant: withLiveState(member?.currentTenant, requests),
+
+  // ONE users query for every tenancy on this flat, not one per tenancy.
+  const loginMap = await resolveLoginEnabledMany(requests, { User });
+
+  return json({
+    currentTenant: withLiveState(member?.currentTenant, requests, loginMap, member),
     history: (member?.tenantHistory || []).filter(t => !t.isCurrent).map(dto),
-    requests: requests.map(r => ({ ...r, _id: String(r._id) })) });
+    requests: requests.map(r => ({
+      ...r,
+      _id: String(r._id),
+      loginEnabled: loginMap.get(String(r._id)) ?? false,
+      documents: r.documents ?? {},
+      noteThread: Array.isArray(r.noteThread) ? r.noteThread : [],
+    })),
+  });
 });
+
 export const POST = withRoute(async (req) => {
   const claims = getClaims(req); const societyId = requireTenant(claims);
   if (!claims.memberId || claims.occupancyType === OCCUPANCY_TYPES.TENANT) throw new ApiError(403, "Only owners can add past tenants");
