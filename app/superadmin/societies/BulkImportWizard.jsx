@@ -42,6 +42,7 @@ import {
   isBlankRow,
 } from "@/lib/import/validateWorkbook";
 import styles from "@/styles/BulkImportWizard.module.css";
+import { ENUMS } from "@/lib/import/importSchema";
 
 const ICONS = {
   building: Building2,
@@ -59,41 +60,135 @@ function emptyRow(sheet) {
   return r;
 }
 
+// Header-aware paste. Admins export from their own spreadsheets, so column
+// order and wording vary per society — "Maintenance Rate (Per Sq Ft)" vs
+// "Maintenance Rate", "Admin Full Name" vs "Admin Name". Matching on a
+// normalised header is the only thing that survives that; positional paste
+// silently writes an address into a date field.
+const normHeader = (s) =>
+  String(s)
+    .toLowerCase()
+    .replace(/\*/g, "")
+    .replace(/\((?:per\s+sq\s*ft|fixed|per\s+vehicle|days)\)/g, "")
+    .replace(/[^a-z0-9]/g, "");
+
+// Wording differences we accept. Left side is normalised incoming header.
+const HEADER_ALIASES = {
+  adminfullname: "Admin Name",
+  contactperson: "Person of Contact",
+  intereststartsafterduedate: "Interest After Days",
+  gracedays: "Interest After Days",
+  watercharges: "Water Charge",
+  securitycharges: "Security Charge",
+  electricitycharges: "Electricity Charge",
+  regdate: "Date of Registration",
+  pan: "PAN No",
+  tan: "TAN No",
+};
+
+function resolveHeaders(headerCells, sheet) {
+  const byNorm = new Map();
+  for (const c of sheet.columns) {
+    byNorm.set(normHeader(c.key), c.key);
+    byNorm.set(normHeader(c.label), c.key);
+  }
+  return headerCells.map((h) => {
+    const n = normHeader(h);
+    return byNorm.get(n) || byNorm.get(normHeader(HEADER_ALIASES[n] || "")) || null;
+  });
+}
+
+// Detects whether the first pasted line is a header rather than data.
+function looksLikeHeader(cells, sheet) {
+  const mapped = resolveHeaders(cells, sheet).filter(Boolean).length;
+  return mapped >= Math.max(2, Math.ceil(cells.length * 0.4));
+}
+
+// Excel in India exports DD/MM/YYYY. The schema stores ISO. Converting on
+// paste beats making the admin retype every date.
+function coerceCell(raw, col) {
+  if (!col || !raw) return raw;
+  if (col.type === "date") {
+    const m = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (m) {
+      const [, d, mo, y] = m;
+      return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+  }
+  if (["money", "number", "area"].includes(col.type)) {
+    return raw.replace(/[₹,\s]/g, "");
+  }
+  return raw;
+}
+
 /** Parse clipboard TSV into rows aligned to the sheet's columns. */
 function parseClipboard(text, sheet, startColIdx) {
-  const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.length);
+  let lines = text.replace(/\r/g, "").split("\n").filter((l) => l.length);
+  if (!lines.length) return [];
+
+  // Admins copy the header row along with the data. If the first line's first
+  // cell is a known column name, it's a header — drop it rather than writing
+  // "Society Name" into the Society Name field.
+  const firstCell = (lines[0] || "").split("\t")[0].trim().toLowerCase();
+  const isHeader = sheet.columns.some(
+    (c) => c.key.toLowerCase() === firstCell || c.label.toLowerCase() === firstCell,
+  );
+  if (isHeader) lines = lines.slice(1);
+
   return lines.map((line) => {
     const cells = line.split("\t");
     const row = emptyRow(sheet);
     cells.forEach((cell, i) => {
       const col = sheet.columns[startColIdx + i];
-      if (col) row[col.key] = cell.trim();
+if (!col) return;
+let v = cell.trim();
+// Excel casing varies ("yes" vs "Yes"). Snap select values to the enum
+// so a case difference isn't reported as a validation error.
+if (col.type === "select" && v) {
+  const opts = ENUMS[col.options] || [];
+  v = opts.find((o) => o.toLowerCase() === v.toLowerCase()) || v;
+}
+row[col.key] = v;
     });
     return row;
   });
 }
 
-export default function BulkImportWizard({ open, onClose, onImported }) {
+export default function BulkImportWizard({ open, onClose, onImported,BillHistoryStep  }) {
   const [schema, setSchema] = useState(null);
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [schemaError, setSchemaError] = useState(null);
   const [takenEmails, setTakenEmails] = useState(() => new Set());
-
+const [showBillHistory, setShowBillHistory] = useState(false);
+const [billHistoryDone, setBillHistoryDone] = useState(false);
   const [activeSheet, setActiveSheet] = useState("society");
   const [data, setData] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [serverResult, setServerResult] = useState(null);
   const [focused, setFocused] = useState({ row: 0, col: 0 });
-
+const [importRunId, setImportRunId] = useState(null);
+const [progress, setProgress] = useState(null);
   const shellRef = useRef(null);
   const scrimRef = useRef(null);
   const cellRefs = useRef(new Map()); // "sheetId:row:colKey" -> input el
+const [pasteNote, setPasteNote] = useState(null);
+const [armedClear, setArmedClear] = useState(null); // sheet.id awaiting confirm
 
-  // ── Schema: fetched once per mount ─────────────────────────────────────
-  useEffect(() => {
-    if (!open || schema || loadingSchema) return;
-    setLoadingSchema(true);
-    setSchemaError(null);
+// ── Schema: fetched once per open ──────────────────────────────────────
+// The attempt flag is a ref, not state: loadingSchema was both a dependency
+// and mutated by this effect, so a failed fetch flipped it back to false,
+// retriggered the effect and re-fetched — an unthrottled retry loop against
+// a 401.
+const schemaAttempted = useRef(false);
+useEffect(() => {
+  if (!open) {
+    schemaAttempted.current = false; // allow one retry on reopen
+    return;
+  }
+  if (schema || schemaAttempted.current) return;
+  schemaAttempted.current = true;
+  setLoadingSchema(true);
+  setSchemaError(null);
 
     fetch("/api/admin/bulk-import/schema?probe=1", { credentials: "include" })
       .then(async (r) => {
@@ -110,9 +205,9 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
         }
         setData(seeded);
       })
-      .catch((e) => setSchemaError(e.message))
-      .finally(() => setLoadingSchema(false));
-  }, [open, schema, loadingSchema]);
+       .catch((e) => setSchemaError(e.message))
+    .finally(() => setLoadingSchema(false));
+}, [open, schema]);
 
   // ── Entrance morph ───────────────────────────────────────────────────
   // transform + opacity only. Animating width/height here would reflow a grid
@@ -151,7 +246,23 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
     () => (schema ? collectWarnings(data) : []),
     [schema, data],
   );
-
+// The footer counted errors without naming them, which is useless at 84.
+// Group identical messages: one misaligned column produces the same error on
+// every row, so the fix is one line, not 84.
+const errorDigest = useMemo(() => {
+  const byMessage = new Map();
+  for (const [sheetId, rowMap] of Object.entries(verdict.cellErrors || {})) {
+    for (const [rowIdx, colMap] of Object.entries(rowMap)) {
+      for (const [colKey, msg] of Object.entries(colMap)) {
+        const k = `${sheetId}|${colKey}|${msg}`;
+        const hit = byMessage.get(k) || { sheetId, colKey, msg, rows: [] };
+        hit.rows.push(Number(rowIdx) + 1);
+        byMessage.set(k, hit);
+      }
+    }
+  }
+  return [...byMessage.values()].sort((a, b) => b.rows.length - a.rows.length);
+}, [verdict]);
   // Advisory email check layered on top - not part of validateWorkbook because
   // it depends on server state the isomorphic validator must not know about.
   const emailAdvisories = useMemo(() => {
@@ -202,6 +313,26 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
     });
   }, []);
 
+const clearSheet = useCallback(
+  (sheet) => {
+    // A mispasted block is the common case, and per-row delete is unusable
+    // at 84 rows. Reset to one blank row so the grid stays usable.
+    setData((prev) => ({ ...prev, [sheet.id]: [emptyRow(sheet)] }));
+    setPasteNote(null);
+    setArmedClear(null);
+  },
+  [],
+);
+
+// Replaces the old template download. Paste this into row 1 of Excel and your
+// columns line up with the grid, which is all the template was ever for.
+const copyHeaders = useCallback((sheet) => {
+  const tsv = sheet.columns.map((c) => c.key).join("\t");
+  navigator.clipboard.writeText(tsv);
+  setPasteNote(`Column headers for "${sheet.title}" copied — paste into row 1 of Excel.`);
+}, []);
+
+// ── Keyboard grid navigation ───────────────────────────────────────────
   // ── Keyboard grid navigation ───────────────────────────────────────────
   const focusCell = useCallback((sheetId, rowIdx, colIdx, sheet) => {
     const col = sheet.columns[colIdx];
@@ -288,12 +419,74 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
           }
           rows[target] = base;
         });
-        return { ...prev, [sheet.id]: rows };
-      });
-    },
-    [],
-  );
+           return { ...prev, [sheet.id]: rows };
+    });
 
+    const extra = (text.split("\n")[0] || "").split("\t").length - sheet.columns.length;
+    setPasteNote(
+      extra > 0
+        ? `${extra} extra column(s) in your clipboard were ignored — this sheet has ${sheet.columns.length}.`
+        : null,
+    );
+  },
+  [],
+);
+// Container-level fallback. Grid text inputs handle their own paste; this
+// catches select cells, the single-mode Society tab, and a paste with
+// nothing focused. Without it the first tab an admin lands on silently
+// ignores Ctrl+V.
+const onSheetPaste = useCallback(
+  (e, sheet) => {
+    if (e.target.tagName === "INPUT" && sheet.mode !== "single") return; // handled per-cell
+    const text = e.clipboardData?.getData("text/plain") || "";
+    if (!text.includes("\t") && !text.includes("\n")) return;
+    e.preventDefault();
+    const startRow = sheet.mode === "single" ? 0 : focused.row || 0;
+    const startCol = sheet.mode === "single" ? 0 : focused.col || 0;
+    const pasted = parseClipboard(text, sheet, startCol);
+    setData((prev) => {
+      const rows = [...(prev[sheet.id] || [])];
+      pasted.forEach((pRow, i) => {
+        const target = startRow + i;
+        const base = rows[target] ? { ...rows[target] } : emptyRow(sheet);
+        for (const c of sheet.columns) {
+          if (pRow[c.key] !== "") base[c.key] = pRow[c.key];
+        }
+        rows[target] = base;
+      });
+      // Fill any holes — a sparse array makes React skip rows entirely.
+      for (let i = 0; i < rows.length; i++) if (!rows[i]) rows[i] = emptyRow(sheet);
+      return { ...prev, [sheet.id]: rows };
+    });
+
+    const extra = (text.split("\n")[0] || "").split("\t").length - sheet.columns.length;
+    setPasteNote(
+      extra > 0
+        ? `${extra} extra column(s) in your clipboard were ignored — this sheet has ${sheet.columns.length}.`
+        : null,
+    );
+  },
+  [focused],
+);
+// Document-level paste. A handler on a wrapper div only fires when focus is
+// already inside it, so Ctrl+V with nothing clicked does nothing — which is
+// exactly how an admin uses this. Capturing at the document while open makes
+// paste work on every tab regardless of focus or markup.
+useEffect(() => {
+  if (!open || !schema) return;
+  const sheet = schema.sheets.find((s) => s.id === activeSheet);
+  if (!sheet) return;
+
+  const handler = (e) => {
+    // Grid text inputs already handle their own paste.
+    const t = e.target;
+    if (t?.tagName === "INPUT" && sheet.mode !== "single") return;
+    onSheetPaste(e, sheet);
+  };
+
+  document.addEventListener("paste", handler);
+  return () => document.removeEventListener("paste", handler);
+}, [open, schema, activeSheet, onSheetPaste]);
   // ── Submit: the one and only POST ──────────────────────────────────────
   const submit = useCallback(async () => {
     if (!canSubmit) return;
@@ -310,15 +503,32 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
     }
 
     try {
-      const res = await fetch("/api/admin/bulk-import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          schemaVersion: schema.schemaVersion,
-          data: cleaned,
-        }),
-      });
+    // Stable id so the server can report progress and so a retry after a
+// dropped connection replays instead of double-importing.
+const runId = crypto.randomUUID();
+setImportRunId(runId);
+
+const poll = setInterval(async () => {
+  try {
+    const r = await fetch(
+      `/api/admin/bulk-import/status?importRunId=${runId}`,
+      { credentials: "include" },
+    );
+    if (r.ok) setProgress(await r.json());
+  } catch { /* transient; next tick retries */ }
+}, 1200);
+
+const res = await fetch("/api/admin/bulk-import", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  credentials: "include",
+  body: JSON.stringify({
+    importRunId: runId,
+    schemaVersion: schema.schemaVersion,
+    data: cleaned,
+  }),
+});
+clearInterval(poll);
       const json = await res.json();
       setServerResult({ ok: res.ok, ...json });
       if (res.ok && json.success) onImported?.(json);
@@ -382,8 +592,8 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
           </div>
         )}
 
-        {schema && !serverResult?.success && (
-          <>
+{schema && !submitting && !serverResult?.success && (
+            <>
             {/* Sheet tabs */}
             <nav className={styles.tabs} data-stagger>
               {schema.sheets.map((s) => {
@@ -396,8 +606,10 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
                     className={`${styles.tab} ${isActive ? styles.tabActive : ""} ${
                       c.errors ? styles.tabError : ""
                     }`}
-                    onClick={() => setActiveSheet(s.id)}
-                  >
+onClick={() => {
+  setActiveSheet(s.id);
+  setArmedClear(null); // don't carry a primed delete across tabs
+}}                  >
                     <Icon size={15} />
                     <span className={styles.tabLabel}>{s.title}</span>
                     {c.errors > 0 ? (
@@ -417,19 +629,51 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
                   <h3 className={styles.sheetTitle}>{sheet.title}</h3>
                   <p className={styles.sheetSub}>{sheet.subtitle}</p>
                 </div>
-                {sheet.mode === "grid" && (
-                  <div className={styles.sheetActions}>
-                    <span className={styles.hint}>
-                      <ClipboardPaste size={13} /> paste a block from Excel to fill many rows
-                    </span>
-                    <button className={styles.ghostBtn} onClick={() => addRow(sheet, 1)}>
-                      <Plus size={14} /> Row
-                    </button>
-                    <button className={styles.ghostBtn} onClick={() => addRow(sheet, 10)}>
-                      <Plus size={14} /> 10 rows
-                    </button>
-                  </div>
-                )}
+               <div className={styles.sheetActions}>
+  {sheet.mode === "grid" && (
+    <>
+      <span className={styles.hint}>
+        <ClipboardPaste size={13} /> paste a block from Excel to fill many rows
+      </span>
+      <button className={styles.ghostBtn} onClick={() => addRow(sheet, 1)}>
+        <Plus size={14} /> Row
+      </button>
+      <button className={styles.ghostBtn} onClick={() => addRow(sheet, 10)}>
+        <Plus size={14} /> 10 rows
+      </button>
+    </>
+  )}
+  <button
+    className={styles.ghostBtn}
+    onClick={() =>
+      armedClear === sheet.id ? clearSheet(sheet) : setArmedClear(sheet.id)
+    }
+    onBlur={() => setArmedClear(null)}
+  >
+    <Trash2 size={14} />{" "}
+    {armedClear === sheet.id ? "Click again to confirm" : "Discard all"}
+  </button>
+  <button className={styles.ghostBtn} onClick={() => copyHeaders(sheet)}>
+  <ClipboardPaste size={14} /> Copy headers
+</button>
+<button
+  className={styles.ghostBtn}
+  onClick={async () => {
+    const res = await fetch("/api/admin/bulk-import/template", {
+      credentials: "include",
+    });
+    if (!res.ok) return setPasteNote("Template download failed.");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "BulkImport_Template.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }}
+>
+  Download template
+</button>
+</div>
               </div>
 
               {(verdict.sheetErrors[activeSheet] || []).map((m, i) => (
@@ -437,10 +681,16 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
                   <AlertTriangle size={14} /> {m}
                 </div>
               ))}
-
+{/* ← INSERT HERE */}
+{pasteNote && (
+  <div className={styles.sheetErrorBar}>
+    <AlertTriangle size={14} /> {pasteNote}
+  </div>
+)}
               {/* Society = form, everything else = grid */}
               {sheet.mode === "single" ? (
-                <div className={styles.form}>
+                
+                <div className={styles.form} onPaste={(e) => onSheetPaste(e, sheet)}>
                   {sheet.columns.map((col) => {
                     const value = rows[0]?.[col.key] ?? "";
                     const error = sheetCellErrors[0]?.[col.key];
@@ -535,9 +785,10 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
                                       }}
                                       value={val}
                                       onChange={(e) => setCell(sheet.id, rIdx, col.key, e.target.value)}
-                                      onKeyDown={(e) => onCellKeyDown(e, sheet, rIdx, cIdx)}
-                                    >
-                                      <option value="">—</option>
+                                        onKeyDown={(e) => onCellKeyDown(e, sheet, rIdx, cIdx)}
+  onPaste={(e) => onPaste(e, sheet, rIdx, cIdx)}
+>
+  <option value="">—</option>
                                       {(schema.enums[col.options] || []).map((o) => (
                                         <option key={o} value={o}>{o}</option>
                                       ))}
@@ -581,12 +832,30 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
             {/* Footer */}
             <footer className={styles.footer} data-stagger>
               <div className={styles.status}>
-                {verdict.totalErrors > 0 ? (
-                  <span className={styles.statusErr}>
-                    <AlertTriangle size={15} />
-                    {verdict.totalErrors} problem{verdict.totalErrors === 1 ? "" : "s"} to fix
-                  </span>
-                ) : blockedByAdvisory ? (
+               {verdict.totalErrors > 0 ? (
+  <details className={styles.warnBox} open>
+   
+    <ul>
+      {errorDigest.slice(0, 12).map((d, i) => (
+        <li key={i}>
+          <strong>{d.colKey}</strong> — {d.msg}
+          {d.rows.length > 1
+            ? ` (${d.rows.length} rows: ${d.rows.slice(0, 5).join(", ")}${
+                d.rows.length > 5 ? "…" : ""
+              })`
+            : ` (row ${d.rows[0]})`}
+        </li>
+      ))}
+      {errorDigest.length > 12 && (
+        <li>…and {errorDigest.length - 12} more kinds</li>
+      )}
+    </ul>
+     <summary className={styles.statusErr}>
+      <AlertTriangle size={15} />
+      {verdict.totalErrors} problem{verdict.totalErrors === 1 ? "" : "s"} to fix
+    </summary>
+  </details>
+) : blockedByAdvisory ? (
                   <span className={styles.statusErr}>
                     <AlertTriangle size={15} />
                     An email is already registered
@@ -608,13 +877,30 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
                     </ul>
                   </details>
                 )}
-              </div>
+           </div>
 
-              <button
-                className={styles.submitBtn}
-                disabled={!canSubmit}
-                onClick={submit}
-              >
+<button
+  className={styles.ghostBtn}
+  disabled={submitting}
+  onClick={() => {
+    if (armedClear !== "__all__") return setArmedClear("__all__");
+    const seeded = {};
+    for (const s of schema.sheets) seeded[s.id] = [emptyRow(s)];
+    setData(seeded);
+    setPasteNote(null);
+    setArmedClear(null);
+  }}
+  onBlur={() => setArmedClear(null)}
+>
+  <Trash2 size={14} />{" "}
+  {armedClear === "__all__" ? "Confirm — clears all 6 sheets" : "Start over"}
+</button>
+
+<button
+  className={styles.submitBtn}
+  disabled={!canSubmit}
+  onClick={submit}
+>
                 {submitting ? (
                   <>
                     <Loader2 size={16} className={styles.spin} /> Importing…
@@ -628,7 +914,43 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
             </footer>
           </>
         )}
-
+{/* Live progress — real server stages, polled from BulkImportRun */}
+{submitting && (
+  <div style={{ padding: "1.5rem 0.5rem" }}>
+    <div style={{ marginBottom: "1.25rem", fontWeight: 600, color: "#a5b4fc", fontSize: "0.9rem" }}>
+      Importing {progress?.totalCount ? `${progress.processedCount ?? 0} / ${progress.totalCount} flats` : "…"}
+    </div>
+    {[
+      { key: "VALIDATING", label: "Re-validating on the server", icon: "🔍" },
+      { key: "IMPORTING", label: "Creating society, admin and flats", icon: "🏢" },
+      { key: "FINALIZING", label: "Billing heads and current month bills", icon: "📋" },
+      { key: "COMMITTED", label: "Committing the transaction", icon: "🔒" },
+      { key: "EMAIL_QUEUED", label: "Queueing onboarding emails", icon: "✉️" },
+      { key: "COMPLETED", label: "Done", icon: "✅" },
+    ].map((s, i, arr) => {
+      const now = arr.findIndex((x) => x.key === progress?.status);
+      const done = now > i;
+      const active = now === i;
+      return (
+        <div key={s.key} style={{
+          display: "flex", alignItems: "center", gap: "0.75rem",
+          padding: "0.6rem 0.75rem", marginBottom: "0.5rem", borderRadius: 8,
+          background: done ? "#064e3b" : active ? "#1e3a5f" : "#1f2937",
+          border: `1px solid ${done ? "#10b981" : active ? "#3b82f6" : "#374151"}`,
+          opacity: done || active ? 1 : 0.45, transition: "all 0.3s ease",
+        }}>
+          <div style={{ fontSize: "1.1rem", minWidth: 24 }}>{done ? "✓" : s.icon}</div>
+          <div style={{ flex: 1, fontSize: "0.83rem", fontWeight: done || active ? 600 : 400,
+            color: done ? "#4ade80" : active ? "#93c5fd" : "#6b7280" }}>
+            {progress?.stage && active ? progress.stage : s.label}
+          </div>
+          {active && <div style={{ fontSize: "0.7rem", color: "#60a5fa" }}>●●●</div>}
+          {done && <div style={{ fontSize: "0.75rem", color: "#4ade80", fontWeight: 700 }}>Done</div>}
+        </div>
+      );
+    })}
+  </div>
+)}
         {/* Server rejection */}
         {serverResult && !serverResult.success && (
           <div className={styles.serverErr}>
@@ -654,24 +976,204 @@ export default function BulkImportWizard({ open, onClose, onImported }) {
         )}
 
         {/* Success */}
-        {serverResult?.success && (
-          <div className={styles.centerState}>
-            <CheckCircle2 size={30} className={styles.okIcon} />
-            <h3>Society imported</h3>
-            <p>
-              {serverResult.memberCount ?? 0} flats created.{" "}
-              {serverResult.emailsQueued ?? 0} onboarding email
-              {serverResult.emailsQueued === 1 ? "" : "s"} queued.
-            </p>
-            <p className={styles.smallNote}>
-              Owners holding several flats receive one email that activates all
-              of their flats.
-            </p>
-            <button className={styles.submitBtn} onClick={onClose}>
-              Done
-            </button>
+       {serverResult?.success && (
+  <div style={{ padding: "0.5rem" }}>
+    <div style={{ background: "#064e3b", borderRadius: 8, padding: "1.25rem", marginBottom: "1rem" }}>
+      <div style={{ color: "#4ade80", fontWeight: 700, fontSize: "1rem", marginBottom: "0.75rem" }}>
+        ✅ Import Successful
+      </div>
+      <div style={{ fontSize: "0.85rem", color: "#a7f3d0", lineHeight: 1.8 }}>
+        <div><strong>Society:</strong> {serverResult.society?.name} ({serverResult.society?.societyId})</div>
+        <div><strong>Members imported:</strong> {serverResult.membersCreated} / {serverResult.totalMemberRows}</div>
+        <div>
+          <strong>Billing heads:</strong>{" "}
+          {serverResult.billingHeadsCreated > 0
+            ? `${serverResult.billingHeadsCreated} heads created`
+            : <span style={{ color: "#fbbf24" }}>⚠ None — rates were 0</span>}
+        </div>
+        <div>
+          <strong>Bills generated:</strong>{" "}
+          {serverResult.billsGenerated > 0
+            ? `${serverResult.billsGenerated} bills for ${serverResult.billPeriod}`
+            : <span style={{ color: "#fbbf24" }}>⚠ 0</span>}
+        </div>
+        {serverResult.society?.chargesSummary?.length > 0 && (
+          <div style={{ marginTop: 4, paddingLeft: 8, borderLeft: "2px solid #10b981" }}>
+            {serverResult.society.chargesSummary.map((c, i) => (
+              <div key={i} style={{ fontSize: "0.75rem", color: "#6ee7b7" }}>{c}</div>
+            ))}
           </div>
         )}
+      </div>
+    </div>
+
+    <div style={{ background: "#1e1b4b", borderRadius: 8, padding: "1.25rem", marginBottom: "1rem" }}>
+      <div style={{ color: "#a5b4fc", fontWeight: 700, marginBottom: "0.5rem" }}>Admin Credentials</div>
+      <div style={{ fontSize: "0.85rem", color: "#c7d2fe", lineHeight: 1.8 }}>
+        <div><strong>Name:</strong> {serverResult.admin?.name}</div>
+        <div><strong>Email:</strong> {serverResult.admin?.email}</div>
+        <div>
+          <strong>Password:</strong>{" "}
+          <code style={{ background: "#312e81", padding: "2px 6px", borderRadius: 4 }}>
+            {serverResult.admin?.password}
+          </code>
+        </div>
+      </div>
+    </div>
+
+    {serverResult.memberCredentials?.length > 0 && (
+      <div style={{ background: "#1e1b4b", borderRadius: 8, padding: "1.25rem", marginBottom: "1rem" }}>
+        <div style={{ color: "#a5b4fc", fontWeight: 700, marginBottom: "0.5rem" }}>
+          Members ({serverResult.memberCredentials.length})
+        </div>
+        <div style={{ overflowX: "auto", maxHeight: 320 }}>
+          <table style={{ width: "100%", fontSize: "0.8rem", color: "#c7d2fe", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ textAlign: "left", color: "#a5b4fc" }}>
+                <th style={{ padding: "4px 8px" }}>Flat</th>
+                <th style={{ padding: "4px 8px" }}>Name</th>
+                <th style={{ padding: "4px 8px" }}>Email</th>
+                <th style={{ padding: "4px 8px" }}>Account</th>
+                <th style={{ padding: "4px 8px" }}>Setup Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {serverResult.memberCredentials.map((c, i) => (
+                <tr key={i} style={{ borderTop: "1px solid #312e81" }}>
+                  <td style={{ padding: "4px 8px" }}>{c.wing}-{c.flatNo}</td>
+                  <td style={{ padding: "4px 8px" }}>{c.ownerName}</td>
+                  <td style={{ padding: "4px 8px" }}>{c.email || <span style={{ color: "#6b7280" }}>none</span>}</td>
+                  <td style={{ padding: "4px 8px" }}>
+                    {c.isNewUser
+                      ? <span style={{ color: "#4ade80" }}>new login created</span>
+                      : <span style={{ color: "#fbbf24" }}>existing account linked</span>}
+                  </td>
+                  <td style={{ padding: "4px 8px" }}>
+                    {c.setCredentialsUrl ? (
+                      <button
+                        onClick={() => navigator.clipboard.writeText(c.setCredentialsUrl)}
+                        style={{ background: "none", border: "none", color: "#a5b4fc", textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: "0.78rem" }}
+                      >Copy link</button>
+                    ) : <span style={{ color: "#6b7280" }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {serverResult.warnings?.length > 0 && (
+      <div style={{ background: "#451a03", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}>
+        <div style={{ color: "#fbbf24", fontWeight: 600, marginBottom: "0.5rem" }}>
+          ⚠ {serverResult.warnings.length} Warning{serverResult.warnings.length > 1 ? "s" : ""}
+        </div>
+        {serverResult.warnings.map((w, i) => (
+          <div key={i} style={{ fontSize: "0.8rem", color: "#fde68a", marginBottom: 4 }}>• {w}</div>
+        ))}
+      </div>
+    )}
+
+    {serverResult.billErrors?.length > 0 && (
+      <div style={{ background: "#1c1917", border: "1px solid #b45309", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}>
+        <div style={{ color: "#fbbf24", fontWeight: 600, marginBottom: "0.5rem", fontSize: "0.85rem" }}>
+          ⚠ {serverResult.billErrors.length} bill(s) failed to generate:
+        </div>
+        {serverResult.billErrors.map((e, i) => (
+          <div key={i} style={{ fontSize: "0.78rem", color: "#fde68a" }}>• {e}</div>
+        ))}
+      </div>
+    )}
+
+    {serverResult.memberCreateErrors?.length > 0 && (
+      <div style={{ background: "#450a0a", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}>
+        <div style={{ color: "#fca5a5", fontWeight: 600, marginBottom: "0.5rem" }}>
+          {serverResult.memberCreateErrors.length} member(s) failed:
+        </div>
+        {serverResult.memberCreateErrors.map((e, i) => (
+          <div key={i} style={{ fontSize: "0.8rem", color: "#fca5a5" }}>{e.flat}: {e.error}</div>
+        ))}
+      </div>
+    )}
+
+    {serverResult.onboardingEmailErrors?.length > 0 && (
+      <div style={{ background: "#450a0a", border: "1px solid #ef4444", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}>
+        <div style={{ color: "#fca5a5", fontWeight: 700, marginBottom: "0.5rem" }}>
+          ⚠ {serverResult.onboardingEmailErrors.length} onboarding email(s) failed to send
+        </div>
+        <div style={{ fontSize: "0.78rem", color: "#fca5a5", marginBottom: 8 }}>
+          Everything was created, but these members won't get their link by mail — use the Copy link column or the export below.
+        </div>
+        {serverResult.onboardingEmailErrors.map((e, i) => (
+          <div key={i} style={{ fontSize: "0.8rem", color: "#fca5a5" }}>• {e}</div>
+        ))}
+      </div>
+    )}
+
+    {serverResult.memberCredentials?.length > 0 && (
+      <button
+        onClick={async () => {
+          const res = await fetch("/api/members/download-credentials", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ credentials: serverResult.memberCredentials }),
+          });
+          if (!res.ok) return alert("Download failed");
+          const url = URL.createObjectURL(await res.blob());
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `Member_Credentials_${Date.now()}.xlsx`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }}
+        style={{ width: "100%", background: "#059669", color: "#fff", border: "none", padding: "0.75rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, marginBottom: "0.75rem" }}
+      >
+        📥 Download Member Credentials ({serverResult.memberCredentials.length} members)
+      </button>
+    )}
+
+    {BillHistoryStep && !showBillHistory && !billHistoryDone && (
+      <div style={{ background: "#1e1b4b", border: "1px solid #4f46e5", borderRadius: 8, padding: "1rem", marginBottom: "0.75rem" }}>
+        <div style={{ color: "#a5b4fc", fontWeight: 700, marginBottom: "0.4rem", fontSize: "0.9rem" }}>
+          📜 Step 4: Import Bill History (Recommended)
+        </div>
+        <div style={{ color: "#9ca3af", fontSize: "0.8rem", marginBottom: "0.75rem" }}>
+          Historical bills from the previous April up to the month before {serverResult.society?.name} joined. Required for correct opening balances and audit reports.
+        </div>
+        <button
+          onClick={() => setShowBillHistory(true)}
+          style={{ background: "#4f46e5", color: "#fff", border: "none", padding: "0.55rem 1.25rem", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" }}
+        >Start Bill History Import →</button>
+      </div>
+    )}
+
+    {BillHistoryStep && showBillHistory && !billHistoryDone && (
+      <div style={{ background: "#111827", border: "1px solid #374151", borderRadius: 8, padding: "1.25rem", marginBottom: "0.75rem" }}>
+        <BillHistoryStep
+          societyId={serverResult.society?.id}
+          societyName={serverResult.society?.name || ""}
+          joinPeriodId={serverResult.billPeriod || ""}
+          interestRate={21}
+          onComplete={() => setBillHistoryDone(true)}
+          onSkip={() => { setShowBillHistory(false); setBillHistoryDone(true); }}
+        />
+      </div>
+    )}
+
+    {billHistoryDone && (
+      <div style={{ background: "#064e3b22", border: "1px solid #10b981", borderRadius: 8, padding: "0.75rem", marginBottom: "0.75rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: 600 }}>
+        ✓ Bill History step complete
+      </div>
+    )}
+
+    <button
+      onClick={onClose}
+      style={{ width: "100%", background: "#6366f1", color: "#fff", border: "none", padding: "0.75rem", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}
+    >Close</button>
+  </div>
+)}
       </div>
     </div>
   );

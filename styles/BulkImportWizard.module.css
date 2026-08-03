@@ -17,7 +17,11 @@
   place-items: center;
   padding: 24px;
 }
-
+.ghostBtn[data-armed="true"] {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fee2e2;
+}
 .scrim {
   position: absolute;
   inset: 0;

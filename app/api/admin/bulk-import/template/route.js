@@ -72,10 +72,10 @@ export async function GET(request) {
   // ── Sheets 2-7: Members (exact same structure as member_import_template.xlsx) ──
   // Sheet 2: Basic Info
   const basicInfoRows = [
-    ["flatNo*", "wing", "floor", "ownerName*", "contactNumber*", "emailPrimary*", "carpetAreaSqft*", "flatType", "ownershipType", "openingPrincipal", "openingInterest"],
-    ["1310", "A", 13, "Arjun Rastogi", "9876543210", "arjun@example.com", 1800, "2BHK", "Owner-Occupied", 0, 0],
-    ["202", "B", 2, "Priya Sharma (with dues)", "9876500000", "priya@example.com", 1200, "2BHK", "Owner-Occupied", 5000, 875],
-    [],
+   ["flatNo*", "wing", "floor", "ownerName*", "contactNumber*", "emailPrimary*", "carpetAreaSqft*", "flatType", "ownershipType", "openingPrincipal", "openingInterest", "advanceCredit"],
+["1310", "A", 13, "Arjun Rastogi", "9876543210", "arjun@example.com", 1800, "2BHK", "Owner-Occupied", 0, 0, 0],
+["202", "B", 2, "Priya Sharma (with dues)", "9876500000", "priya@example.com", 1200, "2BHK", "Owner-Occupied", 5000, 875, 0],
+  [],
     ["INSTRUCTIONS:"],
     ["* = Required fields"],
     ["flatType options: 1BHK, 2BHK, 3BHK, 4BHK, 5BHK+, Studio, Penthouse, Shop, Office"],
@@ -93,7 +93,7 @@ export async function GET(request) {
   ];
   // Sheet 4: Parking Slots
   const parkingRows = [
-    ["flatNo", "slotNumber", "type", "vehicleType"],
+    ["flatNo*", "slotNumber", "type", "vehicleType"],
     ["1310", "P-A-101", "Stilt", "Four-Wheeler"],
     ["1310", "P-A-102", "Open", "Two-Wheeler"],
     ["1310", "P-A-103", "Open", "Two-Wheeler"],

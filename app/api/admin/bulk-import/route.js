@@ -1074,6 +1074,7 @@ export async function POST(request) {
     .map((cred) => {
       const onboardingToken = signToken({ userId: cred.userId, purpose: "onboarding" }, { expiresIn: "7d" });
       const setCredentialsUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/onboarding/set-credentials?token=${onboardingToken}`;
+      cred.setCredentialsUrl = setCredentialsUrl;
       return {
         importRunId,
         userId: cred.userId,

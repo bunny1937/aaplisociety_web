@@ -14,20 +14,20 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { requireRoles } from "@/lib/authz";
+// Must match how every other superadmin route authenticates
+// (see app/api/admin/societies/route.js). lib/authz.js requireRoles reads the
+// member JWT cookie, which the superadmin console does not carry — using it
+// here 401s unconditionally.
+import { validateAdminRequest } from "@/lib/admin-middleware";
 import { buildClientSchema, SCHEMA_VERSION } from "@/lib/import/importSchema";
 import cache from "@/lib/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SUPERADMIN_ROLES = ["SuperAdmin"];
-
 export async function GET(request) {
-  const auth = await requireRoles(request, SUPERADMIN_ROLES);
-  if (!auth.valid) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const validation = validateAdminRequest(request);
+  if (!validation.valid) return validation;
 
   const { searchParams } = new URL(request.url);
   const wantProbe = searchParams.get("probe") === "1";

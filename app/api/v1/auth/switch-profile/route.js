@@ -44,22 +44,28 @@ export const dynamic = "force-dynamic";
 // only the transport differs, and a body is not captured by proxy logs that
 // record Authorization.
 function claimsFrom(req, bodyToken) {
-  try {
-    return getClaims(req, { allowPending: true });
-  } catch (err) {
-    if (!bodyToken) {
-      throw new ApiError(
-        401,
-        "No token. Send the profile-select token from login as an Authorization header or as profileSelectToken in the body.",
-      );
-    }
+  // The body token is request-scoped and deliberately not persisted, so it is
+  // always the caller's real intent. The Authorization header is whatever the
+  // interceptor happened to have in TokenStore — possibly a stale session from
+  // a previous login, which silently resolves to the wrong user.
+  if (bodyToken) {
     try {
-      return verifyAccess(bodyToken);
+      const claims = verifyAccess(bodyToken);
+      if (claims.pending) return claims;
     } catch {
       throw new ApiError(401, "Profile selection expired. Please sign in again.");
     }
   }
+  try {
+    return getClaims(req, { allowPending: true });
+  } catch {
+    throw new ApiError(
+      401,
+      "No token. Send the profile-select token from login as an Authorization header or as profileSelectToken in the body.",
+    );
+  }
 }
+
 export const POST = withRoute(async (req) => {
   const body = await req.json().catch(() => ({}));
 
@@ -78,8 +84,17 @@ if (user.isActive === false) throw new ApiError(403, "Account is disabled");
 const profile = (user.profiles || []).find(
   (p) => String(p.profileId ?? p._id) === parsed.data.profileId && p.status === "Active",
 );
-if (!profile) throw new ApiError(404, "Profile not found");
-
+if (!profile) {
+  const available = (user.profiles || [])
+    .filter((p) => p.status === "Active")
+    .map((p) => `${p.wing || ""}-${p.flatNo || "?"}:${String(p.profileId ?? p._id)}`);
+  throw new ApiError(
+    404,
+    process.env.NODE_ENV === "production"
+      ? "Profile not found"
+      : `Profile not found. Sent ${parsed.data.profileId}; user ${user._id} has [${available.join(", ")}]`,
+  );
+}
 // Persist so /v1/auth/me, the website session and the app agree on which
 // flat is active. Without this the app and web disagree after a switch.
 const chosenId = String(profile.profileId ?? profile._id);
