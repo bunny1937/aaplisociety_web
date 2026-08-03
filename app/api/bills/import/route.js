@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import Member from "@/models/Member";
 import Society from "@/models/Society";
 import BillingHead from "@/models/BillingHead";
 import * as XLSX from "xlsx";
-import { v4 as uuidv4 } from "uuid";
 import { requireRoles, BILLING_WRITE_ROLES } from "@/lib/authz";
 import { calculateMonthlyInterest } from "@/utils/interestUtils";
 import { resolveOpeningBalances } from "@/lib/billing/generationService";
 import { validateBillInvariants } from "@/lib/billing/invariants";
+import { getSocietySnapshot, getBilledSet } from "@/lib/import/societySnapshot";
+import ImportStaging from "@/models/ImportStaging";
 
 const twoDp = (n) => parseFloat((Number(n) || 0).toFixed(2));
-let tempStorage = {};
 export async function POST(request) {
   try {
     await connectDB();
@@ -33,6 +34,7 @@ export async function POST(request) {
       }
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
+      const fileHash = createHash("sha256").update(buffer).digest("hex");
       // Read Excel
       const workbook = XLSX.read(buffer);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -56,17 +58,26 @@ export async function POST(request) {
           { status: 400 },
         );
       }
-      // Fetch members
-      const members = await Member.find({
-        societyId: decoded.societyId,
-      }).lean();
-      const memberMap = new Map(members.map((m) => [m._id.toString(), m]));
-      // Fetch existing bills
-      const existingBills = await Bill.find({ societyId: decoded.societyId })
-        .select("memberId billMonth billYear billPeriodId")
-        .lean();
-      const existingSet = new Set(
-        existingBills.map((b) => `${b.memberId}-${b.billMonth}-${b.billYear}`),
+      // Only the periods this file actually mentions - not every bill the
+      // society has ever had. See lib/import/societySnapshot.js for why the
+      // old unbounded Bill.find({ societyId }) got slower every month.
+      const periodIds = [
+        ...new Set(
+          data
+            .map((r) => {
+              const m = parseInt(r["Bill Month"]);
+              const y = parseInt(r["Bill Year"]);
+              return isNaN(m) || isNaN(y) ? null : `${y}-${String(m + 1).padStart(2, "0")}`;
+            })
+            .filter(Boolean),
+        ),
+      ];
+      const [snapshot, billedSet] = await Promise.all([
+        getSocietySnapshot(decoded.societyId),
+        getBilledSet(decoded.societyId, periodIds),
+      ]);
+      const memberMap = new Map(
+        snapshot.members.map((m) => [m._id.toString(), m]),
       );
       // Validate rows
       const rows = [];
@@ -101,8 +112,8 @@ export async function POST(request) {
           status = "Error";
         }
         // Check duplicates
-        const billKey = `${memberId}-${billMonth}-${billYear}`;
-        if (existingSet.has(billKey)) {
+        const periodId = `${billYear}-${String(billMonth + 1).padStart(2, "0")}`;
+        if (billedSet.has(`${memberId}|${periodId}`)) {
           issues.push("Duplicate bill exists");
           status = "Error";
           duplicates++;
@@ -159,15 +170,20 @@ export async function POST(request) {
           data: row,
         });
       });
-      // Store in temp cache — only keep what confirm step needs, not the full token
-      const batchId = uuidv4();
-      tempStorage[batchId] = {
-        rows,
+      // Staged in Mongo, not process memory - a serverless instance can be
+      // frozen or recycled between this request and the confirm click, and
+      // there is no guarantee both land on the same instance anyway.
+      const staged = await ImportStaging.create({
         societyId: decoded.societyId,
-        userId: decoded.userId,
-      };
+        createdBy: decoded.userId,
+        kind: "bills",
+        fileHash,
+        fileName: file.name,
+        rows,
+        rowCount: rows.length,
+      });
       return NextResponse.json({
-        batchId,
+        batchId: String(staged._id),
         total: rows.length,
         valid,
         warnings,
@@ -181,11 +197,26 @@ export async function POST(request) {
     // STEP 2: CONFIRM
     if (action === "confirm") {
       const { batchId } = await request.json();
-      const cached = tempStorage[batchId];
-      if (!cached) {
-        return NextResponse.json({ error: "Session expired" }, { status: 400 });
+      // Atomic claim, scoped to this society: a double-submit races the same
+      // document and only one request can win.
+      const staged = await ImportStaging.findOneAndUpdate(
+        {
+          _id: batchId,
+          societyId: decoded.societyId,
+          kind: "bills",
+          consumedAt: null,
+        },
+        { $set: { consumedAt: new Date() } },
+        { new: true },
+      ).lean();
+      if (!staged) {
+        const any = await ImportStaging.exists({ _id: batchId, societyId: decoded.societyId });
+        return NextResponse.json(
+          { error: any ? "This import was already completed." : "Preview expired. Re-upload the file." },
+          { status: any ? 409 : 410 },
+        );
       }
-      const { rows, societyId: cachedSocietyId, userId: cachedUserId } = cached;
+      const { rows, societyId: cachedSocietyId, createdBy: cachedUserId } = staged;
       const validRows = rows.filter((r) => r.status === "Valid");
       // Fetch members again
       const members = await Member.find({
@@ -302,8 +333,6 @@ export async function POST(request) {
         }
       }
       if (billsToInsert.length > 0) await Bill.insertMany(billsToInsert);
-      // Clear cache
-      delete tempStorage[batchId];
       return NextResponse.json({
         success: true,
         imported: billsToInsert.length,

@@ -1,0 +1,481 @@
+"use client";
+// app/admin/generate-bills/CollectionsGrid.jsx
+//
+// Replaces the "Download Template" -> edit in Excel -> "Upload" loop with a
+// native grid.
+//
+// Design rules enforced here:
+//
+//  - Four ledger columns (Opening Due, Current Charges, Bill Due, Remaining
+//    Due) are read-only. They render grey, they are not focusable, and their
+//    values are never sent back to the server on submit. Each row carries an
+//    HMAC that proves they were not touched.
+//  - Exactly three fields are editable: Amount Paid, Mode, Remarks.
+//  - Navigation behaves like a spreadsheet. Enter and the arrow keys move
+//    between cells and wrap across rows. Tab still works normally.
+//  - The sheet is fetched once and reused until the billing-config
+//    fingerprint changes.
+
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import { gsap } from "gsap";
+import {
+  Lock,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  Wallet,
+  Smartphone,
+} from "lucide-react";
+import s from "@/styles/CollectionsGrid.module.css";
+
+const MODES = ["", "Cash", "Cheque", "NEFT", "IMPS", "UPI", "Card", "Online"];
+
+// Column order for keyboard navigation. Only editable cells appear here,
+// which is what makes arrow-right skip the grey ledger block entirely.
+const EDITABLE_COLS = ["amountPaid", "mode", "remarks"];
+
+function inr(n) {
+  if (n === null || n === undefined || n === "") return "—";
+  return Number(n).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function StatusPill({ status, paidVia }) {
+  const map = {
+    PAID: { cls: s.pillPaid, label: "Paid" },
+    PARTIAL: { cls: s.pillPartial, label: "Partial" },
+    UNPAID: { cls: s.pillUnpaid, label: "Unpaid" },
+  };
+  const m = map[status] || map.UNPAID;
+  return (
+    <span className={`${s.pill} ${m.cls}`}>
+      {paidVia === "MEMBER_APP" && <Smartphone size={11} strokeWidth={2.5} />}
+      {m.label}
+    </span>
+  );
+}
+
+export default function CollectionsGrid({
+  periodId,
+  rowState,
+  setRowState,
+  results,
+  onSheetLoaded,
+  onRequestVerify,
+  verifyBtnRef,
+  busy,
+}) {
+  const gridRef = useRef(null);
+  const cellRefs = useRef(new Map());
+  const [focused, setFocused] = useState({ row: 0, col: 0 });
+
+  // ---- One fetch, cached until the fingerprint moves --------------------
+  //
+  // staleTime Infinity is deliberate. The server decides when this data is
+  // stale, not a timer, because "stale" here means "billing config changed",
+  // which no client-side interval can know. The verify endpoint returns
+  // STALE_FINGERPRINT and the parent triggers a refetch.
+  const {
+    data: sheet,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: ["collection-sheet", periodId],
+    queryFn: () =>
+      apiClient.get(`/api/bills/collection-sheet?periodId=${periodId}`),
+    enabled: Boolean(periodId),
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const rows = useMemo(() => sheet?.rows || [], [sheet]);
+
+  useEffect(() => {
+    if (sheet) onSheetLoaded?.(sheet);
+  }, [sheet, onSheetLoaded]);
+
+  // ---- Row entrance -----------------------------------------------------
+  // transform + opacity only. Animating height here would reflow the table on
+  // every frame and is exactly the pixel-shift we are avoiding.
+  useEffect(() => {
+    if (!rows.length || !gridRef.current) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const rowEls = gridRef.current.querySelectorAll("[data-grid-row]");
+    gsap.fromTo(
+      rowEls,
+      { opacity: 0, y: 10 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.34,
+        ease: "power2.out",
+        force3D: true,
+        // amount, not per-item: 31 flats and 300 flats take the same 0.35s.
+        stagger: { amount: Math.min(0.35, rowEls.length * 0.01) },
+        clearProps: "transform",
+      },
+    );
+  }, [rows.length]);
+
+  const cellKey = (r, c) => `${r}:${c}`;
+
+  const registerCell = useCallback((r, c, el) => {
+    if (el) cellRefs.current.set(cellKey(r, c), el);
+    else cellRefs.current.delete(cellKey(r, c));
+  }, []);
+
+  const focusCell = useCallback((r, c) => {
+    const total = EDITABLE_COLS.length;
+    const el = cellRefs.current.get(cellKey(r, c));
+    if (!el) return false;
+    el.focus();
+    if (el.select) {
+      try {
+        el.select();
+      } catch {
+        /* selects on <select> throw, ignore */
+      }
+    }
+    setFocused({ row: r, col: c });
+    // Keep the active row in view without smooth-scrolling, which fights the
+    // stagger animation on slower devices.
+    el.closest("[data-grid-row]")?.scrollIntoView({
+      block: "nearest",
+      behavior: "auto",
+    });
+    return total > 0;
+  }, []);
+
+  /**
+   * Spreadsheet keyboard model.
+   *
+   *   Enter        -> next row, same column (wraps to first row)
+   *   Shift+Enter  -> previous row, same column
+   *   ArrowDown/Up -> same as Enter / Shift+Enter
+   *   ArrowRight   -> next editable column, wrapping to the next row
+   *   ArrowLeft    -> previous editable column, wrapping to the previous row
+   *   Escape       -> blur, so the overlay shortcut can take over
+   *
+   * Arrow left/right inside a text input only navigates when the caret is
+   * already at the edge. Otherwise it moves the caret, which is what anyone
+   * coming from Excel expects.
+   */
+  const onKeyDown = useCallback(
+    (e, r, c) => {
+      const lastRow = rows.length - 1;
+      const lastCol = EDITABLE_COLS.length - 1;
+      const el = e.target;
+      const isText = el.tagName === "INPUT" && el.type !== "checkbox";
+      const atStart = !isText || el.selectionStart === 0;
+      const atEnd = !isText || el.selectionEnd === (el.value?.length ?? 0);
+
+      switch (e.key) {
+        case "Enter":
+          e.preventDefault();
+          if (e.shiftKey) focusCell(Math.max(0, r - 1), c);
+          else if (r < lastRow) focusCell(r + 1, c);
+          else focusCell(0, c);
+          break;
+
+        case "ArrowDown":
+          e.preventDefault();
+          focusCell(Math.min(lastRow, r + 1), c);
+          break;
+
+        case "ArrowUp":
+          e.preventDefault();
+          focusCell(Math.max(0, r - 1), c);
+          break;
+
+        case "ArrowRight":
+          if (!atEnd) return;
+          e.preventDefault();
+          if (c < lastCol) focusCell(r, c + 1);
+          else if (r < lastRow) focusCell(r + 1, 0);
+          break;
+
+        case "ArrowLeft":
+          if (!atStart) return;
+          e.preventDefault();
+          if (c > 0) focusCell(r, c - 1);
+          else if (r > 0) focusCell(r - 1, lastCol);
+          break;
+
+        case "Escape":
+          el.blur();
+          break;
+
+        default:
+          break;
+      }
+    },
+    [rows.length, focusCell],
+  );
+
+  const update = useCallback(
+    (billId, field, value) => {
+      setRowState((prev) => ({
+        ...prev,
+        [billId]: { ...(prev[billId] || {}), [field]: value },
+      }));
+    },
+    [setRowState],
+  );
+
+  // ---- Live totals, computed from locked server values ------------------
+  const totals = useMemo(() => {
+    let entered = 0;
+    let filledRows = 0;
+    for (const r of rows) {
+      const st = rowState[r.billId] || {};
+      const amt = Number(st.amountPaid);
+      if (st.mode && Number.isFinite(amt) && amt > 0) {
+        entered += amt;
+        filledRows += 1;
+      }
+    }
+    return {
+      entered,
+      filledRows,
+      outstanding: sheet?.summary?.outstanding || 0,
+    };
+  }, [rows, rowState, sheet]);
+
+  if (isLoading) {
+    return (
+      <div className={s.skeletonWrap}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className={s.skeletonRow} style={{ animationDelay: `${i * 60}ms` }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    const code = error?.data?.code;
+    return (
+      <div className={s.emptyState}>
+        <AlertCircle size={28} className={s.emptyIcon} />
+        <h3>
+          {code === "NO_BILLS"
+            ? "No bills generated for this period yet"
+            : "Could not load the collection sheet"}
+        </h3>
+        <p>
+          {code === "NO_BILLS"
+            ? "Generate the bills for this period first, then come back to record collections."
+            : error?.message || "Something went wrong."}
+        </p>
+        <button className={s.btnSecondary} onClick={() => refetch()}>
+          <RefreshCw size={14} /> Try again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={s.wrap} ref={gridRef}>
+      {/* ---- Sheet header -------------------------------------------- */}
+      <div className={s.sheetBar}>
+        <div className={s.sheetMeta}>
+          <span className={s.sheetTitle}>Collections · {periodId}</span>
+          <span className={s.sheetSub}>
+            {sheet.summary.total} flats · {sheet.summary.alreadyPaid} already paid ·{" "}
+            {sheet.summary.partial} partial · {sheet.summary.unpaid} unpaid
+          </span>
+        </div>
+        <div className={s.sheetActions}>
+          <span className={s.cacheTag} title="This sheet is reused until billing configuration changes.">
+            <Lock size={11} /> Ledger locked
+          </span>
+          <button
+            className={s.btnGhost}
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Refetch only if you changed billing heads or rates"
+          >
+            {isFetching ? <Loader2 size={14} className={s.spin} /> : <RefreshCw size={14} />}
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* ---- Grid ------------------------------------------------------ */}
+      <div className={s.tableScroll}>
+        <table className={s.table}>
+          <thead>
+            <tr>
+              <th className={s.thSticky}>Flat</th>
+              <th className={s.thName}>Owner</th>
+              <th className={s.thStatus}>Status</th>
+              <th className={s.thLocked}>
+                Opening Due <Lock size={10} />
+              </th>
+              <th className={s.thLocked}>
+                Current Charges <Lock size={10} />
+              </th>
+              <th className={s.thLocked}>
+                Bill Due <Lock size={10} />
+              </th>
+              <th className={s.thLocked}>
+                Remaining Due <Lock size={10} />
+              </th>
+              <th className={s.thEdit}>Amount Paid</th>
+              <th className={s.thEdit}>Mode</th>
+              <th className={s.thEdit}>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rIdx) => {
+              const st = rowState[row.billId] || {};
+              const res = results?.[row.billId];
+              const rowCls = [
+                s.row,
+                res?.ok === true ? s.rowPass : "",
+                res?.ok === false ? s.rowFail : "",
+                row.systemStatus === "PAID" ? s.rowSettled : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+
+              // A fully settled bill has nothing left to collect. Locking the
+              // inputs is friendlier than letting the admin type and then
+              // rejecting it at verify time.
+              const settled = row.systemStatus === "PAID";
+
+              return (
+                <tr
+                  key={row.billId}
+                  data-grid-row
+                  data-bill-id={row.billId}
+                  className={rowCls}
+                >
+                  <td className={s.tdSticky}>{row.flat}</td>
+                  <td className={s.tdName} title={row.ownerName}>
+                    {row.ownerName}
+                  </td>
+                  <td>
+                    <StatusPill status={row.systemStatus} paidVia={row.paidVia} />
+                  </td>
+
+                  {/* ---- LOCKED LEDGER BLOCK -------------------------- */}
+                  <td className={s.tdLocked}>{inr(row.openingDue)}</td>
+                  <td className={s.tdLocked}>{inr(row.currentCharges)}</td>
+                  <td className={`${s.tdLocked} ${s.tdEmphasis}`}>{inr(row.billDue)}</td>
+                  <td
+                    className={`${s.tdLocked} ${row.remainingDue > 0 ? s.tdDue : s.tdClear}`}
+                  >
+                    {inr(row.remainingDue)}
+                  </td>
+
+                  {/* ---- EDITABLE ------------------------------------- */}
+                  <td className={s.tdEdit}>
+                    <input
+                      ref={(el) => registerCell(rIdx, 0, el)}
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      max={row.remainingDue}
+                      className={s.cellInput}
+                      value={st.amountPaid ?? ""}
+                      disabled={settled || busy}
+                      placeholder={settled ? "settled" : inr(row.remainingDue)}
+                      onChange={(e) => update(row.billId, "amountPaid", e.target.value)}
+                      onKeyDown={(e) => onKeyDown(e, rIdx, 0)}
+                      onFocus={() => setFocused({ row: rIdx, col: 0 })}
+                    />
+                  </td>
+                  <td className={s.tdEdit}>
+                    <select
+                      ref={(el) => registerCell(rIdx, 1, el)}
+                      className={s.cellSelect}
+                      value={st.mode ?? ""}
+                      disabled={settled || busy}
+                      onChange={(e) => update(row.billId, "mode", e.target.value)}
+                      onKeyDown={(e) => onKeyDown(e, rIdx, 1)}
+                      onFocus={() => setFocused({ row: rIdx, col: 1 })}
+                    >
+                      {MODES.map((m) => (
+                        <option key={m || "none"} value={m}>
+                          {m || "— not collected —"}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className={s.tdEdit}>
+                    <input
+                      ref={(el) => registerCell(rIdx, 2, el)}
+                      type="text"
+                      maxLength={240}
+                      className={s.cellInput}
+                      value={st.remarks ?? ""}
+                      disabled={settled || busy}
+                      placeholder={st.mode === "Cheque" ? "Cheque no. + bank" : ""}
+                      onChange={(e) => update(row.billId, "remarks", e.target.value)}
+                      onKeyDown={(e) => onKeyDown(e, rIdx, 2)}
+                      onFocus={() => setFocused({ row: rIdx, col: 2 })}
+                    />
+                    {res && !res.ok && (
+                      <span className={s.rowError} role="alert">
+                        <AlertCircle size={11} /> {res.message}
+                      </span>
+                    )}
+                    {res?.ok && (
+                      <span className={s.rowOk}>
+                        <CheckCircle2 size={11} /> {res.note}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ---- Footer dock ---------------------------------------------- */}
+      <div className={s.footerDock}>
+        <div className={s.footerStats}>
+          <div>
+            <span className={s.footLabel}>Outstanding</span>
+            <span className={s.footValue}>₹{inr(totals.outstanding)}</span>
+          </div>
+          <div>
+            <span className={s.footLabel}>Being collected</span>
+            <span className={`${s.footValue} ${s.footAccent}`}>
+              ₹{inr(totals.entered)}
+            </span>
+          </div>
+          <div>
+            <span className={s.footLabel}>Rows filled</span>
+            <span className={s.footValue}>
+              {totals.filledRows} / {rows.length}
+            </span>
+          </div>
+        </div>
+
+        <button
+          ref={verifyBtnRef}
+          className={s.btnVerify}
+          onClick={onRequestVerify}
+          disabled={busy || rows.length === 0}
+        >
+          <Wallet size={16} />
+          Verify &amp; Submit
+          <kbd className={s.kbd}>⌘↵</kbd>
+        </button>
+      </div>
+    </div>
+  );
+}

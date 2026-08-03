@@ -6,6 +6,7 @@ import { postNdjson } from "@/lib/ndjson-client";
 import styles from "@/styles/GenerateBills.module.css";
 import ExcelPreviewGrid from "../../components/ExcelPreviewGrid";
 import DropZone from "components/DropZone";
+import CollectionsPanel from "./CollectionsPanel";
 // ─── Pure billing engine functions (client-safe, no DB/React imports) ────────
 function buildParkingRates(heads) {
   const parkingRates = {};
@@ -572,7 +573,10 @@ if (!latestPeriodId) {
   const periodLabel =
     billMonth !== null && billYear
       ? `${billYear}-${String(billMonth + 1).padStart(2, "0")}`
-      : "...";
+      : null;
+  const hasValidPeriodLabel = Boolean(
+    periodLabel && /^\d{4}-\d{2}$/.test(periodLabel),
+  );
   const generatePreview = async () => {
     if (billMonth === null || billYear === null) return;
     const members = allMembers.filter((m) => !m.isDeleted);
@@ -1610,14 +1614,22 @@ ${
               Remarks
             </div>
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              <button
-                className="btn btn-primary"
-                disabled={billTemplateDisabled}
-                onClick={downloadBillTemplate}
-                style={{ opacity: billTemplateDisabled ? 0.5 : 1 }}
-              >
-                Download Template ({periodLabel})
-              </button>
+              {hasValidPeriodLabel ? (
+                <CollectionsPanel periodId={periodLabel} />
+              ) : (
+                <div
+                  style={{
+                    fontSize: "0.82rem",
+                    color: "#6b7280",
+                    padding: "0.6rem 0.9rem",
+                    border: "1px dashed #d1d5db",
+                    borderRadius: "8px",
+                    background: "#f9fafb",
+                  }}
+                >
+                  Preparing billing period…
+                </div>
+              )}
               <button
                 className="btn btn-secondary"
                 disabled={isPreviewing}

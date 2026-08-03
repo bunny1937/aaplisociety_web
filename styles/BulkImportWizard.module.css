@@ -1,0 +1,627 @@
+/* styles/BulkImportWizard.module.css
+ *
+ * Same token set as GenerateBills / CollectionsGrid so the two admin surfaces
+ * read as one product: indigo #4f46e5, ink #111827, 10-12px radii.
+ *
+ * ANIMATION RULE: transitions are allowed ONLY on transform, opacity,
+ * background-color, border-color and box-shadow. Never width/height/top/left.
+ * This grid can hold several hundred rows; animating a layout property would
+ * reflow all of them every frame.
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.46);
+  backdrop-filter: blur(3px);
+}
+
+.shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1400px, 96vw);
+  height: min(92vh, 940px);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(17, 24, 39, 0.28);
+  overflow: hidden;
+  /* The morph animates this element. Give the compositor its own layer for
+     the duration; GSAP clears the transform when the timeline ends. */
+  will-change: transform, opacity;
+  transform-origin: center bottom;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  color: #111827;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  transform: scale(1.05);
+}
+
+.iconBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Sheet tabs ─────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 24px 0;
+  border-bottom: 1px solid #e5e7eb;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 9px 9px 0 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab:hover {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.tabActive {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+
+.tabError {
+  color: #b91c1c;
+}
+
+.tabError.tabActive {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.tabLabel {
+  font-variant-numeric: tabular-nums;
+}
+
+.badgeOk,
+.badgeErr {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.badgeOk {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badgeErr {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* ── Body ───────────────────────────────────────────────────────────────── */
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 24px 0;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.sheetHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.sheetTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 620;
+  color: #111827;
+}
+
+.sheetSub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #6b7280;
+}
+
+.sheetActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #9ca3af;
+  margin-right: 4px;
+}
+
+.ghostBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.ghostBtn:hover {
+  background: #f5f4ff;
+  border-color: #c7d2fe;
+  transform: translateY(-1px);
+}
+
+.sheetErrorBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 12.5px;
+}
+
+/* ── Society form ───────────────────────────────────────────────────────── */
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px 16px;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 560;
+  color: #374151;
+}
+
+.req {
+  color: #ef4444;
+  font-style: normal;
+  margin-left: 2px;
+}
+
+.field input,
+.field select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #111827;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.13);
+}
+
+.fieldErr input,
+.fieldErr select {
+  border-color: #ef4444;
+  background: #fff7f7;
+}
+
+.fieldErr input:focus,
+.fieldErr select:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.13);
+}
+
+.fieldMsg {
+  font-size: 11.5px;
+  color: #b91c1c;
+  line-height: 1.4;
+}
+
+/* ── Grid ───────────────────────────────────────────────────────────────── */
+
+.tableScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  /* Isolates repaints to this box so scrolling a long grid does not repaint
+     the tabs and footer. */
+  contain: paint;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 12.5px;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 9px 8px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 620;
+  color: #374151;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.thIndex,
+.tdIndex {
+  width: 44px;
+  text-align: center !important;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.thDel,
+.tdDel {
+  width: 40px;
+}
+
+.table tbody td {
+  padding: 0;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.table tbody input,
+.table tbody select {
+  width: 100%;
+  height: 33px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12.5px;
+  color: #111827;
+  font-family: inherit;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.table tbody input:focus,
+.table tbody select:focus {
+  outline: none;
+  background: #fff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.13);
+  position: relative;
+  z-index: 2;
+}
+
+.rowErr {
+  background: #fffbfb;
+}
+
+.rowErr .tdIndex {
+  box-shadow: inset 3px 0 0 #ef4444;
+  color: #b91c1c;
+}
+
+.rowBlank .tdIndex {
+  opacity: 0.4;
+}
+
+.cellErr input,
+.cellErr select {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.delBtn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 0 auto;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #d1d5db;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.delBtn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  transform: scale(1.1);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.statusOk {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #047857;
+  font-weight: 560;
+}
+
+.statusErr {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #b91c1c;
+  font-weight: 560;
+}
+
+.warnBox {
+  font-size: 12px;
+  color: #92400e;
+}
+
+.warnBox summary {
+  cursor: pointer;
+  padding: 3px 9px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  user-select: none;
+}
+
+.warnBox ul {
+  position: absolute;
+  bottom: 60px;
+  max-width: 560px;
+  margin: 8px 0 0;
+  padding: 12px 16px 12px 30px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.12);
+  line-height: 1.55;
+}
+
+.warnBox li + li {
+  margin-top: 6px;
+}
+
+.submitBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.3);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.015);
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.32);
+}
+
+.submitBtn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── States ─────────────────────────────────────────────────────────────── */
+
+.centerState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.centerState h3 {
+  margin: 0;
+  font-size: 19px;
+  color: #111827;
+}
+
+.smallNote {
+  font-size: 12.5px;
+  color: #9ca3af;
+  max-width: 44ch;
+}
+
+.okIcon {
+  color: #10b981;
+}
+
+.errIcon {
+  color: #ef4444;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.serverErr {
+  display: flex;
+  gap: 12px;
+  margin: 0 24px 20px;
+  padding: 14px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #991b1b;
+  font-size: 13px;
+}
+
+.serverErr ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.mismatch {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: #b91c1c;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .header,
+  .tabs,
+  .body,
+  .footer {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .iconBtn,
+  .ghostBtn,
+  .submitBtn,
+  .delBtn,
+  .table tbody input,
+  .table tbody select {
+    transition: none;
+  }
+
+  .spin {
+    animation: none;
+  }
+}

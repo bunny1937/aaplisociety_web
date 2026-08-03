@@ -34,6 +34,9 @@ import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
 import { generateUniqueSocietyCode } from "@/lib/society-code";
 import { generatePassword } from "@/lib/password-generator";
+import cache from "@/lib/cache";
+import { SCHEMA_VERSION } from "@/lib/import/importSchema";
+import { validateWorkbook } from "@/lib/import/validateWorkbook";
 import { sendEmail, onboardingEmailHtml } from "@/lib/brevo-email";
 import { signToken } from "@/lib/jwt";
 
@@ -339,11 +342,60 @@ export async function POST(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
   await connectDB();
-  const formData = await request.formData();
-  const file = formData.get("file");
-  const importRunId =
-    String(formData.get("importRunId") || "").trim() ||
-    new mongoose.Types.ObjectId().toString();
+
+  const contentType = request.headers.get("content-type") || "";
+  let file, importRunId, jsonBody;
+
+  if (contentType.includes("application/json")) {
+    // Native wizard path. Rows arrive already shaped as
+    // { society, basicInfo, additional, parking, family, ownerHistory,
+    //   tenantHistory }, already validated client-side against the same
+    // schema re-checked below.
+    jsonBody = await request.json();
+    importRunId =
+      String(jsonBody.importRunId || "").trim() ||
+      new mongoose.Types.ObjectId().toString();
+
+    if (jsonBody.schemaVersion !== SCHEMA_VERSION) {
+      // The admin loaded the wizard, we deployed, they submitted. Rather than
+      // import against stale rules, make them reload.
+      return NextResponse.json(
+        {
+          error: "SCHEMA_CHANGED",
+          message:
+            "The import format was updated while this window was open. Reload the page and re-open the wizard.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Re-run the IDENTICAL rules the browser ran. The client-side pass is a
+    // UX affordance; this is the boundary. A crafted POST gets nowhere.
+    const verdict = validateWorkbook(jsonBody.data);
+    if (!verdict.ok) {
+      return NextResponse.json(
+        {
+          validationFailed: true,
+          phase: "schema",
+          serverRejectedClientValidated: true,
+          cellErrors: verdict.cellErrors,
+          sheetErrors: verdict.sheetErrors,
+          errors: [
+            `Server-side validation found ${verdict.totalErrors} problem(s) the browser did not report. ` +
+              "Reload and try again.",
+          ],
+        },
+        { status: 422 },
+      );
+    }
+    file = true; // native path never lacks a "file" - skip the formData check below
+  } else {
+    const formData = await request.formData();
+    file = formData.get("file");
+    importRunId =
+      String(formData.get("importRunId") || "").trim() ||
+      new mongoose.Types.ObjectId().toString();
+  }
   if (!file)
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
@@ -398,8 +450,25 @@ export async function POST(request) {
     return NextResponse.json({ ...body, importRunId }, { status });
   };
 
-  const bytes = await file.arrayBuffer();
-  const wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
+  let wb;
+  if (jsonBody) {
+    // Reuse the identical downstream pipeline (position/prefix-based sheet
+    // lookups) by building an in-memory workbook out of the wizard's JSON
+    // rows, instead of forking the parsing logic below in two.
+    wb = XLSX.utils.book_new();
+    const sheet = (name, rows) =>
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows || []), name);
+    sheet("Society", jsonBody.data.society);
+    sheet("1. Basic Info (Required)", jsonBody.data.basicInfo);
+    sheet("2. Additional Info", jsonBody.data.additional);
+    sheet("3. Parking Slots", jsonBody.data.parking);
+    sheet("4. Family Members", jsonBody.data.family);
+    sheet("5. Owner History", jsonBody.data.ownerHistory);
+    sheet("6. Tenant History", jsonBody.data.tenantHistory);
+  } else {
+    const bytes = await file.arrayBuffer();
+    wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
+  }
   if (wb.SheetNames.length < 1) {
     return fail(
       {
@@ -568,9 +637,14 @@ export async function POST(request) {
   const memberEmails = [
     ...new Set(validMembers.filter((m) => m.emailPrimary).map((m) => m.emailPrimary)),
   ];
-  const existingUsersByEmail = new Map();
+  // Emails that already belong to an account OUTSIDE this import still abort
+  // the run - we are not silently merging a new society into a stranger's
+  // login. Unchanged policy.
   if (memberEmails.length > 0) {
-    const existingUsers = await User.find({ email: { $in: memberEmails } });
+    const existingUsers = await User.find(
+      { email: { $in: memberEmails } },
+      { email: 1 },
+    ).lean();
     if (existingUsers.length > 0) {
       const existingEmailSet = new Set(existingUsers.map((u) => u.email));
       const emailErrors = validMembers
@@ -581,12 +655,16 @@ export async function POST(request) {
         );
       return fail({ validationFailed: true, phase: "members", errors: emailErrors, warnings }, 422);
     }
-    // (Left in place for defense-in-depth: the check above currently rejects
-    // the whole import on any collision, so this map is always empty here —
-    // but if that policy ever relaxes to "merge into existing account",
-    // this one bulk lookup avoids re-introducing an N+1 findOne per member.)
-    for (const u of existingUsers) existingUsersByEmail.set(u.email, u);
   }
+
+  // Accounts created DURING this run, keyed by email. This is the map the
+  // Phase 3 loop actually needs: when the same owner holds several flats, the
+  // second and third rows must attach a profile to the user the first row
+  // created, not create a duplicate account.
+  //
+  // Populated inside the loop below. Do NOT hoist a DB query into it - by
+  // definition these users do not exist yet when the loop starts.
+  const createdUsersByEmail = new Map(); // email -> { _id, username }
   await markRun(importRunId, {
     status: "IMPORTING",
     stage: "Creating society, users, and members",
@@ -683,11 +761,12 @@ export async function POST(request) {
           { session },
         );
         if (memberData.emailPrimary) {
-          const existingUser = existingUsersByEmail.get(memberData.emailPrimary);
-          if (existingUser) {
+          const alreadyCreated = createdUsersByEmail.get(memberData.emailPrimary);
+          if (alreadyCreated) {
+            // Same owner, another flat. One login, one more profile.
             const profileId = new mongoose.Types.ObjectId();
             await User.updateOne(
-              { _id: existingUser._id },
+              { _id: alreadyCreated._id },
               {
                 $push: {
                   profiles: {
@@ -696,6 +775,7 @@ export async function POST(request) {
                     memberId: member._id,
                     flatNo: memberData.flatNo,
                     wing: memberData.wing,
+                    societyName: societyPayload.societyName,
                     isPrimary: false,
                     status: "Active",
                     joinedAt: new Date(),
@@ -704,13 +784,18 @@ export async function POST(request) {
               },
               { session },
             );
+            // No second onboarding email: isNewUser stays false, so the
+            // EmailOutbox filter at the end of this route skips it. One token
+            // activates every flat under this email.
             memberCredentials.push({
               flatNo: memberData.flatNo,
               wing: memberData.wing,
               ownerName: memberData.ownerName,
               email: memberData.emailPrimary,
-              password: "(existing account — original password unchanged)",
+              username: alreadyCreated.username,
+              password: "(same login as this owner's first flat)",
               isNewUser: false,
+              additionalFlatFor: alreadyCreated.username,
             });
           } else {
             const [newUser] = await User.create(
@@ -731,6 +816,7 @@ export async function POST(request) {
                       memberId: member._id,
                       flatNo: memberData.flatNo,
                       wing: memberData.wing,
+                      societyName: societyPayload.societyName,
                       isPrimary: true,
                       status: "Active",
                       joinedAt: new Date(),
@@ -742,6 +828,13 @@ export async function POST(request) {
               ],
               { session },
             );
+            // Register before the next iteration. This single line is what
+            // turns three rows into one account with three profiles.
+            createdUsersByEmail.set(memberData.emailPrimary, {
+              _id: newUser._id,
+              username: prep.username,
+            });
+
             memberCredentials.push({
               userId: newUser._id,
               flatNo: memberData.flatNo,
@@ -1053,6 +1146,7 @@ export async function POST(request) {
     billErrors,
     warnings,
   };
+  await cache.del("import:taken-emails");
   await markRun(importRunId, {
     status: "COMPLETED",
     stage: "Done",

@@ -2,9 +2,45 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: {
-      bodySizeLimit: "10mb",
+      // ## Why this came down from "10mb"
+      //
+      // 10mb was misleading. Vercel rejects any request body over 4.5MB at the
+      // edge, before the function runs — this setting cannot raise that ceiling,
+      // it only relaxes Next's own additional check. Declaring 10mb meant the
+      // codebase advertised a limit it could never honour, which is exactly how
+      // the "upload just fails with no error" bug survived so long.
+      //
+      // 4mb sits safely under the platform limit, so oversized bodies now fail
+      // with our own error message instead of a bodyless platform 413.
+      // Anything larger must use the presigned direct-to-R2 flow
+      // (POST /v1/uploads/sign) which has no such ceiling.
+      bodySizeLimit: "4mb",
     },
   },
+
+  // Image Optimization counters all read zero because there was no images
+  // config at all — next/image cannot optimise an R2 URL it has not been told
+  // to trust, so every image was being served unoptimised at full size.
+  images: {
+    formats: ["image/avif", "image/webp"],
+    // Presigned R2 URLs carry a query string; remotePatterns matches on host
+    // and path, so the signature does not interfere.
+    remotePatterns: [
+      // Replace <account>.r2.cloudflarestorage.com with your actual R2 host,
+      // or set R2_PUBLIC_HOST and this picks it up automatically.
+      ...(process.env.R2_PUBLIC_HOST
+        ? [{ protocol: "https", hostname: process.env.R2_PUBLIC_HOST, pathname: "/**" }]
+        : []),
+      { protocol: "https", hostname: "**.r2.cloudflarestorage.com", pathname: "/**" },
+      { protocol: "https", hostname: "**.r2.dev", pathname: "/**" },
+    ],
+    // Derived variants are immutable; cache them hard so a resident scrolling
+    // the visitor log does not re-fetch the same thumbnails all day.
+    minimumCacheTTL: 60 * 60 * 24 * 30,
+    deviceSizes: [360, 480, 640, 828, 1080],
+    imageSizes: [48, 64, 96, 128, 256],
+  },
+
   // Mobile API compatibility: the Flutter app calls `/v1/...`. On Vercel this
   // is handled by vercel.json rewrites, but those are NOT applied during local
   // dev (`node server.js`) or `next start`. Declaring it here as well makes
