@@ -1,32 +1,23 @@
 // app/api/v1/auth/switch-profile/route.js
 //
-// FIX APPLIED HERE: accept the pending token from the request BODY as well as
-// the Authorization header.
+// Two jobs now:
 //
-// The app was patched to send it in the body:
+//   1. FIRST SELECTION   - caller holds a `pending: true` token from /auth/login
+//                          and has no session yet. Token arrives in the body.
+//   2. IN-SESSION SWITCH - caller is already fully signed in on flat 101 and
+//                          wants to jump to 201 from the dashboard avatar.
+//                          Token is a normal access token on the header.
 //
-//   dio.post('/auth/switch-profile', data: {
-//     'profileId': ..., 'profileSelectToken': ...,
-//   });
+// Both end in the same place: verify the profile really belongs to this user,
+// persist activeProfileId, mint a fresh token pair scoped to that profile.
+// Case 2 used to be rejected with 400 "Profile already selected", which is why
+// the only way to change flat was to log out and back in.
 //
-// while this route only ever read the header via getClaims(). The Dio
-// interceptor sets Authorization from TokenStore, and at this point in the
-// flow TokenStore is empty - login returned a pending token instead of a real
-// token pair, and the app deliberately does not persist it. So the header was
-// absent and every selection came back 401 "No token".
-//
-// Reading both is the right resolution rather than forcing one:
-//
-//   - header  : what the current /v1 clients and the web caller already send
-//   - body    : what a client without a cookie jar or token store can send
-//               without polluting its global auth interceptor with a
-//               short-lived token that must never be persisted
-//
-// Security is unchanged either way. The token is a signed JWT carrying
-// pending: true and a 15-minute TTL; where it travels does not affect what it
-// proves. The body is TLS-encrypted exactly like the header, and unlike a
-// header it will not be captured by proxy access logs that record
-// Authorization.
+// NOTE ON THE 404 THIS ROUTE RETURNED ON EVERY SINGLE CALL:
+// the bug was never in this file. lib/v1/models.js did not declare `profileId`
+// on its profile sub-schema and used { _id: true }, so Mongoose minted a fresh
+// random id per hydration and login/switch could never agree. See the comment
+// block in lib/v1/models.js.
 
 import { withRoute, ApiError, json, zodError } from "@/lib/v1/http";
 import { getClaims } from "@/lib/v1/auth";
@@ -38,20 +29,14 @@ import { issueTokens } from "@/lib/v1/authService";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// The app has no Authorization header at this moment: login returned a
-// pending token that is deliberately not persisted to TokenStore, so it
-// sends it in the body. Same signed JWT, same pending claim, same 15m TTL —
-// only the transport differs, and a body is not captured by proxy logs that
-// record Authorization.
+// The body token wins when present. It is request-scoped and deliberately not
+// persisted by the app, so it is always the caller's real intent. The header is
+// whatever the Dio interceptor happened to hold, which during first selection
+// is nothing and after a switch is the OLD profile's token.
 function claimsFrom(req, bodyToken) {
-  // The body token is request-scoped and deliberately not persisted, so it is
-  // always the caller's real intent. The Authorization header is whatever the
-  // interceptor happened to have in TokenStore — possibly a stale session from
-  // a previous login, which silently resolves to the wrong user.
   if (bodyToken) {
     try {
-      const claims = verifyAccess(bodyToken);
-      if (claims.pending) return claims;
+      return verifyAccess(bodyToken);
     } catch {
       throw new ApiError(401, "Profile selection expired. Please sign in again.");
     }
@@ -69,39 +54,62 @@ function claimsFrom(req, bodyToken) {
 export const POST = withRoute(async (req) => {
   const body = await req.json().catch(() => ({}));
 
-  // Accept either name so a client patched to one convention or the other
-  // works. Matches the dual naming now returned by /auth/login.
   const bodyToken = body.profileSelectToken || body.selectToken || null;
+  const claims = claimsFrom(req, bodyToken);
 
-const claims = claimsFrom(req, bodyToken);
-if (!claims.pending) throw new ApiError(400, "Profile already selected");
-const parsed = profileSelectSchema.safeParse(body);
-if (!parsed.success) throw zodError(parsed);
+  // Accepted deliberately whether or not claims.pending is set:
+  //   pending  -> first selection straight after login
+  //   !pending -> in-session switch from the dashboard avatar
+  // A non-pending token is strictly MORE authenticated than a pending one, so
+  // allowing it does not widen access. The profile-belongs-to-user check below
+  // is the real gate in both cases.
+  const parsed = profileSelectSchema.safeParse(body);
+  if (!parsed.success) throw zodError(parsed);
 
- const user = await User.findById(claims.userId);
-if (!user) throw new ApiError(401, "User not found");
-if (user.isActive === false) throw new ApiError(403, "Account is disabled");
-const profile = (user.profiles || []).find(
-  (p) => String(p.profileId ?? p._id) === parsed.data.profileId && p.status === "Active",
-);
-if (!profile) {
-  const available = (user.profiles || [])
-    .filter((p) => p.status === "Active")
-    .map((p) => `${p.wing || ""}-${p.flatNo || "?"}:${String(p.profileId ?? p._id)}`);
-  throw new ApiError(
-    404,
-    process.env.NODE_ENV === "production"
-      ? "Profile not found"
-      : `Profile not found. Sent ${parsed.data.profileId}; user ${user._id} has [${available.join(", ")}]`,
+  const user = await User.findById(claims.userId);
+  if (!user) throw new ApiError(401, "User not found");
+  if (user.isActive === false) throw new ApiError(403, "Account is disabled");
+
+  const profile = (user.profiles || []).find(
+    (p) =>
+      String(p.profileId ?? p._id) === parsed.data.profileId &&
+      p.status === "Active",
   );
-}
-// Persist so /v1/auth/me, the website session and the app agree on which
-// flat is active. Without this the app and web disagree after a switch.
-const chosenId = String(profile.profileId ?? profile._id);
-if (String(user.activeProfileId ?? "") !== chosenId) {
-  user.activeProfileId = profile.profileId ?? profile._id;
-  await user.save();
-}
 
-return json(await issueTokens(user, profile));
+  if (!profile) {
+    // Never leak the id list in production, but make a repeat of this class of
+    // bug diagnosable in one request instead of one evening.
+    const available = (user.profiles || [])
+      .filter((p) => p.status === "Active")
+      .map((p) => `${p.wing || ""}-${p.flatNo || "?"}:${String(p.profileId ?? p._id)}`);
+    throw new ApiError(
+      404,
+      process.env.NODE_ENV === "production"
+        ? "Profile not found"
+        : `Profile not found. Sent ${parsed.data.profileId}; user ${user._id} has [${available.join(", ")}]`,
+    );
+  }
+
+  // Persist so /v1/auth/me, the website session and the app all agree on which
+  // flat is active. Without this the app and web disagree after a switch.
+  const chosenId = String(profile.profileId ?? profile._id);
+  if (String(user.activeProfileId ?? "") !== chosenId) {
+    user.activeProfileId = profile.profileId ?? profile._id;
+    await user.save();
+  }
+
+  const result = await issueTokens(user, profile);
+
+  // Echo the chosen flat so the app can repaint the avatar without a round trip
+  // to /auth/me. Purely additive.
+  return json({
+    ...result,
+    activeProfile: {
+      profileId: chosenId,
+      flatNo: profile.flatNo ?? null,
+      wing: profile.wing ?? null,
+      societyName: profile.societyName ?? null,
+      occupancyType: profile.occupancyType ?? null,
+    },
+  });
 });

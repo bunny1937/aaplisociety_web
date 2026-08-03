@@ -1,0 +1,59 @@
+// app/api/v1/auth/my-profiles/route.js
+//
+// NEW. Lists every active flat on the signed-in account, plus which one is
+// currently active.
+//
+// Needed because the flat switcher now lives on the dashboard avatar, not only
+// on the login screen. At login the profile list arrives inside the login
+// response; once you are inside the app that response is long gone, so the
+// switcher needs its own read.
+//
+// Requires a NORMAL access token (pending tokens are rejected by getClaims) -
+// you must already be inside a session to enumerate the account's flats.
+
+import { withRoute, ApiError, json } from "@/lib/v1/http";
+import { getClaims } from "@/lib/v1/auth";
+import { User } from "@/lib/v1/models";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// Same shape /auth/login sends for the picker, so FlatSummary.fromJson on the
+// app parses both without needing a second model.
+function toPickerProfile(p) {
+  const wing = p.wing ?? null;
+  const flatNo = p.flatNo ?? null;
+  const unit = [wing, flatNo].filter(Boolean).join("-") || "Flat";
+  return {
+    profileId: String(p.profileId ?? p._id),
+    societyName: p.societyName ?? null,
+    flatNo,
+    wing,
+    occupancyType: p.occupancyType ?? null,
+    isPrimary: p.isPrimary === true,
+    status: p.status ?? null,
+    label: [unit, p.societyName].filter(Boolean).join(" \u00b7 "),
+  };
+}
+
+export const GET = withRoute(async (req) => {
+  const claims = getClaims(req);
+
+  const user = await User.findById(claims.userId).lean();
+  if (!user) throw new ApiError(401, "User not found");
+  if (user.isActive === false) throw new ApiError(403, "Account is disabled");
+
+  const profiles = (user.profiles || [])
+    .filter((p) => p.status === "Active")
+    .map(toPickerProfile);
+
+  return json({
+    name: user.name ?? user.username ?? null,
+    username: user.username ?? null,
+    // Prefer the claim: it is what the current token is actually scoped to.
+    // user.activeProfileId can lag if two devices switched concurrently.
+    activeProfileId: String(claims.activeProfileId ?? user.activeProfileId ?? ""),
+    canSwitch: profiles.length > 1,
+    profiles,
+  });
+});
