@@ -208,6 +208,20 @@ export default function AdminLayout({ children }) {
         { name: "Watchlist", path: "/admin/blacklist", icon: "⛔" },
       ],
     },
+    {
+      title: "Amenities",
+      items: [
+        { name: "Overview", path: "/admin/amenities", icon: "🏠" },
+        { name: "Categories", path: "/admin/amenities/categories", icon: "🗂️" },
+        { name: "All Amenities", path: "/admin/amenities/list", icon: "🏊" },
+        { name: "Maintenance", path: "/admin/amenities/maintenance", icon: "🔧" },
+        { name: "Attendance", path: "/admin/amenities/attendance", icon: "✅" },
+        { name: "Events", path: "/admin/amenities/events", icon: "🎉" },
+        { name: "Analytics", path: "/admin/amenities/analytics", icon: "📊" },
+        { name: "Incidents", path: "/admin/amenities/incidents", icon: "⚠️" },
+        { name: "Settings", path: "/admin/amenities/settings", icon: "⚙️" },
+      ],
+    },
   ];
   return (
     <DashboardLayout

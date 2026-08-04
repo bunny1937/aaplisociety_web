@@ -28,6 +28,23 @@ const NotificationSchema = new mongoose.Schema(
         "MAINTENANCE_ALERT",
         "ADMIN_MESSAGE",
         "CUSTOM",
+        // ── amenities ──
+        "AMENITY_MAINTENANCE_SCHEDULED",
+        "AMENITY_MAINTENANCE_UPDATED",
+        "AMENITY_MAINTENANCE_EXTENDED",
+        "AMENITY_REOPENED",
+        "AMENITY_CLOSED",
+        "AMENITY_EMERGENCY_CLOSURE",
+        "AMENITY_RULES_UPDATED",
+        "AMENITY_EVENT_CREATED",
+        "AMENITY_EVENT_UPDATED",
+        "AMENITY_EVENT_CANCELLED",
+        "AMENITY_EVENT_REMINDER",
+        "AMENITY_WAITLIST_PROMOTED",
+        "AMENITY_INCIDENT_REPORTED",
+        "AMENITY_INCIDENT_RESOLVED",
+        "AMENITY_VISITOR_APPROVAL_REQUIRED",
+        "AMENITY_CHECKIN_REJECTED",
         // ── visitor management ──
         "VISITOR_APPROVAL", // resident: someone is at the gate, approve/deny
         "VISITOR_DECISION", // guard: resident approved/denied

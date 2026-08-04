@@ -112,3 +112,4 @@ tests
 *.tsbuildinfo
 .jest-cache
 screenshots
+.mongo-tmp/
