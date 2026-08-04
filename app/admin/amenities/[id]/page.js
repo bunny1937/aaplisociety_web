@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import QRCode from "qrcode";
 import styles from "@/styles/Amenities.module.css";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -30,6 +31,7 @@ export default function AmenityDetailPage() {
   const [maintenance, setMaintenance] = useState([]);
   const [qr, setQr] = useState(null);
   const [newToken, setNewToken] = useState(null);
+  const [qrImage, setQrImage] = useState(null);
   const [editingSlot, setEditingSlot] = useState(null);
   const [savingSlot, setSavingSlot] = useState(false);
   const [selectingSlots, setSelectingSlots] = useState(false);
@@ -113,6 +115,17 @@ export default function AmenityDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!newToken) { setQrImage(null); return; }
+    const value = newToken.deepLink || newToken.token;
+    if (!value) return;
+    let cancelled = false;
+    QRCode.toDataURL(value, { width: 220, margin: 1 })
+      .then((url) => { if (!cancelled) setQrImage(url); })
+      .catch((err) => console.error("QR render failed", err));
+    return () => { cancelled = true; };
+  }, [newToken]);
 
   const addWindow = (dayOfWeek) => {
     setWeeklyDraft((prev) => prev.map((d) => (
@@ -1244,6 +1257,15 @@ export default function AmenityDetailPage() {
               <div className={`${styles.banner} ${styles.bannerWarn}`} style={{ marginBottom: 0 }}>
                 This is the only time the code is shown. Only a hash is stored, so it cannot be retrieved
                 later — print it now, or generate a fresh one.
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+                {qrImage ? (
+                  <img src={qrImage} width={220} height={220} alt="Scannable QR code" />
+                ) : (
+                  <div style={{ width: 220, height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 12 }}>
+                    Rendering…
+                  </div>
+                )}
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Token</label>
