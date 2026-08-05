@@ -22,6 +22,34 @@ export default function SocietyConfigPage() {
   });
   const [errors, setErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
+
+  // ---- Commercial module (additive) ------------------------------------
+  // Separate query + mutation on purpose: the flags save instantly on toggle
+  // and are NOT part of the society form's Save button, so this cannot affect
+  // the existing config submit path in any way.
+  const { data: commercialData } = useQuery({
+    queryKey: ["commercial-flags"],
+    queryFn: () => apiClient.get("/api/commercial/flags"),
+    retry: false,
+  });
+  const commercialFlags = commercialData?.flags || {
+    enabled: false,
+    directoryEnabled: false,
+    ownerEditingEnabled: false,
+    commercialBillingEnabled: false,
+  };
+  const commercialMutation = useMutation({
+    mutationFn: (patch) => apiClient.post("/api/commercial/flags", patch),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries(["commercial-flags"]);
+      // The sidebar reads the flags once when the admin shell mounts, so
+      // reload when the master switch changes to make the Commercial group
+      // appear or disappear immediately.
+      if (res?.flags?.enabled !== commercialFlags.enabled) {
+        window.location.reload();
+      }
+    },
+  });
   const { data: societyData, isLoading } = useQuery({
     queryKey: ["society-config"],
     queryFn: () => apiClient.get("/api/society/config"),
@@ -401,6 +429,76 @@ export default function SocietyConfigPage() {
                 {errors.interestAfterDays && <span style={{ color: "#dc2626", fontSize: "0.8rem" }}>{errors.interestAfterDays}</span>}
               </div>
             </div>
+          </div>
+        </div>
+        {/* Commercial module. Always visible to admins - this is the only
+            place the module can be switched on. Every flag defaults to off. */}
+        <div className={styles.contentCard}>
+          <div className={styles.cardHeader}>
+            <h2 className={styles.cardTitle}>Commercial Module</h2>
+          </div>
+          <div style={{ padding: "0 1.25rem 1.25rem" }}>
+            <p style={{ margin: "0 0 1rem", color: "#475569", fontSize: "0.85rem" }}>
+              Directory of the shops and offices inside this society. Changes save
+              immediately - the Save button below does not apply to this section.
+              Turning the master switch off hides the module instantly for members
+              and admins. No data is deleted.
+            </p>
+            {commercialMutation.isError && (
+              <div className={gridStyles.errorList}>
+                <div className={gridStyles.errorListTitle}>Could not update</div>
+                <div>{commercialMutation.error?.message}</div>
+              </div>
+            )}
+            <div style={{ display: "grid", gap: "0.85rem" }}>
+              {[
+                ["enabled", "Enable commercial module",
+                  "Master switch. Off means nothing commercial exists for this society."],
+                ["directoryEnabled", "Show the directory in the member app",
+                  "Members can browse published shops. Off keeps listings admin-only."],
+                ["ownerEditingEnabled", "Let shop owners edit their own listing",
+                  "Owners edit details; publishing and suspending stay with the admin."],
+                ["commercialBillingEnabled", "Allow charges restricted to shops/offices",
+                  "Lets a billing head target specific unit types. Off means every head applies to everyone, exactly as today."],
+              ].map(([key, label, help]) => {
+                const locked = key !== "enabled" && !commercialFlags.enabled;
+                return (
+                  <label
+                    key={key}
+                    style={{
+                      display: "flex",
+                      gap: "0.65rem",
+                      alignItems: "flex-start",
+                      opacity: locked ? 0.5 : 1,
+                      cursor: locked ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!commercialFlags[key]}
+                      disabled={locked || commercialMutation.isPending}
+                      onChange={(e) =>
+                        commercialMutation.mutate({ [key]: e.target.checked })
+                      }
+                      style={{ marginTop: "0.25rem" }}
+                    />
+                    <span>
+                      <span style={{ display: "block", fontWeight: 700, fontSize: "0.875rem" }}>
+                        {label}
+                      </span>
+                      <span style={{ display: "block", fontSize: "0.78rem", color: "#64748b" }}>
+                        {help}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {commercialFlags.enabled && (
+              <p style={{ marginTop: "1rem", fontSize: "0.8rem", color: "#475569" }}>
+                Manage listings under Commercial in the sidebar.
+              </p>
+            )}
           </div>
         </div>
       </form>

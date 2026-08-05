@@ -1,8 +1,7 @@
+import "dotenv/config";
 import { createServer } from "http";
 import next from "next";
 import { initSocketServer } from "./lib/socket-server.js";
-import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
 const handle = app.getRequestHandler();

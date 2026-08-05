@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import DashboardLayout from "components/DashboardLayout";
 import {
   LayoutDashboard,
@@ -25,6 +26,22 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 export default function AdminLayout({ children }) {
+  // Commercial module visibility. One cheap read of the society's flags; a
+  // failure leaves the group hidden and never blocks the admin shell.
+  const [commercialEnabled, setCommercialEnabled] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/commercial/flags", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d?.flags?.enabled) setCommercialEnabled(true);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const navigation = [
     {
       title: "Overview",
@@ -208,6 +225,22 @@ export default function AdminLayout({ children }) {
         { name: "Watchlist", path: "/admin/blacklist", icon: "⛔" },
       ],
     },
+    // Commercial (additive). Rendered only for societies that switched the
+    // module on, so every other sidebar is byte-identical to before.
+    ...(commercialEnabled
+      ? [
+          {
+            title: "Commercial",
+            items: [
+              { name: "Overview", path: "/admin/commercial", icon: "📊" },
+                    { name: "Units", path: "/admin/commercial/units", icon: "🏢" },
+                    { name: "Businesses", path: "/admin/commercial/businesses", icon: "🏪" },
+              { name: "Categories", path: "/admin/commercial/categories", icon: "🏷️" },
+                    { name: "Rate card", path: "/admin/commercial/rate-card", icon: "💰" },
+            ],
+          },
+        ]
+      : []),
     {
       title: "Amenities",
       items: [

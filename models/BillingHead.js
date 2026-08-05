@@ -31,6 +31,29 @@ const BillingHeadSchema = new mongoose.Schema(
       ref: "ChartOfAccount",
       default: null,
     },
+    // Optional commercial applicability. MISSING or EMPTY = applies to every
+    // unit, which is exactly today's behaviour for every existing head, so no
+    // migration and no bill changes. Only a head an admin explicitly restricts
+    // is filtered - see lib/commercial/billingApplicability.js.
+    appliesToUnitClasses: {
+      type: [{ type: String, enum: ["Residential", "Shop", "Office"] }],
+      default: undefined,
+    },
+    // Optional per-unit-class RATE OVERRIDE. A shop and a flat can be charged
+    // different amounts for the SAME head. MISSING or empty = every class pays
+    // `defaultAmount`, which is exactly today's behaviour for every existing
+    // head, so no migration and no bill changes until an admin sets a rate.
+    unitClassRates: {
+      type: new mongoose.Schema(
+        {
+          Residential: { type: Number, min: 0, default: undefined },
+          Shop: { type: Number, min: 0, default: undefined },
+          Office: { type: Number, min: 0, default: undefined },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
     canBeArchived: { type: Boolean, default: false },
 isDeleted: { type: Boolean, default: false },
 deletedAt: { type: Date },

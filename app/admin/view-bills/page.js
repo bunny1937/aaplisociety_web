@@ -145,6 +145,7 @@ export default function ViewBillsPage() {
   const [viewingBill, setViewingBill] = useState(null);
   const [activeTab, setActiveTab] = useState("summary");
   const [downloadingId, setDownloadingId] = useState(null);
+  const [seriesFilter, setSeriesFilter] = useState("All"); // "All" | "Residential" | "Commercial"
   const { data: billsData, isLoading } = useQuery({
     queryKey: ["view-bills", selectedPeriod, filterStatus],
     queryFn: async () => {
@@ -164,11 +165,13 @@ export default function ViewBillsPage() {
   const periods = [...new Set(bills.map((b) => b.billPeriodId))].filter(Boolean).sort().reverse();
   const filteredBills = bills.filter((b) => {
     const q = searchTerm.toLowerCase();
-    return (
+    const matchesSearch =
       b.memberId?.flatNo?.toLowerCase().includes(q) ||
       b.memberId?.ownerName?.toLowerCase().includes(q) ||
-      b.memberId?.wing?.toLowerCase().includes(q)
-    );
+      b.memberId?.wing?.toLowerCase().includes(q);
+    const matchesSeries =
+      seriesFilter === "All" || (b.billSeries || "RESIDENTIAL") === seriesFilter.toUpperCase();
+    return matchesSearch && matchesSeries;
   });
   const openBill = (bill) => { setViewingBill(bill); setActiveTab("summary"); };
   const downloadBill = async (bill) => {
@@ -247,6 +250,11 @@ export default function ViewBillsPage() {
             <option value="Unpaid">Unpaid</option>
             <option value="Overdue">Overdue</option>
           </select>
+          <select value={seriesFilter} onChange={(e) => setSeriesFilter(e.target.value)} className={styles.select}>
+            <option value="All">All (Residential + Commercial)</option>
+            <option value="Residential">Residential</option>
+            <option value="Commercial">Commercial</option>
+          </select>
           <div className={styles.resultCount}>{filteredBills.length} Bills</div>
         </div>
       </div>
@@ -266,6 +274,7 @@ export default function ViewBillsPage() {
               <tr>
                 <th>Flat</th>
                 <th>Member</th>
+                <th>Unit Class</th>
                 <th>Period</th>
                 <th>Current Bill</th>
                 <th>Prev Balance</th>
@@ -294,6 +303,7 @@ export default function ViewBillsPage() {
                       )}
                     </td>
                     <td>{bill.memberId?.ownerName}</td>
+                    <td>{bill.unitClass ?? "—"}</td>
                     <td><span className={styles.periodTag}>{bill.billPeriodId}</span></td>
                     <td>₹{fmt(chargesTotal(bill))}</td>
                   <td style={{ color: prevBalance(bill) > 0 ? "#b91c1c" : "#15803d" }}>

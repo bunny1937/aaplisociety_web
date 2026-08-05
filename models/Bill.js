@@ -71,6 +71,12 @@ closingTotal: { type: Number, default: 0 },
       of: Number,
       default: new Map(),
     },
+    // Commercial billing separation (additive; null/"RESIDENTIAL" for every
+    // bill generated before this and every residential bill generated after —
+    // byte-identical to today). See lib/billing/generationService.js.
+    unitClass: { type: String, enum: ["Shop", "Office", null], default: null },
+    billSeries: { type: String, enum: ["RESIDENTIAL", "COMMERCIAL"], default: "RESIDENTIAL" },
+    billNo: { type: String, default: null },
     totalAmount: {
       type: Number,
       required: true,

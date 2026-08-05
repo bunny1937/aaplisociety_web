@@ -7,6 +7,7 @@ import styles from "@/styles/GenerateBills.module.css";
 import ExcelPreviewGrid from "../../components/ExcelPreviewGrid";
 import DropZone from "components/DropZone";
 import CollectionsPanel from "./CollectionsPanel";
+import { resolveHeadsForMember } from "@/lib/commercial/billingApplicability";
 // ─── Pure billing engine functions (client-safe, no DB/React imports) ────────
 function buildParkingRates(heads) {
   const parkingRates = {};
@@ -29,6 +30,11 @@ function buildParkingRates(heads) {
   return parkingRates;
 }
 function computeCurrentCharges(member, heads, parkingRates, serviceTaxRate) {
+  // Commercial: drop heads that do not apply to this unit class and resolve
+  // per-class rate overrides, so this on-screen preview matches exactly what
+  // lib/calculate-member-bill.js will generate. A head with neither setting
+  // (every head that exists today) passes through untouched.
+  heads = resolveHeadsForMember(heads, member);
   const area = Number(
     member.carpetAreaSqft ?? member.builtUpAreaSqft ?? member.areaSqFt ?? 0,
   );
@@ -453,10 +459,52 @@ function TestConfigPanel({ members, periodLabel, onSaved }) {
     </div>
   );
 }
+// Standalone commercial bill-generation panel — own trigger, own numbering
+// (COM/YYYY/MM/NNNN via lib/commercial/billNumbering.js), scoped to Shop/Office
+// units only. Deliberately does not touch any residential state above it.
+function CommercialGenerateBillsPanel({ billMonth, billYear, onBack }) {
+  const [msg, setMsg] = useState(null);
+  const generate = useMutation({
+    mutationFn: () => apiClient.post("/api/commercial/generate-bills", { billMonth, billYear }),
+    onSuccess: (res) =>
+      setMsg(`Generated ${res.generated} commercial bill(s). ${res.failed?.length || 0} failed.`),
+    onError: (e) => setMsg(e.message),
+  });
+  return (
+    <div style={{ padding: "1.5rem", maxWidth: 720 }}>
+      <button type="button" onClick={onBack} style={{ marginBottom: "1rem", background: "none", border: "none", color: "#4f46e5", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+        ← Back to Residential
+      </button>
+      <h1 style={{ fontSize: "1.4rem", fontWeight: 800 }}>Generate Commercial Bills</h1>
+      <p style={{ color: "#64748b", fontSize: "0.85rem" }}>
+        Generates COM/ numbered bills for every Shop/Office unit for the selected period, using the{" "}
+        <a href="/admin/commercial/rate-card">Commercial Rate Card</a>.
+      </p>
+      {billMonth === null || !billYear ? (
+        <div style={{ marginTop: "1rem", color: "#92400e" }}>Detecting billing period…</div>
+      ) : (
+        <p style={{ fontSize: "0.85rem" }}>
+          Period: <b>{billYear}-{String(billMonth + 1).padStart(2, "0")}</b>
+        </p>
+      )}
+      {msg && <div style={{ marginTop: "0.75rem", padding: "0.75rem", background: "#eef2ff", borderRadius: 8 }}>{msg}</div>}
+      <button
+        type="button"
+        style={{ marginTop: "1rem", padding: "0.6rem 1rem", borderRadius: 8, background: "#1d4ed8", color: "#fff", border: "none", fontWeight: 700, cursor: "pointer" }}
+        disabled={generate.isPending || billMonth === null || !billYear}
+        onClick={() => generate.mutate()}
+      >
+        {generate.isPending ? "Generating…" : "Generate Commercial Bills"}
+      </button>
+    </div>
+  );
+}
+
 export default function GenerateBillsPage() {
   const queryClient = useQueryClient();
   const [billMonth, setBillMonth] = useState(null); // 0-indexed, null until auto-detected
   const [billYear, setBillYear] = useState(null);
+  const [activeBillTab, setActiveBillTab] = useState("residential"); // "residential" | "commercial"
   // Flow 1: Bill Generation
   const [showPreview, setShowPreview] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
@@ -1476,10 +1524,20 @@ ${
       alert("Download failed: " + e.message);
     }
   };
+  if (activeBillTab === "commercial") {
+    return (
+      <CommercialGenerateBillsPanel
+        billMonth={billMonth}
+        billYear={billYear}
+        onBack={() => setActiveBillTab("residential")}
+      />
+    );
+  }
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+          <div>
           <h1>Generate Bills</h1>
           <p>
             {latestPeriodLoading
@@ -1500,6 +1558,14 @@ ${
                   })()
                 : "Detecting billing period..."}
           </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveBillTab("commercial")}
+            style={{ padding: "0.5rem 0.9rem", borderRadius: 8, border: "1px solid #4f46e5", background: "#fff", color: "#4f46e5", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}
+          >
+            Commercial →
+          </button>
         </div>
       </div>
       {membersData?.members && (

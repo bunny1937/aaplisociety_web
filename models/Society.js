@@ -223,6 +223,17 @@ const SocietySchema = new mongoose.Schema(
       adminEmail: { type: String },
       plainPassword: { type: String, select: true }, // explicitly included
     },
+    // Feature flags. Grouped per module instead of loose booleans. Commercial
+    // ships OFF for every existing society, and `enabled: false` overrides
+    // every child flag, so one switch disables the whole module instantly.
+    features: {
+      commercial: {
+        enabled: { type: Boolean, default: false },
+        directoryEnabled: { type: Boolean, default: false },
+        ownerEditingEnabled: { type: Boolean, default: false },
+        commercialBillingEnabled: { type: Boolean, default: false },
+      },
+    },
     // Soft delete support
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },

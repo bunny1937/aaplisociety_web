@@ -3,6 +3,8 @@ import connectDB from "@/lib/mongodb";
 import BillingHead from "@/models/BillingHead";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import cache from "@/lib/cache";
+import { UNIT_CLASS_VALUES } from "@/lib/commercial/constants";
+import { normalizeUnitClassRates } from "@/lib/commercial/billingApplicability";
 export async function PUT(request, { params }) {
   try {
     await connectDB();
@@ -46,6 +48,20 @@ export async function PUT(request, { params }) {
         head[key] = updates[key];
       }
     });
+    // Optional unit-class restriction. An empty list clears the restriction
+    // and returns the head to "applies to every unit" - the legacy behaviour.
+    if (updates.appliesToUnitClasses !== undefined) {
+      const list = updates.appliesToUnitClasses;
+      if (!Array.isArray(list) || !list.every((c) => UNIT_CLASS_VALUES.includes(c))) {
+        return NextResponse.json({ error: "Invalid unit class" }, { status: 400 });
+      }
+      head.appliesToUnitClasses = list.length ? [...new Set(list)] : undefined;
+    }
+    // Optional per-class rate override. Sending {} or null clears every
+    // override and the head goes back to a single rate for all units.
+    if (updates.unitClassRates !== undefined) {
+      head.unitClassRates = normalizeUnitClassRates(updates.unitClassRates);
+    }
     head.lastModifiedAt = new Date();
     head.lastModifiedBy = decoded.userId;
     await head.save();

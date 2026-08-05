@@ -4,7 +4,8 @@ import { paymentSchema } from "@/lib/v1/schemas";
 import { Bill, Member, Payment, Transaction, Receipt } from "@/lib/v1/models";
 import { BILLING_WRITE_ROLES } from "@/lib/v1/constants";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
-import { normalizeBill, newReceiptNo, newTransactionId } from "@/lib/v1/billUtils";
+import { normalizeBill, newTransactionId } from "@/lib/v1/billUtils";
+import { issueReceiptNo } from "@/lib/billing/receiptIssuance";
 import { periodLabelFrom } from "@/lib/v1/periodLabel";
 import { notifyPaymentReceived } from "@/lib/v1/notify";
 import { postPaymentToLedger } from "@/lib/accounting/paymentLedgerPosting";
@@ -71,7 +72,7 @@ export const POST = withRoute(async (req, ctx) => {
   // v1-shaped `bill` doc is stale on amountPaid/balanceAmount/status now.
   const freshBill = await Bill.findById(bill._id);
 
-  const receiptNo = newReceiptNo();
+  const receiptNo = await issueReceiptNo(bill);
   const transactionId = newTransactionId();
   const label = periodLabelFrom(bill);
 
@@ -101,6 +102,8 @@ export const POST = withRoute(async (req, ctx) => {
       billPeriodId: bill.billPeriodId ?? bill.period,
       memberId: bill.memberId,
       societyId,
+      unitClass: bill.unitClass,
+      billSeries: bill.billSeries,
       amount,
       paymentMode,
       paidAt: new Date(),

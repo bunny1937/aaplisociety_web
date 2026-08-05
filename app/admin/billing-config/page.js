@@ -29,6 +29,25 @@ export default function BillingConfigPage() {
     queryKey: ["billing-heads"],
     queryFn: () => apiClient.get("/api/billing-heads/list"),
   });
+  // Commercial billing is opt-in per society. When it is off this query fails
+  // or returns false and the extra column simply never renders.
+  const { data: commercialFlagsData } = useQuery({
+    queryKey: ["commercial-flags"],
+    queryFn: () => apiClient.get("/api/commercial/flags"),
+    retry: false,
+  });
+  const commercialBilling =
+    commercialFlagsData?.flags?.commercialBillingEnabled === true;
+  // An empty list means "every unit" - the behaviour of every head that
+  // existed before this feature, and the default for every new one.
+  const chargeAppliesTo = (charge, member) => {
+    const list = charge.appliesToUnitClasses;
+    if (!Array.isArray(list) || list.length === 0) return true;
+    const flatType = member?.flatType;
+    const unitClass =
+      flatType === "Shop" ? "Shop" : flatType === "Office" ? "Office" : "Residential";
+    return list.includes(unitClass);
+  };
   const { data: membersData, isLoading: membersLoading } = useQuery({
     queryKey: ["members-list"],
     queryFn: () => apiClient.get("/api/members/list?limit=1000"),
@@ -51,6 +70,9 @@ export default function BillingConfigPage() {
           calculationType: h.calculationType ?? "Fixed",
           defaultAmount: Number(h.defaultAmount ?? 0),
           isActive: h.isActive !== false,
+          appliesToUnitClasses: Array.isArray(h.appliesToUnitClasses)
+            ? h.appliesToUnitClasses.map(String)
+            : [],
           isExisting: true,
         }));
       setCustomCharges(active);
@@ -67,6 +89,7 @@ export default function BillingConfigPage() {
       const calculations = {};
       customCharges.forEach((charge) => {
         if (!charge.name?.trim() || charge.isActive === false) return;
+        if (!chargeAppliesTo(charge, member)) return;
         const amount = parseFloat(charge.defaultAmount) || 0;
         const chargeName = charge.name.trim().toLowerCase();
         const isParkingCharge =
@@ -124,6 +147,7 @@ export default function BillingConfigPage() {
             calculationType: charge.calculationType,
             defaultAmount: parseFloat(charge.defaultAmount) || 0,
             isActive: charge.isActive !== false,
+            appliesToUnitClasses: charge.appliesToUnitClasses ?? [],
           });
         } else {
           await apiClient.post("/api/billing-heads/create", {
@@ -131,6 +155,7 @@ export default function BillingConfigPage() {
             calculationType: charge.calculationType,
             defaultAmount: parseFloat(charge.defaultAmount) || 0,
             isActive: true,
+            appliesToUnitClasses: charge.appliesToUnitClasses ?? [],
           });
         }
       }
@@ -151,6 +176,7 @@ export default function BillingConfigPage() {
         calculationType: "Fixed",
         defaultAmount: 0,
         isActive: true,
+        appliesToUnitClasses: [],
         isExisting: false,
       },
     ]);
@@ -207,6 +233,7 @@ export default function BillingConfigPage() {
       const baseCalculations = {};
       customCharges.forEach((charge) => {
         if (!charge.name?.trim || charge.isActive === false) return;
+        if (!chargeAppliesTo(charge, member)) return;
         const amount = parseFloat(charge.defaultAmount) || 0;
         const chargeName = charge.name.trim().toLowerCase();
         // Detect if this is a parking charge by matching against member's actual slots
@@ -540,6 +567,18 @@ export default function BillingConfigPage() {
                   <span style={{ flex: 2 }}>Name</span>
                   <span style={{ flex: 1 }}>Type</span>
                   <span style={{ flex: 1 }}>Rate / Amount</span>
+                  {commercialBilling && (
+                    <span style={{ flex: 1.1 }}>
+                      Applies to{" "}
+                      <a
+                        href="/admin/commercial/rate-card"
+                        style={{ fontWeight: 400, textTransform: "none" }}
+                        title="Set a different amount for shops and offices"
+                      >
+                        (rates)
+                      </a>
+                    </span>
+                  )}
                   <span style={{ width: 60, textAlign: "center" }}>Active</span>
                   <span style={{ width: 60 }}></span>
                 </div>
@@ -610,6 +649,56 @@ export default function BillingConfigPage() {
                           : "₹/flat"}
                       </span>
                     </div>
+                    {commercialBilling && (
+                      <div
+                        style={{
+                          flex: 1.1,
+                          display: "flex",
+                          gap: "0.5rem",
+                          flexWrap: "wrap",
+                          fontSize: "0.72rem",
+                          color: "#475569",
+                        }}
+                      >
+                        {["Residential", "Shop", "Office"].map((cls) => {
+                          const list = charge.appliesToUnitClasses ?? [];
+                          const all = list.length === 0;
+                          return (
+                            <label
+                              key={cls}
+                              style={{ display: "flex", alignItems: "center", gap: 3 }}
+                              title={
+                                all
+                                  ? "Currently applies to every unit"
+                                  : `Applies to: ${list.join(", ")}`
+                              }
+                            >
+                              <input
+                                type="checkbox"
+                                checked={all || list.includes(cls)}
+                                onChange={(e) => {
+                                  const base = all
+                                    ? ["Residential", "Shop", "Office"]
+                                    : [...list];
+                                  const next = e.target.checked
+                                    ? [...new Set([...base, cls])]
+                                    : base.filter((c) => c !== cls);
+                                  // All three ticked is the same as no
+                                  // restriction, so store it as the empty
+                                  // list and keep legacy heads legacy.
+                                  updateCharge(
+                                    charge.id,
+                                    "appliesToUnitClasses",
+                                    next.length === 3 ? [] : next,
+                                  );
+                                }}
+                              />
+                              {cls === "Residential" ? "Flats" : cls}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                     <label
                       style={{
                         display: "flex",

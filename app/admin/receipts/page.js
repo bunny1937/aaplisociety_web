@@ -763,6 +763,7 @@ export default function ReceiptsPage() {
                       {[
                         "Receipt No",
                         "Member",
+                        "Unit Class",
                         "Bill Period",
                         "Amount",
                         "Mode",
@@ -798,6 +799,9 @@ export default function ReceiptsPage() {
                             <div style={{ fontSize: "11px", color: "#94a3b8" }}>
                               {member?.ownerName}
                             </div>
+                          </td>
+                          <td style={{ ...tdStyle, color: "#64748b" }}>
+                            {r.unitClass || "—"}
                           </td>
                           <td style={{ ...tdStyle, color: "#64748b" }}>
                             {r.billPeriodId || "—"}

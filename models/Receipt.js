@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 const ReceiptSchema = new mongoose.Schema(
   {
     receiptNo: { type: String, required: true, unique: true },
+    unitClass: { type: String, enum: ["Shop", "Office", null], default: null },
+    billSeries: { type: String, enum: ["RESIDENTIAL", "COMMERCIAL"], default: "RESIDENTIAL" },
     filename: { type: String, required: true },
     billId: {
       type: mongoose.Schema.Types.ObjectId,

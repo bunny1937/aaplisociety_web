@@ -83,7 +83,11 @@
   /* Fixed layout: column widths never recalc as values change, which keeps
      the grid from twitching while the admin types. */
   table-layout: fixed;
-  min-width: 1080px;
+  /* Declared column widths total 1356px. The old 1080px floor let
+     `table-layout: fixed` squeeze every column to fit the viewport, which
+     clipped Mode and Remarks instead of scrolling. Floor it at the real sum so
+     .tableScroll (overflow:auto) actually scrolls. */
+  min-width: 1380px;
 }
 .table thead th {
   position: sticky;

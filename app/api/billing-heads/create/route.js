@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import BillingHead from '@/models/BillingHead';
 import { getTokenFromRequest, verifyToken } from '@/lib/jwt';
+import { UNIT_CLASS_VALUES } from '@/lib/commercial/constants';
+import { normalizeUnitClassRates } from '@/lib/commercial/billingApplicability';
 export async function POST(request) {
   try {
     await connectDB();
@@ -13,7 +15,25 @@ export async function POST(request) {
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
-    const { headName, calculationType, defaultAmount } = await request.json();
+    const {
+      headName,
+      calculationType,
+      defaultAmount,
+      appliesToUnitClasses,
+      unitClassRates,
+    } = await request.json();
+    // Optional per-class rate override. Absent = every class pays
+    // defaultAmount, exactly as today.
+    const rates = normalizeUnitClassRates(unitClassRates);
+    // Optional and additive: an absent or empty list means "applies to every
+    // unit", which is exactly how every existing head already behaves.
+    let unitClasses;
+    if (Array.isArray(appliesToUnitClasses) && appliesToUnitClasses.length > 0) {
+      if (!appliesToUnitClasses.every((c) => UNIT_CLASS_VALUES.includes(c))) {
+        return NextResponse.json({ error: 'Invalid unit class' }, { status: 400 });
+      }
+      unitClasses = [...new Set(appliesToUnitClasses)];
+    }
     if (!headName || !calculationType || defaultAmount === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -37,7 +57,9 @@ export async function POST(request) {
       defaultAmount: parseFloat(defaultAmount),
       order: maxOrder ? maxOrder.order + 1 : 0,
       societyId: decoded.societyId,
-      isActive: true
+      isActive: true,
+      ...(unitClasses ? { appliesToUnitClasses: unitClasses } : {}),
+      ...(rates ? { unitClassRates: rates } : {})
     });
     console.log('✅ Created billing head:', billingHead.headName);
     return NextResponse.json({
