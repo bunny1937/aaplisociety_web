@@ -5,7 +5,7 @@ import BillingHead from "@/models/BillingHead";
 import Society from "@/models/Society";
 import AuditReport from "@/models/AuditReport";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-import * as XLSX from "xlsx";
+import { parseFirstSheet } from "@/lib/excelParse";
 // ─── Indian FY helpers ────────────────────────────────────────────────────────
 /**
  * Given a join month (1-12) and join year, returns the required audit window.
@@ -118,9 +118,7 @@ export async function POST(request) {
     });
     // ── 3. Parse Excel ───────────────────────────────────────────────────────
     const bytes = await file.arrayBuffer();
-    const wb = XLSX.read(Buffer.from(bytes), { type: "buffer" });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rawRows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+    const rawRows = await parseFirstSheet(Buffer.from(bytes), { defval: "" });
     const errors = [];
     const warnings = [];
     // ── 4. Column validation ─────────────────────────────────────────────────

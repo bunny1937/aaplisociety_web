@@ -5,12 +5,12 @@
  *   Sheets 2-7 = Members (identical structure to member_import_template.xlsx)
  */
 import { NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import { buildWorkbook, addSheetFromAoa, workbookBuffer } from "@/lib/excelParse";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 export async function GET(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
-  const wb = XLSX.utils.book_new();
+  const wb = buildWorkbook();
   // ── Sheet 1: Society (exact same as society_upload_template.xlsx) ──
   const societyHeaders = [
     "Society Name",
@@ -66,9 +66,9 @@ export async function GET(request) {
     "200",
     "300",
   ];
-  const societyWs = XLSX.utils.aoa_to_sheet([societyHeaders, societySample]);
-  societyWs["!cols"] = societyHeaders.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
-  XLSX.utils.book_append_sheet(wb, societyWs, "Society");
+  addSheetFromAoa(wb, "Society", [societyHeaders, societySample], {
+    colWidths: societyHeaders.map((h) => Math.max(h.length + 4, 18)),
+  });
   // ── Sheets 2-7: Members (exact same structure as member_import_template.xlsx) ──
   // Sheet 2: Basic Info
   const basicInfoRows = [
@@ -135,12 +135,12 @@ export async function GET(request) {
     { name: "6. Tenant History", rows: tenantRows },
   ];
   for (const { name, rows } of memberSheets) {
-    const ws = XLSX.utils.aoa_to_sheet(rows);
     const headerRow = rows[0];
-    ws["!cols"] = headerRow.map((h) => ({ wch: Math.max(String(h || "").length + 4, 16) }));
-    XLSX.utils.book_append_sheet(wb, ws, name);
+    addSheetFromAoa(wb, name, rows, {
+      colWidths: headerRow.map((h) => Math.max(String(h || "").length + 4, 16)),
+    });
   }
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  const buf = await workbookBuffer(wb);
   return new NextResponse(buf, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

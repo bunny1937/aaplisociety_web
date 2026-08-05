@@ -9,7 +9,7 @@ import PaymentImport from "@/models/PaymentImport";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
 import { validatePaymentRows } from "../../../../utils/excelValidator";
 import { getFinancialYear } from "@/lib/date-utils";
-import * as XLSX from "xlsx";
+import { parseFirstSheet } from "@/lib/excelParse";
 import crypto from "node:crypto";
 import cache from "@/lib/cache";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
@@ -74,9 +74,7 @@ export async function POST(request) {
           { status: 400 },
         );
       const bytes = await file.arrayBuffer();
-      const wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      const rows = await parseFirstSheet(Buffer.from(bytes), { defval: "" });
       if (!rows.length)
         return NextResponse.json({ error: "Empty file" }, { status: 400 });
       // Validate required columns — accept merged "Wing-FlatNo" or legacy separate Wing+FlatNo

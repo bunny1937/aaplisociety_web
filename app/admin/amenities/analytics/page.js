@@ -44,6 +44,7 @@ export default function AnalyticsPage() {
     to: iso(new Date()),
   }));
   const [loading, setLoading] = useState(true);
+  const [recomputing, setRecomputing] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, type = "ok") => {
@@ -79,6 +80,23 @@ export default function AnalyticsPage() {
       .catch(() => {});
   }, []);
 
+  const recompute = async () => {
+    setRecomputing(true);
+    try {
+      const params = new URLSearchParams({ from: range.from, to: range.to });
+      if (amenityId !== "all") params.set("amenityId", amenityId);
+      const res = await fetch(`/api/amenities/analytics/recompute?${params}`, {
+        method: "POST", credentials: "include",
+      });
+      const body = await res.json();
+      if (!res.ok) return showToast(body.error || "Recompute failed", "err");
+      showToast(`Rebuilt ${body.recomputed} day(s) from raw attendance`);
+      load();
+    } finally {
+      setRecomputing(false);
+    }
+  };
+
   const exportUrl = () => {
     const params = new URLSearchParams({ from: range.from, to: range.to });
     if (amenityId !== "all") params.set("amenityId", amenityId);
@@ -105,6 +123,10 @@ export default function AnalyticsPage() {
           <p className={styles.subtitle}>{range.from} to {range.to}</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button className={styles.btn} onClick={recompute} disabled={recomputing}
+            title="Rebuild the rollup for this range from raw attendance — use this if numbers look stale or missing">
+            {recomputing ? "Recomputing…" : "Recompute"}
+          </button>
           <a className={styles.btn} href={exportUrl()} download>Export CSV</a>
           <button className={styles.btn} onClick={() => window.print()}>Print / PDF</button>
         </div>

@@ -1,7 +1,23 @@
 "use client";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+
+// Builds a workbook from our own trusted data and triggers a browser
+// download — no `xlsx`/SheetJS involved (unfixed prototype-pollution + ReDoS
+// CVEs in its parser: GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9).
+async function downloadWorkbook(sheetName, aoa, colWidths, filename) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(sheetName);
+  aoa.forEach((r) => ws.addRow(r));
+  if (colWidths) colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 const H = {};
 async function adminGet(url) {
   const res = await fetch(url, { credentials: "include", headers: H });
@@ -90,11 +106,12 @@ export default function SuperAdminExportsPage() {
         const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
         a.download = `export_${selectedCollection}_${Date.now()}.csv`; a.click();
       } else {
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-        ws["!cols"] = headers.map(() => ({ wch: 18 }));
-        XLSX.utils.book_append_sheet(wb, ws, selectedCollection);
-        XLSX.writeFile(wb, `export_${selectedCollection}_${Date.now()}.xlsx`);
+        await downloadWorkbook(
+          selectedCollection,
+          [headers, ...dataRows],
+          headers.map(() => 18),
+          `export_${selectedCollection}_${Date.now()}.xlsx`,
+        );
       }
     } finally {
       setExporting(false);

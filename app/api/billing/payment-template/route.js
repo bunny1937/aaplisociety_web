@@ -5,7 +5,7 @@ import Bill from "@/models/Bill";
 import Receipt from "@/models/Receipt";
 import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-import * as XLSX from "xlsx";
+import { buildWorkbook, addSheetFromJson, workbookBuffer } from "@/lib/excelParse";
 function twoDp(n) {
   return parseFloat((Number(n) || 0).toFixed(2));
 }
@@ -183,12 +183,12 @@ export async function GET(request) {
         LastPaymentDate: "READ ONLY - previous payment date",
       },
     ];
-    const ws = XLSX.utils.json_to_sheet([...instructions, ...rows]);
+    const wb = buildWorkbook();
     const headerKeys = Object.keys(rows[0] || {});
-    ws["!cols"] = headerKeys.map((k) => ({ wch: Math.max(k.length + 2, 14) }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Payments_${billPeriodId}`);
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    addSheetFromJson(wb, `Payments_${billPeriodId}`, [...instructions, ...rows], {
+      colWidths: headerKeys.map((k) => Math.max(k.length + 2, 14)),
+    });
+    const buf = await workbookBuffer(wb);
     return new NextResponse(buf, {
       headers: {
         "Content-Type":

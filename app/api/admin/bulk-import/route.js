@@ -27,7 +27,7 @@ import EmailOutbox from "@/models/EmailOutbox";
 import TenantRequest from "@/models/TenantRequest";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
-import * as XLSX from "xlsx";
+import { loadWorkbook, worksheetToJson, buildWorkbook, addSheetFromJson } from "@/lib/excelParse";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 import { generateBill } from "@/lib/billing/generationService";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
@@ -455,9 +455,8 @@ export async function POST(request) {
     // Reuse the identical downstream pipeline (position/prefix-based sheet
     // lookups) by building an in-memory workbook out of the wizard's JSON
     // rows, instead of forking the parsing logic below in two.
-    wb = XLSX.utils.book_new();
-    const sheet = (name, rows) =>
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows || []), name);
+    wb = buildWorkbook();
+    const sheet = (name, rows) => addSheetFromJson(wb, name, rows || []);
     sheet("Society", jsonBody.data.society);
     sheet("1. Basic Info (Required)", jsonBody.data.basicInfo);
     sheet("2. Additional Info", jsonBody.data.additional);
@@ -466,10 +465,14 @@ export async function POST(request) {
     sheet("5. Owner History", jsonBody.data.ownerHistory);
     sheet("6. Tenant History", jsonBody.data.tenantHistory);
   } else {
+    // Untrusted upload: parsed with exceljs, not xlsx's own reader — xlsx's
+    // parser has an unfixed prototype-pollution + ReDoS CVE
+    // (GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9).
     const bytes = await file.arrayBuffer();
-    wb = XLSX.read(Buffer.from(bytes), { cellDates: true });
+    wb = await loadWorkbook(Buffer.from(bytes));
   }
-  if (wb.SheetNames.length < 1) {
+  const sheetNames = wb.worksheets.map((ws) => ws.name);
+  if (sheetNames.length < 1) {
     return fail(
       {
         error:
@@ -480,8 +483,8 @@ export async function POST(request) {
   }
   // ── PHASE 1: PARSE ──────────────���─────────────────────────────────
   // Society sheet
-  const societySheet = wb.Sheets[wb.SheetNames[0]];
-  const societyRows = XLSX.utils.sheet_to_json(societySheet, { defval: "" });
+  const societySheet = wb.worksheets[0];
+  const societyRows = worksheetToJson(societySheet, { defval: "" });
   if (!societyRows.length) {
     return fail(
       {
@@ -521,18 +524,18 @@ export async function POST(request) {
     return fail({ validationFailed: true, phase: "society", errors: scheduleErrors }, 422);
   }
   // Member sheet (index 1 = "1. Basic Info (Required)")
-  const basicInfoSheetName = wb.SheetNames[1];
+  const basicInfoSheetName = sheetNames[1];
   const basicInfoRows = basicInfoSheetName
-    ? XLSX.utils.sheet_to_json(wb.Sheets[basicInfoSheetName], {
+    ? worksheetToJson(wb.getWorksheet(basicInfoSheetName), {
         defval: "",
         blankrows: true,
       })
     : [];
   // Parking sheet (index 3 = "3. Parking Slots")
-  const parkingSheetName = wb.SheetNames[3];
+  const parkingSheetName = sheetNames[3];
   const parkingByFlat = {};
-  if (parkingSheetName && wb.Sheets[parkingSheetName]) {
-    for (const p of XLSX.utils.sheet_to_json(wb.Sheets[parkingSheetName], {
+  if (parkingSheetName && wb.getWorksheet(parkingSheetName)) {
+    for (const p of worksheetToJson(wb.getWorksheet(parkingSheetName), {
       defval: "",
     })) {
       const fn = String(p["flatNo"] || "").trim();
@@ -543,8 +546,8 @@ export async function POST(request) {
     }
   }
   function rowsFor(prefix) {
-    const name = wb.SheetNames.find((n) => n.startsWith(prefix));
-    return name ? XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: "" }) : [];
+    const name = sheetNames.find((n) => n.startsWith(prefix));
+    return name ? worksheetToJson(wb.getWorksheet(name), { defval: "" }) : [];
   }
   function groupByFlat(rows) {
     const out = {};

@@ -5,7 +5,7 @@ import Bill from "@/models/Bill";
 import Member from "@/models/Member";
 import Society from "@/models/Society";
 import BillingHead from "@/models/BillingHead";
-import * as XLSX from "xlsx";
+import { parseFirstSheet } from "@/lib/excelParse";
 import { requireRoles, BILLING_WRITE_ROLES } from "@/lib/authz";
 import { calculateMonthlyInterest } from "@/utils/interestUtils";
 import { resolveOpeningBalances } from "@/lib/billing/generationService";
@@ -36,9 +36,7 @@ export async function POST(request) {
       const buffer = Buffer.from(bytes);
       const fileHash = createHash("sha256").update(buffer).digest("hex");
       // Read Excel
-      const workbook = XLSX.read(buffer);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(worksheet);
+      const data = await parseFirstSheet(buffer);
       if (data.length === 0) {
         return NextResponse.json(
           { error: "Excel file is empty" },

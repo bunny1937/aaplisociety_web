@@ -4,7 +4,7 @@ import Member from "@/models/Member";
 import BillingHead from "@/models/BillingHead";
 import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-import * as XLSX from "xlsx";
+import { parseFirstSheet } from "@/lib/excelParse";
 import { validateBillRows, classifyBillUploadRows } from "../../../../utils/excelValidator";
 // Accepts merged "Wing-FlatNo" (new template) OR separate Wing+FlatNo (legacy)
 const REQUIRED_MERGED = ["Wing-FlatNo", "Period"];
@@ -31,9 +31,7 @@ export async function POST(request) {
         { status: 400 },
       );
     const bytes = await file.arrayBuffer();
-    const wb = XLSX.read(Buffer.from(bytes), { type: "buffer" });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rawRows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+    const rawRows = await parseFirstSheet(Buffer.from(bytes), { defval: "" });
     // Skip instruction row (Wing-FlatNo or Wing cell starts with ⚠, or all id columns blank)
     const dataRows = rawRows.filter((r) => {
       const wf = String(r["Wing-FlatNo"] || "").trim();

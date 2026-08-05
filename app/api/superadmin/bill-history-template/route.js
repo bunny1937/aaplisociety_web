@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Member from "@/models/Member";
 import mongoose from "mongoose";
-import * as XLSX from "xlsx";
+import { buildWorkbook, addSheetFromAoa, styleHeaderRow, workbookBuffer } from "@/lib/excelParse";
 import { validateAdminRequest } from "@/lib/admin-middleware";
 const HEADERS = [
   "Wing-FlatNo", "Period",
@@ -61,7 +61,7 @@ export async function GET(request) {
   if (!months.length) {
     return NextResponse.json({ error: "No history months to generate (society joined in April?)" }, { status: 400 });
   }
-  const wb = XLSX.utils.book_new();
+  const wb = buildWorkbook();
   // Instructions sheet
   const instrData = [
     ["BILL HISTORY IMPORT TEMPLATE"],
@@ -82,9 +82,7 @@ export async function GET(request) {
     ["Members (Wing-FlatNo):"],
     ...members.map((m) => [`${m.wing ? m.wing + "-" : ""}${m.flatNo}`]),
   ];
-  const instrWs = XLSX.utils.aoa_to_sheet(instrData);
-  instrWs["!cols"] = [{ wch: 40 }, { wch: 30 }];
-  XLSX.utils.book_append_sheet(wb, instrWs, "Instructions");
+  addSheetFromAoa(wb, "Instructions", instrData, { colWidths: [40, 30] });
   // One sheet per month
   for (const { year, month0 } of months) {
     const pid = periodIdFromYM(year, month0);
@@ -102,16 +100,13 @@ export async function GET(request) {
       ];
       dataRows.push(row);
     }
-    const ws = XLSX.utils.aoa_to_sheet(dataRows);
-    ws["!cols"] = HEADERS.map((h) => ({ wch: Math.max(h.length + 2, 14) }));
-    // Bold header row
-    HEADERS.forEach((_, ci) => {
-      const ref = XLSX.utils.encode_cell({ r: 0, c: ci });
-      if (ws[ref]) ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: "D6E4FF" } } };
+    const ws = addSheetFromAoa(wb, pid, dataRows, {
+      colWidths: HEADERS.map((h) => Math.max(h.length + 2, 14)),
     });
-    XLSX.utils.book_append_sheet(wb, ws, pid);
+    styleHeaderRow(ws, "FFD6E4FF");
+    ws.getRow(1).font = { bold: true }; // this template's header stays dark text on light fill, not white
   }
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  const buf = await workbookBuffer(wb);
   return new NextResponse(buf, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

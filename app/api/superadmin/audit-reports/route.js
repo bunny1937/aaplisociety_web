@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import AuditReport from "@/models/AuditReport";
 import { validateAdminRequest } from "@/lib/admin-middleware";
-import * as XLSX from "xlsx";
+import { buildWorkbook, addSheetFromJson, workbookBuffer } from "@/lib/excelParse";
 // GET /api/superadmin/audit-reports
 // Query: ?societyId=xxx  → return full report with billRows
 //        (no query)      → list all reports summary
@@ -23,7 +23,7 @@ export async function GET(request) {
         );
       if (download) {
         // Export as Excel
-        const wb = XLSX.utils.book_new();
+        const wb = buildWorkbook();
         // Summary sheet
         const summaryData = [
           {
@@ -41,11 +41,7 @@ export async function GET(request) {
             Passed: report.validation?.passed ? "YES" : "NO",
           },
         ];
-        XLSX.utils.book_append_sheet(
-          wb,
-          XLSX.utils.json_to_sheet(summaryData),
-          "Summary",
-        );
+        addSheetFromJson(wb, "Summary", summaryData);
         // Bill rows sheet
         if (report.billRows?.length) {
           const rowsFlat = report.billRows.map((r) => ({
@@ -62,13 +58,9 @@ export async function GET(request) {
             Subtotal: r.subtotal,
             GrandTotal: r.grandTotal,
           }));
-          XLSX.utils.book_append_sheet(
-            wb,
-            XLSX.utils.json_to_sheet(rowsFlat),
-            "BillData",
-          );
+          addSheetFromJson(wb, "BillData", rowsFlat);
         }
-        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+        const buf = await workbookBuffer(wb);
         return new NextResponse(buf, {
           headers: {
             "Content-Type":

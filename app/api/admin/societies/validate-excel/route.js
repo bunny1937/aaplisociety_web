@@ -3,7 +3,7 @@ import connectDB from "@/lib/mongodb";
 import Society from "@/models/Society";
 import User from "@/models/User";
 import { validateAdminRequest } from "@/lib/admin-middleware";
-import * as XLSX from "xlsx";
+import { parseFirstSheet } from "@/lib/excelParse";
 export async function POST(request) {
   const validation = validateAdminRequest(request);
   if (!validation.valid) return validation;
@@ -20,10 +20,7 @@ export async function POST(request) {
   const buffer = Buffer.from(arrayBuffer);
   let rows;
   try {
-    const wb = XLSX.read(buffer, { type: "buffer" });
-    const sheetName = wb.SheetNames[0];
-    const sheet = wb.Sheets[sheetName];
-    rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    rows = await parseFirstSheet(buffer, { defval: "" });
   } catch (e) {
     return NextResponse.json({ error: "Invalid Excel file" }, { status: 400 });
   }

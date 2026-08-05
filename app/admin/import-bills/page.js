@@ -2,9 +2,27 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import styles from "@/styles/ImportBills.module.css";
 import DropZone from "../../../components/DropZone";
+
+// Builds a workbook from our own trusted data and triggers a browser
+// download — no `xlsx`/SheetJS involved (unfixed prototype-pollution + ReDoS
+// CVEs in its parser: GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9).
+async function downloadWorkbook(sheets, filename) {
+  const wb = new ExcelJS.Workbook();
+  for (const { name, rows, colWidths } of sheets) {
+    const ws = wb.addWorksheet(name);
+    rows.forEach((r) => ws.addRow(r));
+    if (colWidths) colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 export default function ImportBillsPage() {
   const queryClient = useQueryClient();
   const [file, setFile] = useState(null);
@@ -22,7 +40,7 @@ export default function ImportBillsPage() {
     },
   });
   // Generate dynamic template
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
     if (!configData) {
       alert("Loading configuration...");
       return;
@@ -73,12 +91,6 @@ export default function ImportBillsPage() {
     });
     sampleRow.push("Regular bill"); // Notes
     sampleRow.push("5450"); // Total
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
-    // Set column widths
-    ws["!cols"] = headers.map(() => ({ wch: 15 }));
-    XLSX.utils.book_append_sheet(wb, ws, "Bills Template");
     // Add instructions sheet
     const instructionsData = [
       ["Import Bills - Instructions"],
@@ -106,11 +118,14 @@ export default function ImportBillsPage() {
       ["- Previous balance auto-added"],
       ["- Fill only required columns, rest can be 0"],
     ];
-    const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData);
-    wsInstructions["!cols"] = [{ wch: 50 }];
-    XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
     // Download
-    XLSX.writeFile(wb, `Bills_Import_Template_${new Date().getTime()}.xlsx`);
+    await downloadWorkbook(
+      [
+        { name: "Bills Template", rows: [headers, sampleRow], colWidths: headers.map(() => 15) },
+        { name: "Instructions", rows: instructionsData, colWidths: [50] },
+      ],
+      `Bills_Import_Template_${new Date().getTime()}.xlsx`,
+    );
   };
   // Validate file
   const validateMutation = useMutation({

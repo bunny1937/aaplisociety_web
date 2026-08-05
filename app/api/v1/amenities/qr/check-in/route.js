@@ -6,7 +6,8 @@ import { z } from "zod";
 import { memberContext, requireCapability } from "@/lib/amenities/memberContext";
 import { CAPABILITY } from "@/lib/amenities/permissions";
 import { verifyToken, recordScan } from "@/lib/amenities/qrService";
-import { checkIn } from "@/lib/amenities/attendanceService";
+import { checkIn, CheckInError } from "@/lib/amenities/attendanceService";
+import { STATUS_BY_CODE } from "@/lib/amenities/apiHelpers";
 import { logAmenityActivity } from "@/lib/amenities/activityLog";
 import { ACTIVITY_ACTION, CHECKIN_METHOD, ATTENDANCE_MODE } from "@/lib/amenities/constants";
 
@@ -76,25 +77,37 @@ export const POST = withRoute(async (request) => {
     throw new ApiError(409, "QR check-in is not enabled for this amenity.");
   }
 
-  const record = await checkIn({
-    societyId: ctx.societyId,
-    amenity,
-    attendeeType: "RESIDENT",
-    memberId: ctx.memberId,
-    userId: ctx.userId,
-    residentName: ctx.member.name,
-    flatNo: ctx.flatLabel,
-    occupancyType: ctx.occupancyType,
-    age: ctx.age,
-    eventId: parsed.data.eventId || null,
-    guestCount: parsed.data.guestCount || 0,
-    method: CHECKIN_METHOD.QR,
-    qrTokenId: verification.token._id,
-    checkedInBy: ctx.userId,
-    checkedInByName: ctx.member.name,
-    checkedInByRole: ctx.role,
-    actor: ctx.actor,
-  });
+  let record;
+  try {
+    record = await checkIn({
+      societyId: ctx.societyId,
+      amenity,
+      attendeeType: "RESIDENT",
+      memberId: ctx.memberId,
+      userId: ctx.userId,
+      residentName: ctx.member.name,
+      flatNo: ctx.flatLabel,
+      occupancyType: ctx.occupancyType,
+      age: ctx.age,
+      eventId: parsed.data.eventId || null,
+      guestCount: parsed.data.guestCount || 0,
+      method: CHECKIN_METHOD.QR,
+      qrTokenId: verification.token._id,
+      checkedInBy: ctx.userId,
+      checkedInByName: ctx.member.name,
+      checkedInByRole: ctx.role,
+      actor: ctx.actor,
+    });
+  } catch (err) {
+    // CheckInError is an expected rejection (closed, full, already inside,
+    // not eligible…) not a server fault — without this it fell through to
+    // withRoute's catch-all and the resident saw a bare "Internal server
+    // error" instead of the actual reason.
+    if (err instanceof CheckInError) {
+      throw new ApiError(STATUS_BY_CODE[err.code] || 409, { error: err.message, code: err.code, ...(err.meta || {}) });
+    }
+    throw err;
+  }
 
   await logAmenityActivity({
     societyId: ctx.societyId,

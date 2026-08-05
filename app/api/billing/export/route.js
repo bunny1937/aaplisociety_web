@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-import * as XLSX from "xlsx";
+import { buildWorkbook, addSheetFromJson, workbookBuffer } from "@/lib/excelParse";
 export async function POST(request) {
   try {
     await connectDB();
@@ -74,19 +74,11 @@ export async function POST(request) {
         : "";
       return row;
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    // Auto column widths
-    const colWidths = Object.keys(rows[0] || {}).map((k) => ({
-      wch: Math.max(k.length + 2, 14),
-    }));
-    ws["!cols"] = colWidths;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      period ? `Bills_${period}` : "All_Bills",
-    );
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const wb = buildWorkbook();
+    addSheetFromJson(wb, period ? `Bills_${period}` : "All_Bills", rows, {
+      colWidths: Object.keys(rows[0] || {}).map((k) => Math.max(k.length + 2, 14)),
+    });
+    const buf = await workbookBuffer(wb);
     const filename = period ? `Bills-${period}.xlsx` : `Bills-All.xlsx`;
     return new NextResponse(buf, {
       headers: {

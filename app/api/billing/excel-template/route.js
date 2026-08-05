@@ -4,7 +4,7 @@ import Member from "@/models/Member";
 import BillingHead from "@/models/BillingHead";
 import Society from "@/models/Society";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
-import * as XLSX from "xlsx";
+import { buildWorkbook, addSheetFromJson, workbookBuffer } from "@/lib/excelParse";
 import Bill from "@/models/Bill";
 import { calculateMonthlyInterest } from "../../../../utils/interestUtils";
 import { safeConfigDate } from "../../../../utils/dateUtils";
@@ -278,21 +278,13 @@ const columns = [
     ...chargeHeadCols,
 
 ];
-const ws = XLSX.utils.json_to_sheet([...instructions, ...rows], {
-  header: columns,
-});
-ws["!cols"] = columns.map((k) => ({
-  wch: Math.max(k.length + 2, 16),
-  hidden: false,
-}));
     // Note in instructions row already says "DO NOT EDIT" — PreviousBalance/InterestDue/GrandTotal are for reference only
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      `Bills_${year}_${String(month).padStart(2, "0")}`,
-    );
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const wb = buildWorkbook();
+    addSheetFromJson(wb, `Bills_${year}_${String(month).padStart(2, "0")}`, [...instructions, ...rows], {
+      headers: columns,
+      colWidths: columns.map((k) => Math.max(k.length + 2, 16)),
+    });
+    const buf = await workbookBuffer(wb);
     return new NextResponse(buf, {
       headers: {
         "Content-Type":

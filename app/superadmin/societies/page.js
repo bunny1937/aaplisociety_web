@@ -1,11 +1,51 @@
 "use client";
 import { useState, useEffect } from "react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import styles from "@/styles/Admin.module.css";
 import DropZone from "../../../components/DropZone";
 import BulkImportWizard from "./BulkImportWizard";
+
+// exceljs for all reading and writing — not `xlsx`/SheetJS, which has an
+// unfixed prototype-pollution + ReDoS CVE in its parser (GHSA-4r6h-8v6p-xvw6,
+// GHSA-5pgg-2g8v-p4x9). `xlsx` is not used anywhere in this codebase.
+function cellVal(cell) {
+  let val = cell?.value;
+  if (val && typeof val === "object" && !(val instanceof Date)) {
+    if (Array.isArray(val.richText)) val = val.richText.map((t) => t.text).join("");
+    else if (val.text !== undefined) val = val.text;
+    else if (val.result !== undefined) val = val.result;
+  }
+  return val;
+}
+function sheetToRows(worksheet, { defval = "" } = {}) {
+  if (!worksheet) return [];
+  const headers = [];
+  worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    headers[colNumber - 1] = String(cellVal(cell) ?? "").trim();
+  });
+  const rows = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const obj = {};
+    let hasValue = false;
+    headers.forEach((header, idx) => {
+      if (!header) return;
+      const raw = cellVal(row.getCell(idx + 1));
+      const blank = raw === null || raw === undefined || raw === "";
+      obj[header] = blank ? defval : raw;
+      if (!blank) hasValue = true;
+    });
+    if (hasValue) rows.push(obj);
+  });
+  return rows;
+}
+async function loadWorkbookFromArrayBuffer(arrayBuffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(arrayBuffer);
+  return workbook;
+}
 // ── Validation Rules ──────────────────────────────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
@@ -203,7 +243,7 @@ function rowToSocietyPayload(row) {
   };
 }
 // ── Template Download ─────────────────────────────────────────────
-function downloadTemplate() {
+async function downloadTemplate() {
   const headers = [
     "Society Name",
     "Registration No",
@@ -260,18 +300,18 @@ function downloadTemplate() {
     "200",
     "300",
   ];
-  const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
-  // Column widths
-  ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
-  // Style header row bold (basic)
-  headers.forEach((_, i) => {
-    const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
-    if (!ws[cellRef]) return;
-    ws[cellRef].s = { font: { bold: true } };
-  });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Societies");
-  XLSX.writeFile(wb, "society_upload_template.xlsx");
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Societies");
+  ws.addRow(headers);
+  ws.addRow(sample);
+  headers.forEach((h, i) => { ws.getColumn(i + 1).width = Math.max(h.length + 4, 18); });
+  ws.getRow(1).font = { bold: true };
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "society_upload_template.xlsx"; a.click();
+  URL.revokeObjectURL(url);
 }
 // ── Bill History Validation Engine ───────────────────────────────────────────
 const PAYMENT_METHODS_OK = new Set(["Cash", "Cheque", "Online", "NEFT", "UPI"]);
@@ -387,11 +427,14 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
     setValidatedBills(null);
     setActiveSheetIdx(null);
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
-        const wb = XLSX.read(evt.target.result, { type: "binary", cellDates: true });
+        const wb = await loadWorkbookFromArrayBuffer(evt.target.result);
         // Skip "Instructions" sheet, process period sheets (named YYYY-MM)
-        const periodSheets = wb.SheetNames.filter((n) => /^\d{4}-\d{2}$/.test(n)).sort();
+        const periodSheets = wb.worksheets
+          .map((ws) => ws.name)
+          .filter((n) => /^\d{4}-\d{2}$/.test(n))
+          .sort();
         if (!periodSheets.length) {
           setSheetResults([{ periodId: "?", ok: false, errors: ["No period sheets found (expected sheets named YYYY-MM like 2026-04)"], warnings: [], rowCount: 0 }]);
           setValidationDone(true);
@@ -405,8 +448,7 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
         let allOk = true;
         for (let si = 0; si < periodSheets.length; si++) {
           const sheetName = periodSheets[si];
-          const ws = wb.Sheets[sheetName];
-          const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          const rows = sheetToRows(wb.getWorksheet(sheetName));
           const result = validateBillHistorySheet(rows, sheetName, prevState, interestRate || 21);
           results.push({ periodId: sheetName, ...result, rowCount: rows.length });
           prevState = result.closingState;
@@ -430,7 +472,7 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
         setBhStep("idle");
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
   const handleSave = async () => {
     if (!validatedBills?.length) return;
@@ -795,14 +837,10 @@ export default function AdminSocietiesPage() {
     if (!file) return;
     setUploadedFile(file);
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
-        const wb = XLSX.read(evt.target.result, {
-          type: "binary",
-          cellDates: true,
-        });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const wb = await loadWorkbookFromArrayBuffer(evt.target.result);
+        const rows = sheetToRows(wb.worksheets[0]);
         if (!rows.length) {
           setParsedRows([]);
           setValidationErrors([
@@ -821,7 +859,7 @@ export default function AdminSocietiesPage() {
         setParsedRows(null);
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
   // ── Create All Societies ──
   const handleCreateAll = async () => {

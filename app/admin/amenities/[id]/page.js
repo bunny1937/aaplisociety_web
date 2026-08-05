@@ -43,6 +43,8 @@ export default function AmenityDetailPage() {
   const [quickOpen, setQuickOpen] = useState("09:00");
   const [quickClose, setQuickClose] = useState("21:00");
   const [quickBreaks, setQuickBreaks] = useState([]);
+  const [closureDraft, setClosureDraft] = useState({ closureType: "HOLIDAY", startDate: "", endDate: "", reason: "" });
+  const [savingClosure, setSavingClosure] = useState(false);
   const newRuleKey = () => `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const newKey = () => `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -200,6 +202,40 @@ export default function AmenityDetailPage() {
     } finally {
       setSavingAvailability(false);
     }
+  };
+
+  const addClosure = async () => {
+    if (!closureDraft.startDate || !closureDraft.endDate || !closureDraft.reason.trim()) {
+      return showToast("Start date, end date and reason are required", "err");
+    }
+    setSavingClosure(true);
+    try {
+      const res = await fetch(`/api/amenities/${id}/closures`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(closureDraft),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not add closure");
+      showToast("Closure added");
+      setClosureDraft({ closureType: "HOLIDAY", startDate: "", endDate: "", reason: "" });
+      load();
+    } catch (err) {
+      showToast(err.message, "err");
+    } finally {
+      setSavingClosure(false);
+    }
+  };
+
+  const removeClosure = async (closureId) => {
+    if (!confirm("Cancel this closure? The amenity will reopen per its weekly hours.")) return;
+    const res = await fetch(`/api/amenities/${id}/closures/${closureId}`, {
+      method: "DELETE", credentials: "include",
+    });
+    if (!res.ok) return showToast("Could not cancel closure", "err");
+    showToast("Closure cancelled");
+    load();
   };
 
   const patchAmenity = async (body, successMsg) => {
@@ -654,6 +690,12 @@ export default function AmenityDetailPage() {
                           {label(c.closureType)}
                         </span>
                       </td>
+                      <td style={{ textAlign: "right" }}>
+                        <button className={`${styles.btn} ${styles.btnDanger} ${styles.btnSm}`}
+                          onClick={() => removeClosure(c._id)}>
+                          Cancel
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -663,6 +705,39 @@ export default function AmenityDetailPage() {
               Closures more than a week out appear here and on the resident page but send no notification —
               a holiday eight months away is not news.
             </p>
+
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #f3f4f6", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div className={styles.field} style={{ flex: "1 1 140px" }}>
+                  <label className={styles.label}>Type</label>
+                  <select className={styles.select} value={closureDraft.closureType}
+                    onChange={(e) => setClosureDraft({ ...closureDraft, closureType: e.target.value })}>
+                    <option value="HOLIDAY">Holiday</option>
+                    <option value="TEMPORARY">Temporary</option>
+                  </select>
+                </div>
+                <div className={styles.field} style={{ flex: "1 1 140px" }}>
+                  <label className={styles.label}>Start date</label>
+                  <input type="date" className={styles.input} value={closureDraft.startDate}
+                    onChange={(e) => setClosureDraft({ ...closureDraft, startDate: e.target.value })} />
+                </div>
+                <div className={styles.field} style={{ flex: "1 1 140px" }}>
+                  <label className={styles.label}>End date</label>
+                  <input type="date" className={styles.input} value={closureDraft.endDate}
+                    onChange={(e) => setClosureDraft({ ...closureDraft, endDate: e.target.value })} />
+                </div>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Reason</label>
+                <input className={styles.input} placeholder="e.g. Diwali, deep cleaning, pump repair"
+                  value={closureDraft.reason}
+                  onChange={(e) => setClosureDraft({ ...closureDraft, reason: e.target.value })} />
+              </div>
+              <button className={`${styles.btn} ${styles.btnPrimary}`} style={{ alignSelf: "flex-start" }}
+                disabled={savingClosure} onClick={addClosure}>
+                {savingClosure ? "Adding…" : "Add closure"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1281,6 +1356,15 @@ export default function AmenityDetailPage() {
               ) : null}
             </div>
             <div className={styles.modalFoot}>
+              {qrImage ? (
+                <a
+                  className={styles.btn}
+                  href={qrImage}
+                  download={`amenity-qr-${id}.png`}
+                >
+                  Download PNG
+                </a>
+              ) : null}
               <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => setNewToken(null)}>Done</button>
             </div>
           </div>
