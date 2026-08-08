@@ -8,9 +8,11 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import ProfileEditRequest from "@/models/ProfileEditRequest";
 import Member from "@/models/Member";
+import Shop from "@/models/Shop";
 import { requireRoles } from "@/lib/authz";
 import { logAudit } from "@/lib/audit-logger";
 import { applyProfileEditPayload } from "@/lib/profile-edit-apply";
+import { applyShopProfileEditPayload } from "@/lib/profile-edit-apply-shop";
 import { buildProfileEditDecisionNotification } from "@/lib/profile-edit-notifications";
 import { sendInApp } from "@/lib/visitor-channels";
 export async function POST(request, { params }) {
@@ -28,6 +30,40 @@ export async function POST(request, { params }) {
     });
     if (!editRequest)
       return NextResponse.json({ error: "No pending request found for that id" }, { status: 404 });
+    if (editRequest.section === "ShopProfile") {
+      const shop = await Shop.findOne({ _id: editRequest.shopId, societyId: auth.user.societyId });
+      if (!shop) return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+      applyShopProfileEditPayload(shop, editRequest);
+      await shop.save();
+      editRequest.status = "Approved";
+      editRequest.approvedBy = auth.user.userId;
+      editRequest.approvedAt = new Date();
+      await editRequest.save();
+      const shopNotif = buildProfileEditDecisionNotification({
+        decision: "approved",
+        section: editRequest.section,
+        flatNo: shop.tradeName || shop.shopNo || "your shop",
+      });
+      await sendInApp({
+        societyId: auth.user.societyId,
+        createdBy: auth.user.userId,
+        createdByName: "Admin",
+        type: shopNotif.type,
+        title: shopNotif.title,
+        message: shopNotif.message,
+        recipientType: "user",
+        recipientIds: [String(editRequest.requestedByUserId)],
+        metadata: { profileEditRequestId: String(editRequest._id) },
+      });
+      await logAudit(auth.user.userId, auth.user.societyId, "PROFILE_EDIT_REQUEST_APPROVED", null, {
+        profileEditRequestId: String(editRequest._id),
+        shopId: String(shop._id),
+        section: editRequest.section,
+        action: editRequest.action,
+      });
+      return NextResponse.json({ success: true, profileEditRequest: editRequest });
+    }
+
     const member = await Member.findOne({ _id: editRequest.memberId, societyId: auth.user.societyId });
     if (!member) return NextResponse.json({ error: "Flat not found" }, { status: 404 });
     try {

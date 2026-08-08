@@ -34,6 +34,8 @@ const CommercialBillingHeadSchema = new mongoose.Schema(
     },
     isServiceCharge: { type: Boolean, default: false },
     nonOccupancyEligible: { type: Boolean, default: false },
+    sortOrder: { type: Number, default: 0, min: 0, max: 9999 },
+    notes: { type: String, trim: true, maxlength: 200, default: null },
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
@@ -47,7 +49,15 @@ const CommercialBillingHeadSchema = new mongoose.Schema(
 );
 
 CommercialBillingHeadSchema.index({ societyId: 1, isDeleted: 1, isActive: 1 });
-CommercialBillingHeadSchema.index({ societyId: 1, headName: 1 }, { unique: true });
+CommercialBillingHeadSchema.index({ societyId: 1, sortOrder: 1 });
+// FIXED 2026-08-07: this unique index also covered SOFT-DELETED rows, so
+// removing a charge and re-adding it with the same name failed with a raw
+// MongoDB E11000 that reached the admin as "Request failed". Only LIVE heads
+// need a unique name.
+CommercialBillingHeadSchema.index(
+  { societyId: 1, headName: 1 },
+  { unique: true, partialFilterExpression: { isDeleted: false } },
+);
 
 export default mongoose.models.CommercialBillingHead ||
   mongoose.model("CommercialBillingHead", CommercialBillingHeadSchema);

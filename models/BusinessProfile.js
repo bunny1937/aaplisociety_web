@@ -86,6 +86,42 @@ const BusinessProfileSchema = new mongoose.Schema(
     gstin: { type: String, trim: true, uppercase: true, maxlength: 15 },
     licenseNumber: { type: String, trim: true, maxlength: 60 },
 
+    // ADDED 2026-08-07 — real shop onboarding.
+    //
+    // Setting up a shop used to capture name + category + opening hours only,
+    // which is a directory listing, not a commercial unit. None of the things a
+    // society actually needs to bill and govern a shop were asked for. These are
+    // the ones that matter in practice in an Indian society.
+    //
+    // NOTE ON AREA: the billable carpet area still lives on Member.carpetAreaSqft
+    // — that is the single field the billing engine reads, and duplicating it
+    // here would guarantee the two drift apart. The shop form now asks for it and
+    // writes it to the Member record (see businessProfileService.js).
+    shopActNumber: { type: String, trim: true, maxlength: 60 },   // Gumasta
+    fssaiNumber: { type: String, trim: true, maxlength: 20 },     // food businesses
+
+    // Who physically occupies the unit. Drives the non-occupancy charge
+    // conversation — the charge itself stays a deliberate admin toggle below.
+    occupancyType: {
+      type: String,
+      enum: ["Self-occupied", "Rented out", "Vacant"],
+      default: "Self-occupied",
+    },
+    tenantName: { type: String, trim: true, maxlength: 120 },
+    tenantPhone: { type: String, trim: true, maxlength: 20 },
+    leaseStartDate: { type: String, trim: true, maxlength: 10 },  // YYYY-MM-DD
+    leaseEndDate: { type: String, trim: true, maxlength: 10 },
+
+    // Premises facts the committee is asked for constantly.
+    floor: { type: String, trim: true, maxlength: 20 },           // "Ground", "1st"
+    shutterCount: { type: Number, min: 0, max: 20, default: null },
+    hasSignage: { type: Boolean, default: false },
+    signageSizeSqft: { type: Number, min: 0, max: 10000, default: null },
+    electricityMeterNo: { type: String, trim: true, maxlength: 40 },
+    waterConnectionNo: { type: String, trim: true, maxlength: 40 },
+    emergencyContactName: { type: String, trim: true, maxlength: 120 },
+    emergencyContactPhone: { type: String, trim: true, maxlength: 20 },
+
     businessHours: { type: BusinessHoursSchema, default: null },
 
     // R2 object keys only — never public URLs, never raw bytes.

@@ -31,6 +31,7 @@ import { loadWorkbook, worksheetToJson, buildWorkbook, addSheetFromJson } from "
 import { validateAdminRequest } from "@/lib/admin-middleware";
 import { generateBill } from "@/lib/billing/generationService";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
+import { isCommercialUnit } from "@/lib/commercial/constants";
 import { generateSimpleUsername, buildUsernameBloomFilter } from "@/lib/username-generator";
 import { generateUniqueSocietyCode } from "@/lib/society-code";
 import { generatePassword } from "@/lib/password-generator";
@@ -977,6 +978,10 @@ export async function POST(request) {
       isDeleted: { $ne: true },
     }).lean();
     for (const member of allMembers) {
+      if (isCommercialUnit(member)) {
+        warnings.push(`${member.wing}-${member.flatNo}: Commercial unit skipped — use the Commercial billing wizard instead`);
+        continue;
+      }
       try {
         // Ledger V2: the canonical GenerationService owns opening/current/
         // interest math — no independent calculation here. First-ever bill
@@ -1087,6 +1092,9 @@ export async function POST(request) {
         html: onboardingEmailHtml({
           memberName: cred.ownerName,
           societyName: societyPayload.societyName,
+          societyAddress: societyPayload.address || "",
+          unitKind: cred.accountType === "Tenant" ? "Flat (as tenant of)" : "Flat",
+          unitLabel: cred.wing ? `${cred.wing}-${cred.flatNo}` : cred.flatNo,
           setCredentialsUrl,
         }),
       };

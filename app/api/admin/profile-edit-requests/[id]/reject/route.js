@@ -25,7 +25,9 @@ export async function POST(request, { params }) {
     });
     if (!editRequest)
       return NextResponse.json({ error: "No pending request found for that id" }, { status: 404 });
-    const member = await Member.findOne({ _id: editRequest.memberId, societyId: auth.user.societyId }).lean();
+    const member = editRequest.shopId
+      ? null
+      : await Member.findOne({ _id: editRequest.memberId, societyId: auth.user.societyId }).lean();
     editRequest.status = "Rejected";
     editRequest.rejectionReason = reason || undefined;
     await editRequest.save();
@@ -42,8 +44,8 @@ export async function POST(request, { params }) {
       type: notif.type,
       title: notif.title,
       message: notif.message,
-      recipientType: "member",
-      recipientIds: [String(editRequest.memberId)],
+      recipientType: editRequest.shopId ? "user" : "member",
+      recipientIds: [String(editRequest.shopId ? editRequest.requestedByUserId : editRequest.memberId)],
       metadata: { profileEditRequestId: String(editRequest._id) },
     });
     await logAudit(auth.user.userId, auth.user.societyId, "PROFILE_EDIT_REQUEST_REJECTED", null, {

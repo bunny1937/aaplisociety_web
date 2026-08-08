@@ -18,6 +18,21 @@ const TransactionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Mirrors Bill.shopId (models/Bill.js): a commercial transaction's unit.
+    // memberId above still gets written (the owner if linked, or the shop id
+    // itself when there is no owner — never left unset, since it's required),
+    // but a shop's own ledger reads/writes must key on shopId, not memberId.
+    shopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      default: null,
+      index: true,
+    },
+    billSeries: {
+      type: String,
+      enum: ["RESIDENTIAL", "COMMERCIAL"],
+      default: "RESIDENTIAL",
+    },
     societyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Society",

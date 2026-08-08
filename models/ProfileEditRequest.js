@@ -9,9 +9,25 @@ import mongoose from "mongoose";
 const ProfileEditRequestSchema = new mongoose.Schema(
   {
     societyId: { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
-    memberId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true, index: true },
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: function () {
+        return this.section !== "ShopProfile";
+      },
+      index: true,
+    },
+    shopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      default: null,
+      required: function () {
+        return this.section === "ShopProfile";
+      },
+      index: true,
+    },
     requestedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    section: { type: String, enum: ["Contact", "FamilyMember", "EmergencyContact", "Parking"], required: true },
+    section: { type: String, enum: ["Contact", "FamilyMember", "EmergencyContact", "Parking", "ShopProfile"], required: true },
     action: { type: String, enum: ["Edit", "Add", "Remove"], required: true },
     familyMemberId: mongoose.Schema.Types.ObjectId,
     payload: { type: mongoose.Schema.Types.Mixed, default: {} },

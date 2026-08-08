@@ -11,11 +11,14 @@ export async function GET(request) {
     const decoded = verifyToken(token);
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    const { searchParams } = new URL(request.url);
+    const billSeries = searchParams.get("billSeries") === "COMMERCIAL" ? "COMMERCIAL" : "RESIDENTIAL";
     const now = new Date();
     const currentPeriodId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    // Latest generated period for this society
+    // Latest generated period for this society, THIS series only.
     const latestBill = await Bill.findOne({
       societyId: decoded.societyId,
+      billSeries,
       isDeleted: { $ne: true },
     })
       .sort({ billPeriodId: -1 })
@@ -38,6 +41,7 @@ export async function GET(request) {
       const unpaidBill = await Bill.findOne({
         societyId: decoded.societyId,
         billPeriodId: latestPeriodId,
+        billSeries,
         isDeleted: { $ne: true },
         balanceAmount: { $gt: 0.005 },
       })
@@ -51,6 +55,7 @@ export async function GET(request) {
       currentGenerated,
       allPaid,
       nextPeriodId,
+      billSeries,
     });
   } catch (err) {
     console.error("latest-period error:", err);

@@ -54,7 +54,7 @@ export async function POST(request) {
     const societyId = auth.user.societyId;
 
     const body = await request.json();
-    const { periodId, fingerprint, rows } = body || {};
+    const { periodId, fingerprint, rows, billSeries = "RESIDENTIAL" } = body || {};
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: "No rows submitted" }, { status: 400 });
@@ -98,7 +98,7 @@ export async function POST(request) {
 
     const bills = await Bill.find({ societyId, _id: { $in: billIds } })
       .select(
-        "memberId billPeriodId totalBillDue amountPaid status openingPrincipal openingInterest currentCharges billPrincipal",
+        "memberId billPeriodId billSeries totalBillDue amountPaid status openingPrincipal openingInterest currentCharges billPrincipal",
       )
       .lean();
     const billMap = new Map(bills.map((b) => [String(b._id), b]));
@@ -140,6 +140,12 @@ export async function POST(request) {
         return {
           ...base,
           ...fail("WRONG_PERIOD", "This bill belongs to a different billing period."),
+        };
+      }
+      if (billSeries && bill.billSeries !== billSeries) {
+        return {
+          ...base,
+          ...fail("WRONG_SERIES", "This bill does not belong to the selected billing segment (residential/commercial)."),
         };
       }
 

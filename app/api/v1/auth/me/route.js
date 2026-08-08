@@ -5,6 +5,7 @@ import { toMemberDto, toSocietyDto } from "@/lib/v1/authService";
 import { normalizeCommercialFlags } from "@/lib/commercial/featureFlags";
 import { isCommercialUnit } from "@/lib/commercial/constants";
 import BusinessProfile from "@/models/BusinessProfile";
+import Shop from "@/models/Shop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,18 @@ export const GET = withRoute(async (req) => {
     }
   }
 
+  // Commercial profile's own unit — same role as member/society above, but
+  // only fetched when the active profile is actually Commercial. Never
+  // fetched by shopId from the body/query, only from verified claims.
+  let shop = null;
+  if (claims.kind === "Commercial" && claims.shopId) {
+    shop = await Shop.findOne({ _id: claims.shopId, societyId: claims.societyId })
+      .select("shopNo wing unitKind tradeName categoryId gstin areaSqft")
+      .lean()
+      .catch(() => null);
+    if (shop) shop = { ...shop, _id: String(shop._id) };
+  }
+
   return json({
     capabilities: {
       commercialDirectory: commercialFlags.directoryEnabled === true,
@@ -64,10 +77,13 @@ export const GET = withRoute(async (req) => {
       role: claims.role,
       societyId: claims.societyId ?? null,
       memberId: claims.memberId ?? null,
+      kind: claims.kind ?? "Residential",
+      shopId: claims.shopId ?? null,
       activeProfileId: claims.activeProfileId ?? null,
       occupancyType: claims.occupancyType ?? null,
     },
     member: toMemberDto(member),
     society: toSocietyDto(society),
+    shop,
   });
 });

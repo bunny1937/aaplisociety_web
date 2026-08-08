@@ -14,18 +14,36 @@
 import { withRoute, ApiError, json } from "@/lib/v1/http";
 import { getClaims } from "@/lib/v1/auth";
 import { User } from "@/lib/v1/models";
+import Shop from "@/models/Shop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Same shape /auth/login sends for the picker, so FlatSummary.fromJson on the
-// app parses both without needing a second model.
-function toPickerProfile(p) {
+// Same shape /auth/login sends for the picker, so ProfileSummary.fromJson on
+// the app parses both without needing a second model.
+function toPickerProfile(p, shopById) {
+  if (p.kind === "Commercial") {
+    const shop = shopById.get(String(p.shopId));
+    const unit = [shop?.wing, shop?.shopNo].filter(Boolean).join("-") || "Shop";
+    return {
+      profileId: String(p.profileId ?? p._id),
+      kind: "Commercial",
+      societyName: p.societyName ?? null,
+      shopNo: shop?.shopNo ?? null,
+      wing: shop?.wing ?? null,
+      unitKind: shop?.unitKind ?? null,
+      tradeName: shop?.tradeName ?? null,
+      isPrimary: p.isPrimary === true,
+      status: p.status ?? null,
+      label: [unit, shop?.tradeName].filter(Boolean).join(" \u00b7 "),
+    };
+  }
   const wing = p.wing ?? null;
   const flatNo = p.flatNo ?? null;
   const unit = [wing, flatNo].filter(Boolean).join("-") || "Flat";
   return {
     profileId: String(p.profileId ?? p._id),
+    kind: "Residential",
     societyName: p.societyName ?? null,
     flatNo,
     wing,
@@ -43,9 +61,15 @@ export const GET = withRoute(async (req) => {
   if (!user) throw new ApiError(401, "User not found");
   if (user.isActive === false) throw new ApiError(403, "Account is disabled");
 
-  const profiles = (user.profiles || [])
-    .filter((p) => p.status === "Active")
-    .map(toPickerProfile);
+  const activeProfiles = (user.profiles || []).filter((p) => p.status === "Active");
+  const shopIds = activeProfiles.filter((p) => p.kind === "Commercial").map((p) => p.shopId);
+  const shopById = new Map(
+    shopIds.length
+      ? (await Shop.find({ _id: { $in: shopIds } }).select("shopNo wing unitKind tradeName").lean())
+          .map((s) => [String(s._id), s])
+      : [],
+  );
+  const profiles = activeProfiles.map((p) => toPickerProfile(p, shopById));
 
   return json({
     name: user.name ?? user.username ?? null,

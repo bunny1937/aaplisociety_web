@@ -11,6 +11,7 @@ import {
 import renderBillHtml from "@/lib/bill-renderer";
 import { notifyBillCreated } from "@/lib/v1/notify";
 import cache from "@/lib/cache";
+import { isCommercialUnit } from "@/lib/commercial/constants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,7 +86,7 @@ async function handle(req) {
       scheduledPushDate: { $lte: now },
       isDeleted: { $ne: true },
     })
-      .select("_id societyId memberId billPeriodId billMonth billYear")
+      .select("_id societyId memberId billPeriodId billMonth billYear billSeries")
       .limit(BATCH_SIZE + 1)
       .lean();
 
@@ -99,12 +100,14 @@ async function handle(req) {
     // a bill for that period (e.g. added after the scheduled batch ran).
     const groups = new Map();
     for (const b of due) {
-      const key = `${b.societyId}|${b.billPeriodId}`;
+      const billSeries = b.billSeries || "RESIDENTIAL";
+      const key = `${b.societyId}|${b.billPeriodId}|${billSeries}`;
       if (!groups.has(key)) {
         groups.set(key, {
           societyId: b.societyId,
           billMonth: b.billMonth,
           billYear: b.billYear,
+          billSeries,
           memberIds: new Set(),
         });
       }
@@ -172,11 +175,15 @@ async function handle(req) {
     }
 
     let backfilled = 0;
-    for (const { societyId, billMonth, billYear, memberIds } of groups.values()) {
+    for (const { societyId, billMonth, billYear, billSeries, memberIds } of groups.values()) {
       const activeMembers = await Member.find({ societyId, isDeleted: { $ne: true } })
-        .select("_id")
+        .select("_id flatType")
         .lean();
-      const missing = activeMembers
+      const seriesMembers =
+        billSeries === "COMMERCIAL"
+          ? activeMembers.filter((m) => isCommercialUnit(m))
+          : activeMembers.filter((m) => !isCommercialUnit(m));
+      const missing = seriesMembers
         .map((m) => String(m._id))
         .filter((id) => !memberIds.has(id));
       if (!missing.length) continue;
@@ -191,6 +198,7 @@ async function handle(req) {
         month: billMonth + 1,
         performedBy: "Cron",
         publishMode: "now",
+        billClass: billSeries,
       });
 
       // One query for all generated bills instead of a findById per bill.

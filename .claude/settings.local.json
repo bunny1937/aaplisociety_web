@@ -91,7 +91,22 @@
       "Bash(npx jest *)",
       "Bash(npm ls *)",
       "Bash(npm install *)",
-      "Bash(node -e \"require\\('qrcode'\\); console.log\\('ok', Object.keys\\(require\\('qrcode'\\)\\)\\)\")"
+      "Bash(node -e \"require\\('qrcode'\\); console.log\\('ok', Object.keys\\(require\\('qrcode'\\)\\)\\)\")",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-tttanishkkkk-Documents-GitHub-aaplisociety-web/5cfbf906-0edd-4fa7-8dd3-c85edae7103c/scratchpad/recov_web)",
+      "Bash(node restore-repomix.js)",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "Bash(rm -rf /tmp/head_checkout)",
+      "Bash(mkdir -p /tmp/head_checkout)",
+      "Bash(git archive *)",
+      "Bash(tar -x -C /tmp/head_checkout)",
+      "Bash(npm run *)",
+      "Bash(node --check models/Bill.js)",
+      "Bash(node --check models/Transaction.js)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(node --check lib/commercial/commercialChargeEngine.js)",
+      "Bash(echo \"BUILD EXIT: $?\")",
+      "Read(//Users/tttanishkkkk/.claude/plugins/**)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\) if isinstance\\(d,dict\\) else d\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,

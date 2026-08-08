@@ -46,6 +46,8 @@ export async function GET(request) {
       );
     }
 
+    const billSeries = searchParams.get("billSeries") === "COMMERCIAL" ? "COMMERCIAL" : "RESIDENTIAL";
+
     await connectDB();
 
     const snapshot = await getSocietySnapshot(societyId);
@@ -56,7 +58,7 @@ export async function GET(request) {
 
     // Server-side cache keyed on the fingerprint. Two admins opening the grid
     // in the same minute cost one build, not two.
-    const cacheKey = `collection:sheet:${societyId}:${periodId}:${fingerprint}`;
+    const cacheKey = `collection:sheet:${societyId}:${billSeries}:${periodId}:${fingerprint}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
       return NextResponse.json({ ...cached, cached: true });
@@ -65,7 +67,7 @@ export async function GET(request) {
     // ---- One aggregation for the whole period ---------------------------
     // Bills for this period, plus every payment already applied to them,
     // plus whatever the member paid from the member app. No per-member loop.
-    const bills = await Bill.find({ societyId, billPeriodId: periodId })
+    const bills = await Bill.find({ societyId, billPeriodId: periodId, billSeries })
       .select(
         "memberId billPeriodId billPrincipal billInterest totalBillDue amountPaid status openingPrincipal openingInterest currentCharges advanceApplied dueDate",
       )
@@ -179,6 +181,7 @@ export async function GET(request) {
     const payload = {
       success: true,
       periodId,
+      billSeries,
       fingerprint,
       builtAt: Date.now(),
       societyName: snapshot.societyName,

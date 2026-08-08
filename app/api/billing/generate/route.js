@@ -10,6 +10,7 @@ import cache from "@/lib/cache";
 import { generateBill } from "@/lib/billing/generationService";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import renderBillHtml from "@/lib/bill-renderer";
+import { isCommercialUnit } from "@/lib/commercial/constants";
 export async function POST(request) {
   try {
     await connectDB();
@@ -43,6 +44,27 @@ export async function POST(request) {
       const members = await Member.find(q).select("_id").lean();
       targetMemberIds = members.map((m) => String(m._id));
     }
+
+    // Commercial (Shop/Office) units are billed exclusively through the
+    // dedicated Commercial billing wizard, never through this residential
+    // generator — skip them here rather than silently billing them at the
+    // wrong (residential) rate.
+    const skipErrors = [];
+    if (targetMemberIds.length) {
+      const targetMembers = await Member.find({ _id: { $in: targetMemberIds } })
+        .select("_id flatType")
+        .lean();
+      const commercialIds = new Set(
+        targetMembers.filter((m) => isCommercialUnit(m)).map((m) => String(m._id)),
+      );
+      if (commercialIds.size) {
+        for (const id of commercialIds) {
+          skipErrors.push({ memberId: id, error: "Commercial unit — use the Commercial billing wizard instead" });
+        }
+        targetMemberIds = targetMemberIds.filter((id) => !commercialIds.has(id));
+      }
+    }
+
     if (!targetMemberIds.length)
       return NextResponse.json({ error: "No members/bills found to generate" }, { status: 400 });
 
@@ -52,7 +74,7 @@ export async function POST(request) {
     const startDate = new Date(year, month - 1, 1);
 
     const createdBills = [];
-    const errors = [];
+    const errors = [...skipErrors];
 
     for (const memberId of targetMemberIds) {
       try {

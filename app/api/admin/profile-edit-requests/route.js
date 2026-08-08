@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ProfileEditRequest from "@/models/ProfileEditRequest";
 import Member from "@/models/Member";
+import Shop from "@/models/Shop";
 import { requireRoles } from "@/lib/authz";
 export async function GET(request) {
   const auth = requireRoles(request, ["Admin", "Secretary"]);
@@ -18,14 +19,21 @@ export async function GET(request) {
     const query = { societyId: auth.user.societyId };
     if (status !== "all") query.status = status;
     const items = await ProfileEditRequest.find(query).sort({ createdAt: -1 }).limit(200).lean();
-    const memberIds = [...new Set(items.map((i) => String(i.memberId)))];
-    const members = await Member.find({ _id: { $in: memberIds } })
-      .select("flatNo wing ownerName")
-      .lean();
+    const memberIds = [...new Set(items.filter((i) => i.memberId).map((i) => String(i.memberId)))];
+    const shopIds = [...new Set(items.filter((i) => i.shopId).map((i) => String(i.shopId)))];
+    const [members, shops] = await Promise.all([
+      Member.find({ _id: { $in: memberIds } }).select("flatNo wing ownerName").lean(),
+      Shop.find({ _id: { $in: shopIds } }).select("tradeName shopNo wing").lean(),
+    ]);
     const memberById = new Map(members.map((m) => [String(m._id), m]));
+    const shopById = new Map(shops.map((s) => [String(s._id), s]));
     return NextResponse.json({
       success: true,
-      items: items.map((item) => ({ ...item, member: memberById.get(String(item.memberId)) || null })),
+      items: items.map((item) => ({
+        ...item,
+        member: item.memberId ? memberById.get(String(item.memberId)) || null : null,
+        shop: item.shopId ? shopById.get(String(item.shopId)) || null : null,
+      })),
     });
   } catch (err) {
     console.error("Profile edit requests list error", err);

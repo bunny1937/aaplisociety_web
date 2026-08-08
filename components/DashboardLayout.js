@@ -13,6 +13,7 @@ export default function DashboardLayout({
   title,
   subtitle,
   withQueryClient = false,
+  sidebarExtra = null,
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -96,6 +97,19 @@ export default function DashboardLayout({
             <div className={styles.sidebarSubtitle}>{subtitle}</div>
           </div>
         </div>
+        {/* Quick actions — static, never scrolls with the nav list below it
+            (a flex sibling of sidebarNav, not a child, so sidebarNav's own
+            overflow-y:auto is the only thing that scrolls). Notifications
+            live here for every role that uses this component (Admin/
+            Member/Security); NotificationBell already no-ops on routes
+            that don't need it. sidebarExtra is an optional per-role slot —
+            e.g. Admin passes the Commercial theme toggle, shown only while
+            on a Commercial page, see app/admin/layout.js. This component
+            doesn't know or care what sidebarExtra is. */}
+        <div className={styles.sidebarQuickActions}>
+          <NotificationBell />
+          {sidebarExtra}
+        </div>
         {/* Nav */}
         <nav className={styles.sidebarNav}>
           {navigation.map((group, i) => (
@@ -136,19 +150,14 @@ export default function DashboardLayout({
       </aside>
       {/* MAIN AREA */}
       <div className={styles.mainWrapper}>
-        {/* Top Header — transparent, sticky, right-aligned */}
-        <header className={styles.topHeader}>
-          <div className={styles.topHeaderLeft} />
-          <div className={styles.topHeaderRight}>
-            <NotificationBell />
-            <div className={styles.headerUser}>
-              <div className={styles.headerAvatar}>
-                {user.name?.charAt(0)?.toUpperCase()}
-              </div>
-              <span className={styles.headerUserName}>{user.name}</span>
-            </div>
-          </div>
-        </header>
+        {/* No top header: it used to hold only the user avatar+name (already
+            shown in the sidebar footer below — redundant) and the
+            notification bell (now in the sidebar's quick-actions row above
+            the nav list). Nothing was left to put in an empty 56px bar, so
+            it's gone rather than kept as dead space on every page. The
+            styles.topHeader* / headerUser* / headerAvatar classes stay
+            defined in Dashboard.module.css — components/SuperAdminLayout.js
+            still uses them for its own, separate header. */}
         <main key={pathname} className={styles.mainContent}>
           {children}
         </main>

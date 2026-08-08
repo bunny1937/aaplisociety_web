@@ -94,6 +94,15 @@ const SocietySchema = new mongoose.Schema(
     config: {
       // billing settings (non-charge)
       interestRate: { type: Number, default: 0 },
+      // Q3 — which area RESIDENTIAL bills are calculated on, society-wide.
+      // Changing it re-prices every future residential bill immediately; bills
+      // already generated keep the area frozen on them (Q12).
+      // Shops are NOT affected: a shop carries its own area (models/Shop.js).
+      areaBasis: {
+        type: String,
+        enum: ["carpet", "builtup"],
+        default: "carpet",
+      },
       serviceTaxRate: { type: Number, default: 0 },
       gracePeriodDays: { type: Number, default: 10 },
       billDueDay: { type: Number, min: 1, max: 31, default: 10 },

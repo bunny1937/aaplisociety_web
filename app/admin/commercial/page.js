@@ -2,101 +2,15 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { Card, CardHead, Pill, StatTile, Btn, Icon } from "./_ui";
 
-const S = {
-  page: { padding: "1.5rem" },
-  h1: { fontSize: "1.35rem", fontWeight: 700, margin: 0 },
-  sub: { color: "#64748b", fontSize: "0.85rem", marginTop: "0.25rem" },
-  card: {
-    background: "#fff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: "1rem 1.25rem",
-    marginBottom: "1rem",
-  },
-  row: { display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" },
-  input: {
-    padding: "0.5rem 0.7rem",
-    border: "1px solid #d1d5db",
-    borderRadius: 8,
-    fontSize: "0.85rem",
-  },
-  btn: {
-    padding: "0.5rem 0.9rem",
-    borderRadius: 8,
-    border: "1px solid #4f46e5",
-    background: "#4f46e5",
-    color: "#fff",
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  btnGhost: {
-    padding: "0.5rem 0.9rem",
-    borderRadius: 8,
-    border: "1px solid #d1d5db",
-    background: "#fff",
-    color: "#334155",
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" },
-  th: {
-    textAlign: "left",
-    padding: "0.6rem 0.5rem",
-    borderBottom: "2px solid #e5e7eb",
-    color: "#475569",
-    fontSize: "0.72rem",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-  td: { padding: "0.55rem 0.5rem", borderBottom: "1px solid #f1f5f9" },
-  scroll: { overflowX: "auto" },
-  notice: {
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    borderRadius: 10,
-    padding: "0.85rem 1rem",
-    fontSize: "0.85rem",
-    marginBottom: "1rem",
-  },
-};
-
-const LINKS = [
-  {
-    href: "/admin/commercial/units",
-    title: "Units",
-    body: "Tag which flats are shops or offices. Do it in bulk. A unit must be tagged before it can have a listing.",
-  },
-  {
-    href: "/admin/commercial/businesses",
-    title: "Businesses",
-    body: "Create listings, fill in contact details and opening hours, publish or suspend them.",
-  },
-  {
-    href: "/admin/commercial/categories",
-    title: "Categories",
-    body: "Add categories specific to this society on top of the shared list.",
-  },
-  {
-    href: "/admin/commercial/rate-card",
-    title: "Rate card",
-    body: "Charge shops and offices a different amount per billing head. Compare a flat, a shop and an office side by side.",
-  },
+const QUICK_LINKS = [
+  { href: "/admin/commercial/units", icon: "home", title: "Units", body: "Tag which flats are shops or offices, in bulk." },
+  { href: "/admin/commercial/businesses", icon: "store", title: "Businesses", body: "Create listings, contact details & hours, publish or suspend." },
+  { href: "/admin/commercial/categories", icon: "tag", title: "Categories", body: "Add categories specific to this society." },
+  { href: "/admin/commercial/rate-card", icon: "indian-rupee", title: "Rate card", body: "Compare a flat, a shop and an office side by side." },
+  { href: "/admin/generate-bills", icon: "file-text", title: "Generate bills", body: "Switch to the Commercial segment of the billing wizard." },
 ];
-
-function Stat({ label, value, tone }) {
-  return (
-    <div style={{ ...S.card, flex: "1 1 160px", marginBottom: 0 }}>
-      <div style={{ fontSize: "1.6rem", fontWeight: 700, color: tone || "#0f172a" }}>
-        {value}
-      </div>
-      <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: 2 }}>{label}</div>
-    </div>
-  );
-}
 
 export default function CommercialOverviewPage() {
   const { data, isLoading, error } = useQuery({
@@ -104,87 +18,79 @@ export default function CommercialOverviewPage() {
     queryFn: () => apiClient.get("/api/commercial/overview"),
     retry: false,
   });
-
   const disabled = /not enabled/i.test(error?.message || "");
 
   return (
-    <div style={S.page}>
-      <h1 style={S.h1}>Commercial</h1>
-      <p style={S.sub}>
-        Shops and offices in this society: which units they are, what they sell,
-        and what they are charged.
-      </p>
+    <div className="commercial-scope cx-fade" style={{ padding: "1.75rem 2rem" }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "var(--cx-fg-4)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 8 }}>
+          <Icon name="store" size={11} /> Shops &amp; offices
+        </div>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--cx-fg-1)", letterSpacing: "-0.018em" }}>Commercial</h1>
+        <p style={{ margin: "6px 0 0", fontSize: 14, color: "var(--cx-fg-3)" }}>
+          Which units are commercial, what they sell, and what they are charged.
+        </p>
+      </div>
 
       {disabled && (
-        <div style={{ ...S.notice, marginTop: "1rem" }}>
-          The commercial module is switched off for this society. Turn it on in{" "}
-          <Link href="/admin/society-config" style={{ fontWeight: 700 }}>
-            Society Config
-          </Link>
-          .
-        </div>
+        <Card style={{ marginBottom: 18, borderColor: "var(--cx-warning)" }}>
+          <span style={{ color: "var(--cx-warning)" }}>The commercial module is switched off for this society. Turn it on in{" "}</span>
+          <Link href="/admin/society-config" style={{ fontWeight: 700, color: "var(--cx-brand)" }}>Society Config</Link>.
+        </Card>
       )}
       {error && !disabled && (
-        <div style={{ ...S.notice, marginTop: "1rem" }}>{error.message}</div>
+        <Card style={{ marginBottom: 18, borderColor: "var(--cx-danger)", color: "var(--cx-danger)" }}>{error.message}</Card>
       )}
 
-      <div style={{ ...S.row, marginTop: "1rem", alignItems: "stretch" }}>
-        <Stat label="Units in society" value={isLoading ? "-" : (data?.units?.total ?? 0)} />
-        <Stat
-          label="Tagged Shop / Office"
-          value={isLoading ? "-" : (data?.units?.commercial ?? 0)}
-          tone="#4f46e5"
-        />
-        <Stat
-          label="Published listings"
-          value={isLoading ? "-" : (data?.listings?.PUBLISHED ?? 0)}
-          tone="#047857"
-        />
-        <Stat label="Drafts" value={isLoading ? "-" : (data?.listings?.DRAFT ?? 0)} />
-        <Stat
-          label="Suspended"
-          value={isLoading ? "-" : (data?.listings?.SUSPENDED ?? 0)}
-          tone="#b91c1c"
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 18 }}>
+        <StatTile icon="home" label="Units in society" value={isLoading ? "–" : String(data?.units?.total ?? 0)} />
+        <StatTile icon="store" label="Tagged Shop / Office" value={isLoading ? "–" : String(data?.units?.commercial ?? 0)} />
+        <StatTile icon="check-circle" label="Published listings" value={isLoading ? "–" : String(data?.listings?.PUBLISHED ?? 0)} />
+        <StatTile icon="file-text" label="Drafts" value={isLoading ? "–" : String(data?.listings?.DRAFT ?? 0)} />
+        <StatTile icon="alert-triangle" label="Suspended" value={isLoading ? "–" : String(data?.listings?.SUSPENDED ?? 0)} tone={(data?.listings?.SUSPENDED ?? 0) > 0 ? "danger" : undefined} />
       </div>
 
       {!isLoading && !error && (data?.units?.commercial ?? 0) === 0 && (
-        <div style={{ ...S.notice, marginTop: "1rem" }}>
-          No unit is tagged as a Shop or an Office yet, so no business can be
-          listed. Start on the{" "}
-          <Link href="/admin/commercial/units" style={{ fontWeight: 700 }}>
-            Units
-          </Link>{" "}
-          screen.
-        </div>
+        <Card style={{ marginBottom: 18 }}>
+          No unit is tagged as a Shop or an Office yet, so no business can be listed. Start on the{" "}
+          <Link href="/admin/commercial/units" style={{ fontWeight: 700, color: "var(--cx-brand)" }}>Units</Link> screen.
+        </Card>
       )}
 
-      <div style={{ ...S.row, marginTop: "1.25rem", alignItems: "stretch" }}>
-        {LINKS.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            style={{ ...S.card, flex: "1 1 240px", marginBottom: 0, textDecoration: "none" }}
-          >
-            <div style={{ fontWeight: 700, color: "#0f172a" }}>{l.title}</div>
-            <div style={{ color: "#64748b", fontSize: "0.8rem", marginTop: 4 }}>{l.body}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, marginBottom: 18 }}>
+        {QUICK_LINKS.map((l) => (
+          <Link key={l.href} href={l.href} style={{ textDecoration: "none" }}>
+            <Card hover style={{ height: "100%" }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--cx-brand-soft)", color: "var(--cx-brand)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                <Icon name={l.icon} size={16} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--cx-fg-1)" }}>{l.title}</div>
+              <div style={{ fontSize: 12, color: "var(--cx-fg-3)", lineHeight: 1.4, marginTop: 4 }}>{l.body}</div>
+            </Card>
           </Link>
         ))}
       </div>
 
       {data?.flags && (
-        <div style={{ ...S.card, marginTop: "1.25rem" }}>
-          <div style={{ fontWeight: 700, marginBottom: "0.5rem" }}>Switches</div>
-          <div style={{ fontSize: "0.83rem", color: "#475569", lineHeight: 1.8 }}>
-            Module: <b>{data.flags.enabled ? "on" : "off"}</b> &nbsp;|&nbsp; Member
-            directory: <b>{data.flags.directoryEnabled ? "on" : "off"}</b> &nbsp;|&nbsp;
-            Owner self-editing: <b>{data.flags.ownerEditingEnabled ? "on" : "off"}</b>{" "}
-            &nbsp;|&nbsp; Commercial billing:{" "}
-            <b>{data.flags.commercialBillingEnabled ? "on" : "off"}</b>
-            <br />
-            <Link href="/admin/society-config">Change these in Society Config</Link>
+        <Card>
+          <CardHead title="Switches" sub="Society-wide commercial module flags" />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+            {[
+              ["Module", data.flags.enabled],
+              ["Member directory", data.flags.directoryEnabled],
+              ["Owner self-editing", data.flags.ownerEditingEnabled],
+              ["Commercial billing", data.flags.commercialBillingEnabled],
+            ].map(([label, on]) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 12px", background: "var(--cx-surface-2)", borderRadius: 9, border: "1px solid var(--cx-border)" }}>
+                <span style={{ fontSize: 12, color: "var(--cx-fg-2)", fontWeight: 500 }}>{label}</span>
+                <Pill tone={on ? "active" : "neutral"} dot={false}>{on ? "on" : "off"}</Pill>
+              </div>
+            ))}
           </div>
-        </div>
+          <div style={{ marginTop: 10 }}>
+            <Btn variant="ghost" href="/admin/society-config">Change these in Society Config</Btn>
+          </div>
+        </Card>
       )}
     </div>
   );

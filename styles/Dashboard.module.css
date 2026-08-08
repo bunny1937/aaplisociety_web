@@ -69,6 +69,19 @@
   margin-top: 2px;
   line-height: 1;
 }
+/* ── Quick actions (notifications, per-role extras) ─
+   Sits between the header and the nav list as a plain flex sibling with
+   flex-shrink:0 — it never scrolls, because it isn't inside sidebarNav's
+   own overflow-y:auto, it's next to it. */
+.sidebarQuickActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
 /* ── Nav ─────────────────────────────────────────── */
 .sidebarNav {
   flex: 1;
@@ -258,7 +271,9 @@
 .mainContent {
   flex: 1;
   margin-left: 260px;
-  padding: 0 24px 24px;
+  /* Top padding restored now that topHeader (which used to provide this
+     56px of breathing room above page content) is gone. */
+  padding: 24px 24px 24px;
   animation: fadeSlideIn 0.18s ease;
 }
 @keyframes fadeSlideIn {

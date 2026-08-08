@@ -22,7 +22,20 @@ society_web.md
 CHANGED_FILES.txt
 db-export-2026-07-23.zip
 .vscode
-
+.claude/settings.local.json
+.claude-flow/
+.mcp.json
+.swarm/
+CHANGES-PART2.md
+CHANGES-V6.md
+CHANGES.md
+CLAUDE.md
+DECISIONS-AND-PLAN.md
+README-V5-SHOPS.md
+restore-repomix.js
+ruvector.db
+society_web1.md
+validate2.py
 # BillHistory_*.xlsx
 # BulkImport_Template.xlsx
 transactions_*.xlsx
@@ -108,9 +121,20 @@ brand-intro-new.html
 allure-results
 playwright-report
 test-results
-tests
+tests/
+tests/*
 .env.test
 *.tsbuildinfo
 .jest-cache
 screenshots
 .mongo-tmp/
+
+# Ruflo local secrets and runtime data
+.env
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+
+# Subagent-driven-development scratch workspace (ledgers, briefs, review packages)
+.superpowers/

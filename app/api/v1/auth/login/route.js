@@ -33,16 +33,36 @@ import { issueTokens } from "@/lib/v1/authService";
 import { signAccess } from "@/lib/v1/jwt";
 import { enforceRateLimit } from "@/lib/v1/ratelimit";
 import { OCCUPANCY_TYPES } from "@/lib/v1/constants";
+import Shop from "@/models/Shop";
 
-// Shapes one profile for the flat picker. The old response sent only
+// Shapes one profile for the picker. The old response sent only
 // profileId/societyName/flatNo, so every flat rendered the same
 // "Society · Owner" placeholder and users could not tell 101 from 201.
-function toPickerProfile(p) {
+// A Commercial profile renders a shop card instead — its own identity
+// (shopNo, unitKind, tradeName) lives on Shop, never duplicated here.
+function toPickerProfile(p, shopById) {
+  if (p.kind === "Commercial") {
+    const shop = shopById.get(String(p.shopId));
+    const unit = [shop?.wing, shop?.shopNo].filter(Boolean).join("-") || "Shop";
+    return {
+      profileId: String(p.profileId ?? p._id),
+      kind: "Commercial",
+      societyName: p.societyName ?? null,
+      shopNo: shop?.shopNo ?? null,
+      wing: shop?.wing ?? null,
+      unitKind: shop?.unitKind ?? null,
+      tradeName: shop?.tradeName ?? null,
+      isPrimary: p.isPrimary === true,
+      status: p.status ?? null,
+      label: [unit, shop?.tradeName].filter(Boolean).join(" · "),
+    };
+  }
   const wing = p.wing ?? null;
   const flatNo = p.flatNo ?? null;
   const unit = [wing, flatNo].filter(Boolean).join("-") || "Flat";
   return {
     profileId: String(p.profileId ?? p._id),
+    kind: "Residential",
     societyName: p.societyName ?? null,
     flatNo,
     wing,
@@ -119,7 +139,14 @@ export const POST = withRoute(async (req) => {
     pending: true,
   });
   commit(true);
-  const profiles = activeProfiles.map(toPickerProfile);
+  const shopIds = activeProfiles.filter((p) => p.kind === "Commercial").map((p) => p.shopId);
+  const shopById = new Map(
+    shopIds.length
+      ? (await Shop.find({ _id: { $in: shopIds } }).select("shopNo wing unitKind tradeName").lean())
+          .map((s) => [String(s._id), s])
+      : [],
+  );
+  const profiles = activeProfiles.map((p) => toPickerProfile(p, shopById));
   return json({
     // Both name pairs on purpose. The app reads requiresProfileSelect/
     // profileSelectToken; older shipped builds read needsProfileSelect/

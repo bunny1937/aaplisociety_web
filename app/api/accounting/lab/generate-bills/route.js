@@ -6,6 +6,7 @@ import Bill from "@/models/Bill";
 import { generateBill } from "@/lib/billing/generationService";
 import { recordPayment } from "@/lib/services/PaymentService";
 import { outstandingForBills, twoDp } from "@/lib/billing/paymentApplication";
+import { isCommercialUnit } from "@/lib/commercial/constants";
 
 // POST /api/accounting/lab/generate-bills — the "run a year of billing" step of
 // the Accounting Lab master simulator.
@@ -117,12 +118,23 @@ export async function POST(request) {
     }
 
     const members = await Member.find({ _id: { $in: memberIds }, societyId })
-      .select("_id ownerName flatNo wing")
+      .select("_id ownerName flatNo wing flatType")
       .sort({ wing: 1, flatNo: 1 })
       .lean();
     const memberLabel = new Map(
       members.map((m) => [String(m._id), `${m.wing ? `${m.wing}-` : ""}${m.flatNo} ${m.ownerName}`.trim()]),
     );
+    // The Accounting Lab simulates residential billing only — Commercial
+    // units are billed exclusively through the dedicated Commercial billing
+    // wizard, not this simulator.
+    const skippedCommercial = members.filter((m) => isCommercialUnit(m));
+    if (skippedCommercial.length) {
+      const skippedIds = new Set(skippedCommercial.map((m) => String(m._id)));
+      memberIds = memberIds.filter((id) => !skippedIds.has(id));
+    }
+    if (!memberIds.length) {
+      return NextResponse.json({ error: "This society has no residential members to bill (all selected members are Commercial units)." }, { status: 400 });
+    }
 
     const months = Math.min(Math.max(parseInt(body.months) || 12, 1), 36);
     const now = new Date();
@@ -237,6 +249,9 @@ export async function POST(request) {
       memberCount: memberIds.length,
       monthsRun: months,
       paymentProfile: profile,
+      skippedCommercialMembers: skippedCommercial.length
+        ? skippedCommercial.map((m) => `${m.wing ? `${m.wing}-` : ""}${m.flatNo} ${m.ownerName}`.trim())
+        : undefined,
     });
   } catch (error) {
     console.error("Lab generate-bills error:", error);

@@ -8,8 +8,15 @@ import {
 
 // GET  /api/commercial/units                -> every unit + its class
 // GET  /api/commercial/units?commercial=1   -> shop/office units only
-// POST /api/commercial/units                -> { memberId, flatType }
+// POST  /api/commercial/units               -> { memberId, flatType }
 //                                           -> { memberIds: [...], flatType }
+//
+// RETIRED 2026-08-08: this used to also carry PATCH /api/commercial/units to
+// set a unit's carpet area on the Member record. A shop now owns its own area
+// (models/Shop.js, /api/commercial/shops) — writing area onto a flat is the
+// exact pattern that destroyed A-103, so that handler was removed rather than
+// fixed. Reclassifying a flat's flatType here is legacy too; new shops are
+// created directly on the Shops screen without touching the flat at all.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

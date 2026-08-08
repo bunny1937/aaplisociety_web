@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/models/Bill";
 import Member from "@/models/Member";
+import Shop from "@/models/Shop";
 import Society from "@/models/Society";
 import Transaction from "@/models/Transaction";
 import { getTokenFromRequest, verifyToken } from "@/lib/jwt";
@@ -12,6 +13,7 @@ import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import { notifyBillCreated } from "@/lib/v1/notify";
 import { mapLimit } from "@/lib/concurrency";
 import { ndjsonResponse } from "@/lib/ndjson-stream";
+import { transactionDeleteFilterForRegenerate } from "@/lib/billing/regenerateFilter";
 
 // Each member's bill generation was previously awaited one at a time — for
 // 84 members at ~2.5s/member (several sequential Mongo round trips each,
@@ -43,12 +45,16 @@ export async function POST(request) {
       forceRegenerate,
       publishMode = "config",
       scheduledPushDate = null,
+      billSeries = "RESIDENTIAL",
     } = await request.json();
     if (billMonth === undefined || !billYear || !bills) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 },
       );
+    }
+    if (!["RESIDENTIAL", "COMMERCIAL"].includes(billSeries)) {
+      return NextResponse.json({ error: "billSeries must be RESIDENTIAL or COMMERCIAL" }, { status: 400 });
     }
     if (!["config", "now", "schedule"].includes(publishMode)) {
       return NextResponse.json({ error: "publishMode must be config, now, or schedule" }, { status: 400 });
@@ -67,6 +73,7 @@ export async function POST(request) {
     const historicalExists = await Bill.findOne({
       societyId,
       billPeriodId,
+      billSeries,
       $or: [{ isHistoricalArchive: true }, { importedFrom: "BulkImport" }, { isLocked: true }],
       isDeleted: { $ne: true },
     });
@@ -80,23 +87,24 @@ export async function POST(request) {
       );
     }
 
-    const existing = await Bill.findOne({ societyId, billPeriodId });
+    const existing = await Bill.findOne({ societyId, billPeriodId, billSeries });
     if (existing) {
       if (!forceRegenerate) {
         return NextResponse.json(
-          { error: `Bills for ${billPeriodId} already exist`, canForce: true },
+          { error: `${billSeries === "COMMERCIAL" ? "Commercial bills" : "Bills"} for ${billPeriodId} already exist`, canForce: true },
           { status: 409 },
         );
       }
       // Explicit admin-confirmed regeneration — delete and recreate via the
-      // same canonical engine, never patch financial values in place.
-      await Bill.deleteMany({ societyId, billPeriodId });
-      await Transaction.deleteMany({
-        societyId,
-        billPeriodId,
-        type: "Debit",
-        category: "Maintenance",
-      });
+      // same canonical engine, never patch financial values in place. Only
+      // THIS series' bills/transactions are touched.
+      const staleBillIds = (
+        await Bill.find({ societyId, billPeriodId, billSeries }).select("_id").lean()
+      ).map((b) => b._id);
+      await Bill.deleteMany({ societyId, billPeriodId, billSeries });
+      await Transaction.deleteMany(
+        transactionDeleteFilterForRegenerate(societyId, billPeriodId, staleBillIds),
+      );
     }
 
     const memberIds = [...new Set(bills.map((b) => String(b.memberId)).filter(Boolean))];
@@ -114,24 +122,51 @@ export async function POST(request) {
         performedBy: decoded.userId,
         publishMode,
         scheduledFor: scheduledPushDate,
+        billClass: billSeries,
       });
 
-      const member = await Member.findById(memberId)
-        .select("flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary advanceCredit openingBalance")
-        .lean();
+      // `memberId` is the unit id — a Shop._id on the commercial path (a shop
+      // has no Member row). Always fetching from Member here returned null
+      // for every commercial bill and fed a blank object into rendering,
+      // notification and the advance-credit step below. Normalised to the
+      // same field names bill-renderer.js already expects, so nothing
+      // downstream needs a billSeries-aware branch of its own.
+      const unit =
+        billSeries === "COMMERCIAL"
+          ? await Shop.findById(memberId)
+              .select("shopNo wing ownerName ownerPhone ownerEmail ownerMemberId areaSqft")
+              .lean()
+          : await Member.findById(memberId)
+              .select("flatNo wing ownerName carpetAreaSqft contactNumber emailPrimary advanceCredit openingBalance")
+              .lean();
+      const member =
+        unit && billSeries === "COMMERCIAL"
+          ? {
+              flatNo: unit.shopNo,
+              wing: unit.wing,
+              ownerName: unit.ownerName,
+              carpetAreaSqft: unit.areaSqft,
+              contactNumber: unit.ownerPhone,
+              emailPrimary: unit.ownerEmail,
+              advanceCredit: 0, // shops carry no advance-credit concept
+              openingBalance: 0,
+              ownerMemberId: unit.ownerMemberId ? String(unit.ownerMemberId) : null,
+            }
+          : unit;
       const breakdown =
         bill.charges instanceof Map ? Object.fromEntries(bill.charges) : bill.charges || {};
+      const unitFilter = billSeries === "COMMERCIAL" ? { shopId: memberId } : { memberId };
       const [unpaidBills, recentTransactions] = await Promise.all([
         Bill.find({
           societyId,
-          memberId,
+          ...unitFilter,
           status: { $in: ["Unpaid", "Partial", "Overdue"] },
           billPeriodId: { $ne: billPeriodId },
           isDeleted: { $ne: true },
         })
           .sort({ billYear: 1, billMonth: 1 })
           .lean(),
-        Transaction.find({ societyId, memberId }).sort({ date: -1 }).limit(10).lean(),
+        Transaction.find({ societyId, ...unitFilter }).sort({ date: -1 }).limit(10).lean(),
       ]);
       const renderResult = renderBillHtml(null, society, member, {
         breakdown,
@@ -151,14 +186,20 @@ export async function POST(request) {
       });
       await Bill.updateOne({ _id: bill._id }, { $set: { billHtml: renderResult.billHtml || renderResult.html } });
 
-      const lastTxn = await Transaction.findOne({ memberId, societyId, isReversed: false })
+      const lastTxn = await Transaction.findOne({ societyId, isReversed: false, ...unitFilter })
         .sort({ date: -1, createdAt: -1 })
         .lean();
       const prevBal = parseFloat((lastTxn?.balanceAfterTransaction ?? member?.openingBalance ?? 0).toFixed(2));
       await Transaction.create({
         transactionId: Transaction.generateTransactionId(),
         date: bill.generatedAt || new Date(),
-        memberId,
+        // Transaction.memberId is required — a shop with no linked owner has
+        // no member id to give it, so it falls back to the shop's own id
+        // (same convention Bill.memberId uses). shopId is the field every
+        // commercial lookup actually keys on.
+        memberId: billSeries === "COMMERCIAL" ? member?.ownerMemberId || memberId : memberId,
+        shopId: billSeries === "COMMERCIAL" ? memberId : null,
+        billSeries,
         societyId,
         type: "Debit",
         category: "Maintenance",
@@ -183,13 +224,19 @@ export async function POST(request) {
         }
       }
 
-      if (bill.status !== "Scheduled") await notifyBillCreated({ billId: bill._id, societyId, memberId, amount: bill.totalBillDue, period: billPeriodId });
+      // Notify the owning member if the shop is linked to one — a shop id has
+      // no device tokens / notification recipient of its own.
+      const notifyTargetId = billSeries === "COMMERCIAL" ? member?.ownerMemberId || null : memberId;
+      if (bill.status !== "Scheduled" && notifyTargetId) {
+        await notifyBillCreated({ billId: bill._id, societyId, memberId: notifyTargetId, amount: bill.totalBillDue, period: billPeriodId });
+      }
       return { billId: bill._id, flat: `${member?.wing || ""}-${member?.flatNo || ""}`, ownerName: member?.ownerName };
     }
 
     function classifyError(err, memberId) {
       if (err.code === "P4_DUPLICATE") return { memberId, error: `Bill already exists for ${billPeriodId}` };
       if (err.code === "MEMBER_NOT_FOUND") return { memberId, error: "Member not found" };
+      if (err.code === "SHOP_NOT_FOUND") return { memberId, error: "Shop not found" };
       if (err.code && /^[BP]\d/.test(err.code)) return { memberId, error: `Invariant ${err.code}: ${err.message}` };
       console.error(`Error creating bill for ${memberId}:`, err);
       return { memberId, error: err.message };
@@ -218,6 +265,7 @@ export async function POST(request) {
         success: true,
         message: `Generated ${createdBills.length} bill(s)`,
         billPeriodId,
+        billSeries,
         count: createdBills.length,
         failed: errors.length,
         errors: errors.length > 0 ? errors : undefined,

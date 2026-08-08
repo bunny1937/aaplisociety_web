@@ -14,7 +14,26 @@ const ProfileSchema = new mongoose.Schema(
     memberId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Member",
-      required: true,
+      required: function () {
+        return this.kind !== "Commercial";
+      },
+    },
+    // Which kind of unit this profile represents. Residential (default) links
+    // memberId/flatNo/wing as today; Commercial links shopId instead — the
+    // shop's own identity (shopNo, unitKind, tradeName) lives on models/Shop.js,
+    // never duplicated onto this sub-document.
+    kind: {
+      type: String,
+      enum: ["Residential", "Commercial"],
+      default: "Residential",
+    },
+    shopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      default: null,
+      required: function () {
+        return this.kind === "Commercial";
+      },
     },
     role: {
       type: String,

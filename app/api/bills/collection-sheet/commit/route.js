@@ -48,6 +48,7 @@ export async function POST(request) {
       mode: flowMode,
       scheduleFor,
       nextPeriodId,
+      billSeries = "RESIDENTIAL",
     } = body || {};
 
     if (!commitToken) {
@@ -108,7 +109,7 @@ export async function POST(request) {
     const billIds = paying.map((r) => String(r.billId));
     const bills = await Bill.find({ societyId, _id: { $in: billIds } })
       .select(
-        "memberId billPeriodId totalBillDue amountPaid status openingPrincipal openingInterest currentCharges billPrincipal",
+        "memberId billPeriodId billSeries totalBillDue amountPaid status openingPrincipal openingInterest currentCharges billPrincipal",
       )
       .lean();
     const billMap = new Map(bills.map((b) => [String(b._id), b]));
@@ -137,6 +138,10 @@ export async function POST(request) {
       const bill = billMap.get(billId);
       if (!bill) {
         rejected.push({ billId, code: "BILL_NOT_FOUND" });
+        continue;
+      }
+      if (billSeries && bill.billSeries !== billSeries) {
+        rejected.push({ billId, code: "WRONG_SERIES" });
         continue;
       }
 
@@ -259,7 +264,7 @@ export async function POST(request) {
     await Promise.all([
       cache.del(`billing:generated:${societyId}`),
       cache.del(`payments:outstanding:${societyId}`),
-      cache.delPattern(`collection:sheet:${societyId}:${periodId}:*`),
+      cache.delPattern(`collection:sheet:${societyId}:${billSeries}:${periodId}:*`),
       invalidateSocietySnapshot(societyId),
     ]);
 

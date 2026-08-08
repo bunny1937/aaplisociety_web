@@ -19,7 +19,13 @@ const BillSchema = new mongoose.Schema(
     memberId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Member",
-      required: true,
+      // Required for a RESIDENTIAL bill (it IS the unit). Optional for
+      // COMMERCIAL — it's the shop's owner, and a shop can be linked to no
+      // member at all (models/Shop.js: ownerMemberId is nullable). The unit
+      // a commercial bill is for is always `shopId`, never this field.
+      required: function () {
+        return this.billSeries !== "COMMERCIAL";
+      },
       index: true,
     },
     societyId: {
@@ -75,6 +81,14 @@ closingTotal: { type: Number, default: 0 },
     // bill generated before this and every residential bill generated after —
     // byte-identical to today). See lib/billing/generationService.js.
     unitClass: { type: String, enum: ["Shop", "Office", null], default: null },
+    // NEW 2026-08-07 — a COMMERCIAL bill belongs to a SHOP, not a flat.
+    // memberId stays populated (the owner, for addressing and for the member
+    // app) but it is no longer what the bill is *for*. That separation is what
+    // stops one unit being billed in both series off one area and one balance.
+    shopId: { type: mongoose.Schema.Types.ObjectId, ref: "Shop", default: null, index: true },
+    // Frozen at generation (Q12): correcting an area later must never silently
+    // rewrite a bill that has already gone out.
+    unitAreaAtGeneration: { type: Number, default: null },
     billSeries: { type: String, enum: ["RESIDENTIAL", "COMMERCIAL"], default: "RESIDENTIAL" },
     billNo: { type: String, default: null },
     totalAmount: {

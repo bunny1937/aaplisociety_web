@@ -43,6 +43,7 @@ export default function VerifyGenieOverlay({
   open,
   originRef,
   periodId,
+  billSeries = "RESIDENTIAL",
   fingerprint,
   rows,
   rowState,
@@ -120,6 +121,7 @@ export default function VerifyGenieOverlay({
       try {
         res = await apiClient.post("/api/bills/collection-sheet/verify", {
           periodId,
+          billSeries,
           fingerprint,
           rows: payload,
         });

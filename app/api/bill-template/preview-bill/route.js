@@ -1,3 +1,4 @@
+import { billableArea, areaBasisLabel } from "@/lib/commercial/areaResolver";
 // Returns the latest REAL bill for a member so the bill-template designer can
 // render an actual filled bill (instead of hardcoded sample numbers) before the
 // admin activates a template.
@@ -70,7 +71,14 @@ export async function GET(request) {
         member: {
           ...member,
           _id: String(member._id),
-          areaSqFt: member.areaSqFt ?? member.carpetAreaSqft ?? member.builtUpAreaSqft ?? 0,
+          // FIXED 2026-08-07 — THIS LINE printed a different area than the one
+          // the bill was calculated on. It preferred the legacy imported
+          // `areaSqFt`, while both charge engines preferred `carpetAreaSqft`.
+          // A-103 reads "Carpet Area 400 sq.ft" on its flat profile and printed
+          // "560 sq ft" on its bill. Same resolver as the engines now, and the
+          // bill states WHICH area it used.
+          areaSqFt: billableArea(member, { areaBasis: society?.config?.areaBasis }),
+          areaBasis: areaBasisLabel(member, { areaBasis: society?.config?.areaBasis }),
         },
       },
     });

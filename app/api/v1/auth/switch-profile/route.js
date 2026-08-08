@@ -25,6 +25,7 @@ import { verifyAccess } from "@/lib/v1/jwt";
 import { profileSelectSchema } from "@/lib/v1/schemas";
 import { User } from "@/lib/v1/models";
 import { issueTokens } from "@/lib/v1/authService";
+import Shop from "@/models/Shop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,16 +101,30 @@ export const POST = withRoute(async (req) => {
 
   const result = await issueTokens(user, profile);
 
-  // Echo the chosen flat so the app can repaint the avatar without a round trip
-  // to /auth/me. Purely additive.
-  return json({
-    ...result,
-    activeProfile: {
+  // Echo the chosen unit so the app can repaint the avatar without a round
+  // trip to /auth/me. Purely additive.
+  let activeProfile;
+  if (profile.kind === "Commercial") {
+    const shop = await Shop.findOne({ _id: profile.shopId }).select("shopNo wing unitKind tradeName").lean();
+    activeProfile = {
       profileId: chosenId,
+      kind: "Commercial",
+      shopNo: shop?.shopNo ?? null,
+      wing: shop?.wing ?? null,
+      unitKind: shop?.unitKind ?? null,
+      tradeName: shop?.tradeName ?? null,
+      societyName: profile.societyName ?? null,
+    };
+  } else {
+    activeProfile = {
+      profileId: chosenId,
+      kind: "Residential",
       flatNo: profile.flatNo ?? null,
       wing: profile.wing ?? null,
       societyName: profile.societyName ?? null,
       occupancyType: profile.occupancyType ?? null,
-    },
-  });
+    };
+  }
+
+  return json({ ...result, activeProfile });
 });

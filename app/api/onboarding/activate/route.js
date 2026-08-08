@@ -20,6 +20,7 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import Society from "@/models/Society";
+import Shop from "@/models/Shop";
 import { verifyToken } from "@/lib/jwt";
 
 export const runtime = "nodejs";
@@ -262,24 +263,46 @@ export async function POST(request) {
     { societyName: 1 },
   ).lean();
   const nameById = new Map(societies.map((s) => [String(s._id), s.societyName]));
+  const shopIds = [...new Set(user.profiles.filter((p) => p.kind === "Commercial").map((p) => String(p.shopId)))];
+  const shops = shopIds.length
+    ? await Shop.find({ _id: { $in: shopIds } }).select("shopNo wing tradeName").lean()
+    : [];
+  const shopById = new Map(shops.map((s) => [String(s._id), s]));
 
   return NextResponse.json({
     success: true,
     username: user.username,
     name: user.name,
-    activatedFlats: user.profiles.map((p) => ({
-      profileId: String(p.profileId),
-      label: p.wing ? `${p.wing}-${p.flatNo}` : String(p.flatNo),
-      flatNo: p.flatNo,
-      wing: p.wing || null,
-      societyName: p.societyName || nameById.get(String(p.societyId)) || "Society",
-      occupancyType: p.occupancyType || "Owner",
-      isPrimary: !!p.isPrimary,
-    })),
+    activatedFlats: user.profiles.map((p) => {
+      if (p.kind === "Commercial") {
+        const shop = shopById.get(String(p.shopId));
+        const label = [shop?.wing, shop?.shopNo].filter(Boolean).join("-") || "Shop";
+        return {
+          profileId: String(p.profileId),
+          kind: "Commercial",
+          label,
+          shopNo: shop?.shopNo ?? null,
+          wing: shop?.wing ?? null,
+          tradeName: shop?.tradeName ?? null,
+          societyName: p.societyName || nameById.get(String(p.societyId)) || "Society",
+          isPrimary: !!p.isPrimary,
+        };
+      }
+      return {
+        profileId: String(p.profileId),
+        kind: "Residential",
+        label: p.wing ? `${p.wing}-${p.flatNo}` : String(p.flatNo),
+        flatNo: p.flatNo,
+        wing: p.wing || null,
+        societyName: p.societyName || nameById.get(String(p.societyId)) || "Society",
+        occupancyType: p.occupancyType || "Owner",
+        isPrimary: !!p.isPrimary,
+      };
+    }),
     mergedCount,
     message:
       user.profiles.length > 1
-        ? `Your account is ready. All ${user.profiles.length} flats are active under this one login — you will pick which flat to open each time you sign in.`
+        ? `Your account is ready. All ${user.profiles.length} units are active under this one login — you will pick which one to open each time you sign in.`
         : "Your account is ready. You can sign in now.",
   });
 }

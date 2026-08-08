@@ -9,6 +9,7 @@ import cache from "@/lib/cache";
 import { generateBill } from "@/lib/billing/generationService";
 import { applyPaymentToBill } from "@/lib/billing/allocationService";
 import { notifyBillCreated } from "@/lib/v1/notify";
+import { isCommercialUnit } from "@/lib/commercial/constants";
 
 // Ledger V2: THIN WRAPPER over the shared GenerationService. No billing math
 // of its own — charges/interest/totals come from generateBill(), which
@@ -39,7 +40,21 @@ export async function POST(request) {
     const created = [];
     const errors = [];
 
+    // Commercial (Shop/Office) units are billed exclusively through the
+    // dedicated Commercial billing wizard, never through this Excel path.
+    const rowMemberIds = [...new Set(bills.map((b) => String(b.memberId)).filter(Boolean))];
+    const commercialMembers = rowMemberIds.length
+      ? await Member.find({ _id: { $in: rowMemberIds } }).select("_id flatType").lean()
+      : [];
+    const commercialIds = new Set(
+      commercialMembers.filter((m) => isCommercialUnit(m)).map((m) => String(m._id)),
+    );
+
     for (const b of bills) {
+      if (commercialIds.has(String(b.memberId))) {
+        errors.push({ memberId: b.memberId, error: "Commercial unit — use the Commercial billing wizard instead" });
+        continue;
+      }
       const rowBillYear = b.billYear ?? billYear;
       const rowMonth = (b.billMonth ?? billMonth) + 1; // client sends 0-indexed month
       const billPeriodId = `${rowBillYear}-${String(rowMonth).padStart(2, "0")}`;

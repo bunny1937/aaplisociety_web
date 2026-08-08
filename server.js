@@ -1,4 +1,10 @@
-import "dotenv/config";
+// Must be the first import: loads .env.local (dotenv/config only reads a
+// plain ".env", which this project doesn't have — real config lives in
+// .env.local and was silently never being loaded by this custom server,
+// so env-dependent modules like lib/redis.js and lib/v1/ratelimit.js
+// always fell back to their no-Redis defaults). See lib/load-env.js for
+// why this has to be its own imported file rather than an inline call.
+import "./lib/load-env.js";
 import { createServer } from "http";
 import next from "next";
 import { initSocketServer } from "./lib/socket-server.js";

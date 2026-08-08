@@ -1,0 +1,90 @@
+/* Scoped to .commercial-scope so nothing outside app/admin/commercial/* is
+   affected — see docs/superpowers/specs/2026-08-07-commercial-billing-parity-and-redesign-design.md */
+.commercial-scope {
+  --cx-canvas: #f6f7f9;
+  --cx-surface: #ffffff;
+  --cx-surface-2: #fafbfc;
+  --cx-surface-3: #f3f4f6;
+  --cx-border: #ececef;
+  --cx-border-strong: #dcdde1;
+  --cx-fg-1: #0a0a0a;
+  --cx-fg-2: #1f1f23;
+  --cx-fg-3: #46464f;
+  --cx-fg-4: #767680;
+  --cx-fg-5: #a0a0aa;
+  --cx-brand: #1e3a8a;
+  --cx-brand-soft: #e8edf9;
+  --cx-brand-ink: #ffffff;
+  --cx-success: #0f9d58;
+  --cx-success-soft: #e7f7ee;
+  --cx-danger: #d92d20;
+  --cx-danger-soft: #fdecec;
+  --cx-warning: #b54708;
+  --cx-warning-soft: #fdf2d8;
+  --cx-shadow-card: 0 1px 0 rgba(0,0,0,0.02), 0 1px 3px rgba(15,15,30,0.04);
+  --cx-shadow-pop: 0 12px 32px -8px rgba(15,15,30,0.18), 0 2px 6px rgba(15,15,30,0.06);
+  --cx-radius: 10px;
+  --cx-radius-lg: 14px;
+  background: var(--cx-canvas);
+  color: var(--cx-fg-1);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+/* Dark mode is opt-in ONLY, via the ThemeToggle switch — never automatic
+   from OS `prefers-color-scheme`. No other page in this app has a dark
+   mode, so Commercial must never silently diverge from the rest of the
+   admin console just because a visitor's OS theme happens to be dark.
+   The toggle sets `data-cx-theme="dark"` on the layout wrapper that
+   contains every .commercial-scope div (app/admin/commercial/layout.js);
+   CSS custom properties inherit down through it. */
+[data-cx-theme="dark"] .commercial-scope,
+.commercial-scope[data-cx-theme="dark"] {
+  --cx-canvas: #0b0b0f;
+  --cx-surface: #131318;
+  --cx-surface-2: #16161c;
+  --cx-surface-3: #1c1c24;
+  --cx-border: #24242c;
+  --cx-border-strong: #33333e;
+  --cx-fg-1: #f5f5f7;
+  --cx-fg-2: #e2e2e6;
+  --cx-fg-3: #a8a8b3;
+  --cx-fg-4: #76767f;
+  --cx-fg-5: #50505a;
+  --cx-brand: #6b8eef;
+  --cx-brand-soft: #1c2545;
+  --cx-brand-ink: #0b0b0f;
+  --cx-success: #34d399;
+  --cx-success-soft: #0f2a20;
+  --cx-danger: #f87171;
+  --cx-danger-soft: #2c1212;
+  --cx-warning: #fbbf24;
+  --cx-warning-soft: #2a1d08;
+}
+.cx-num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: -0.01em; }
+.cx-dot { width: 6px; height: 6px; border-radius: 999px; display: inline-block; background: currentColor; }
+@keyframes cx-fade { from { opacity: 0; } to { opacity: 1; } }
+.cx-fade { animation: cx-fade 0.18s ease-out; }
+
+/* ── Theme-toggle flood transition ───────────────────────────────────────
+   ThemeToggle.jsx drives a View Transition (document.startViewTransition)
+   and animates its ::view-transition-new(root) clip-path from a 0px circle
+   at the click point out to a circle big enough to cover the viewport —
+   that's the "smooth flood filling from root" effect. These pseudo-
+   elements only ever exist in the DOM while a view transition triggered by
+   OUR OWN toggle is running (nothing outside Commercial ever calls
+   startViewTransition), so despite the selector looking page-global, it
+   has zero effect on any of the other ~200 pages in this app. Disabling
+   the browser's default cross-fade here is what makes the click-driven
+   clip-path animation (added inline by ThemeToggle) the only visible
+   transition, instead of it fighting a simultaneous opacity fade. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* Compositor hint for the clip-path keyframes ThemeToggle.jsx animates on
+   this pseudo-element — without it the browser may not promote the layer
+   until the animation has already started, costing a dropped frame or two
+   right at the beginning. */
+::view-transition-new(root) {
+  will-change: clip-path;
+}

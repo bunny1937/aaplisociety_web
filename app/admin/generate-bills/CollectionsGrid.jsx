@@ -62,6 +62,7 @@ function StatusPill({ status, paidVia }) {
 
 export default function CollectionsGrid({
   periodId,
+  billSeries = "RESIDENTIAL",
   rowState,
   setRowState,
   results,
@@ -88,9 +89,9 @@ export default function CollectionsGrid({
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ["collection-sheet", periodId],
+    queryKey: ["collection-sheet", billSeries, periodId],
     queryFn: () =>
-      apiClient.get(`/api/bills/collection-sheet?periodId=${periodId}`),
+      apiClient.get(`/api/bills/collection-sheet?periodId=${periodId}&billSeries=${billSeries}`),
     enabled: Boolean(periodId),
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,
@@ -262,23 +263,71 @@ export default function CollectionsGrid({
   }
 
   if (isError) {
-    const code = error?.data?.code;
+    const code = error?.data?.code || error?.body?.code;
+    const isCommercial = billSeries === "COMMERCIAL";
+    const what = isCommercial ? "shop and office" : "flat";
+    const whatPlural = isCommercial ? "shops and offices" : "flats";
+
+    // "No bills yet" is NOT an error. It is the normal state before a run, and
+    // it has exactly one cure: generate the bills. Retrying the same request
+    // can never fix it, so the retry button is not offered for it.
+    const noBills = code === "NO_BILLS";
+
     return (
       <div className={s.emptyState}>
         <AlertCircle size={28} className={s.emptyIcon} />
         <h3>
-          {code === "NO_BILLS"
-            ? "No bills generated for this period yet"
-            : "Could not load the collection sheet"}
+          {noBills
+            ? `No ${isCommercial ? "commercial" : "residential"} bills exist for ${periodId} yet`
+            : "The collection sheet could not be loaded"}
         </h3>
-        <p>
-          {code === "NO_BILLS"
-            ? "Generate the bills for this period first, then come back to record collections."
-            : error?.message || "Something went wrong."}
-        </p>
-        <button className={s.btnSecondary} onClick={() => refetch()}>
-          <RefreshCw size={14} /> Try again
-        </button>
+
+        {noBills ? (
+          <>
+            <p>
+              You can only record payments against bills that have already been generated.
+              Nothing has gone wrong — the {periodId} {isCommercial ? "commercial" : "residential"}{" "}
+              run simply has not been done.
+            </p>
+            <p style={{ marginTop: 6 }}>
+              <b>What to do:</b> close this, make sure the{" "}
+              <b>{isCommercial ? "Commercial" : "Residential"}</b> switch at the top of the page is
+              selected, choose {periodId}, then press <b>Preview</b> followed by{" "}
+              <b>Generate bills</b>. Come back here afterwards.
+            </p>
+            {isCommercial && (
+              <p style={{ marginTop: 6 }}>
+                If the commercial run finds nothing to bill, it is because no {whatPlural} have been
+                added yet, or they have no area. Shops are added on the Shops screen — that is a
+                separate list from your flats, and adding one never changes a flat.
+              </p>
+            )}
+            {isCommercial && (
+              <a className={s.btnSecondary} href="/admin/commercial/shops" style={{ marginTop: 10 }}>
+                Open {whatPlural}
+              </a>
+            )}
+          </>
+        ) : (
+          <>
+            <p>
+              This is a problem fetching the sheet, not a problem with your bills or your
+              payments. Nothing has been saved or changed.
+            </p>
+            <p style={{ marginTop: 6 }}>
+              <b>What to do:</b> press Try again. If it keeps failing, check your internet
+              connection and reload the page. Any payments you had already submitted are safe.
+            </p>
+            {error?.message && (
+              <p style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                Technical detail for support: {error.message}
+              </p>
+            )}
+            <button className={s.btnSecondary} onClick={() => refetch()}>
+              <RefreshCw size={14} /> Try again
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -288,9 +337,12 @@ export default function CollectionsGrid({
       {/* ---- Sheet header -------------------------------------------- */}
       <div className={s.sheetBar}>
         <div className={s.sheetMeta}>
-          <span className={s.sheetTitle}>Collections · {periodId}</span>
+          <span className={s.sheetTitle}>
+            {billSeries === "COMMERCIAL" ? "Commercial collections" : "Residential collections"} · {periodId}
+          </span>
           <span className={s.sheetSub}>
-            {sheet.summary.total} flats · {sheet.summary.alreadyPaid} already paid ·{" "}
+            {sheet.summary.total} {billSeries === "COMMERCIAL" ? "shops & offices" : "flats"} ·{" "}
+            {sheet.summary.alreadyPaid} already paid ·{" "}
             {sheet.summary.partial} partial · {sheet.summary.unpaid} unpaid
           </span>
         </div>

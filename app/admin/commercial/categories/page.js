@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { Card, Pill, Btn, Icon } from "../_ui";
 
 // Global categories are platform-managed and read-only here; a society can add
 // and manage its own on top of them. Global rows are never copied per society.
@@ -79,89 +81,104 @@ export default function AdminCommercialCategoriesPage() {
 
   if (!enabled) {
     return (
-      <div style={S.wrap}>
-        <h1 style={S.h1}>Categories</h1>
-        <div style={S.notice}>The commercial module is switched off for this society.</div>
+      <div className="commercial-scope cx-fade" style={{ padding: "1.75rem 2rem" }}>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--cx-fg-1)", letterSpacing: "-0.018em" }}>
+          Categories
+        </h1>
+        <Card style={{ marginTop: 16, borderColor: "var(--cx-warning)" }}>
+          <span style={{ color: "var(--cx-warning)" }}>
+            The commercial module is switched off for this society. Turn it on in{" "}
+          </span>
+          <Link href="/admin/society-config" style={{ fontWeight: 700, color: "var(--cx-brand)" }}>
+            Society Config
+          </Link>
+          .
+        </Card>
       </div>
     );
   }
 
   return (
-    <div style={S.wrap}>
-      <div>
-        <h1 style={S.h1}>Categories</h1>
-        <p style={S.sub}>Shared defaults plus categories you add for this society.</p>
+    <div className="commercial-scope cx-fade" style={{ padding: "1.75rem 2rem" }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "var(--cx-fg-4)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 8 }}>
+          <Icon name="tag" size={11} /> Shops &amp; offices
+        </div>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--cx-fg-1)", letterSpacing: "-0.018em" }}>Categories</h1>
+        <p style={{ margin: "6px 0 0", fontSize: 14, color: "var(--cx-fg-3)" }}>
+          Shared defaults plus categories you add for this society.
+        </p>
       </div>
 
-      <form onSubmit={add} style={{ ...S.card, flexDirection: "row", alignItems: "flex-end" }}>
-        <label style={{ ...S.label, flex: 1 }}>
-          New category
-          <input style={S.input} required minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Tiffin Service" />
-        </label>
-        <button style={S.primary} type="submit" disabled={busy}>Add</button>
-      </form>
-
       {loading ? (
-        <p style={S.sub}>Loading...</p>
+        <p style={{ color: "var(--cx-fg-3)", fontSize: 13 }}>Loading…</p>
       ) : (
-        <div style={S.card}>
-          <table style={S.table}>
-            <thead>
-              <tr>
-                <th style={S.th}>Name</th>
-                <th style={S.th}>Source</th>
-                <th style={S.th}>Order</th>
-                <th style={S.th}>Status</th>
-                <th style={S.th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr key={c.id}>
-                  <td style={S.td}>{c.name}</td>
-                  <td style={S.td}>{c.scope === "GLOBAL" ? "Shared default" : "This society"}</td>
-                  <td style={S.td}>{c.sortOrder}</td>
-                  <td style={S.td}>
-                    <span style={{ ...S.badge, background: c.isActive ? "#dcfce7" : "#f3f4f6", color: c.isActive ? "#166534" : "#374151" }}>
-                      {c.isActive ? "Active" : "Hidden"}
-                    </span>
-                  </td>
-                  <td style={S.td}>
-                    {c.scope === "SOCIETY" && (
-                      <button style={S.ghost} disabled={busy} onClick={() => toggle(c)}>
-                        {c.isActive ? "Hide" : "Show"}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+          {rows.map((c) => (
+            <Card key={c.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--cx-brand-soft)", color: "var(--cx-brand)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Icon name="tag" size={16} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--cx-fg-1)" }}>{c.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--cx-fg-4)", marginTop: 2 }}>
+                      {c.scope === "GLOBAL" ? "Shared default" : "This society"} · order {c.sortOrder}
+                    </div>
+                  </div>
+                </div>
+                <Pill tone={c.isActive ? "active" : "neutral"} dot={false}>
+                  {c.isActive ? "Active" : "Hidden"}
+                </Pill>
+              </div>
+              {c.scope === "SOCIETY" && (
+                <div>
+                  <Btn variant="ghost" disabled={busy} onClick={() => toggle(c)}>
+                    {c.isActive ? "Hide" : "Show"}
+                  </Btn>
+                </div>
+              )}
+            </Card>
+          ))}
+
+          <Card style={{ border: "1px dashed var(--cx-border)", background: "transparent", boxShadow: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--cx-fg-2)" }}>
+              <Icon name="plus" size={14} /> New category
+            </div>
+            <form onSubmit={add} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                style={{ padding: "9px 11px", borderRadius: 8, border: "1px solid var(--cx-border)", fontSize: 13, fontFamily: "inherit", color: "var(--cx-fg-1)", background: "var(--cx-surface)" }}
+                required
+                minLength={2}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Tiffin Service"
+              />
+              <Btn variant="primary" type="submit" disabled={busy}>
+                {busy ? "Adding…" : "Add"}
+              </Btn>
+            </form>
+          </Card>
         </div>
       )}
 
       {toast && (
-        <div style={{ ...S.toast, background: toast.tone === "error" ? "#991b1b" : "#111827" }}>{toast.message}</div>
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+            color: "#fff",
+            padding: "10px 16px",
+            borderRadius: 10,
+            fontSize: 14,
+            background: toast.tone === "error" ? "var(--cx-danger)" : "var(--cx-fg-1)",
+          }}
+        >
+          {toast.message}
+        </div>
       )}
     </div>
   );
 }
-
-const S = {
-  wrap: { padding: 24, display: "flex", flexDirection: "column", gap: 16 },
-  head: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
-  h1: { fontSize: 22, fontWeight: 700, margin: 0 },
-  sub: { color: "#6b7280", margin: "4px 0 0", fontSize: 13 },
-  card: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 },
-  label: { display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#374151" },
-  input: { padding: "9px 11px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, fontWeight: 400 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 14 },
-  th: { textAlign: "left", padding: "8px 10px", borderBottom: "1px solid #e5e7eb", color: "#6b7280", fontSize: 12 },
-  td: { padding: "10px", borderBottom: "1px solid #f3f4f6" },
-  badge: { padding: "3px 9px", borderRadius: 999, fontSize: 12, fontWeight: 600 },
-  primary: { background: "#111827", color: "#fff", border: 0, borderRadius: 8, padding: "9px 14px", fontWeight: 600, cursor: "pointer" },
-  ghost: { background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 10px", cursor: "pointer", marginRight: 6 },
-  notice: { background: "#f9fafb", border: "1px dashed #d1d5db", borderRadius: 12, padding: 16, color: "#4b5563", fontSize: 14 },
-  toast: { position: "fixed", bottom: 24, right: 24, color: "#fff", padding: "10px 16px", borderRadius: 10, fontSize: 14 },
-};

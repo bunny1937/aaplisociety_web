@@ -515,7 +515,7 @@ function BillHistoryStep({ societyId, societyName, joinPeriodId, interestRate, o
             onClick={async () => {
               const res = await fetch(
                 `/api/superadmin/bill-history-template?societyId=${societyId}&joinPeriod=${joinPeriodId}`,
-                { credentials: "include", headers: { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY } }
+                { credentials: "include" }
               );
               if (!res.ok) { alert("Template download failed"); return; }
               const blob = await res.blob();
@@ -676,7 +676,7 @@ function BhModal({ society, onClose }) {
       try {
         const res = await fetch(
           `/api/superadmin/bill-history-import?societyId=${society._id}`,
-          { credentials: "include", headers: { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY } }
+          { credentials: "include" }
         );
         const data = await res.json();
         if (data.joinPeriodId) {
@@ -876,7 +876,6 @@ export default function AdminSocietiesPage() {
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
-            "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY,
           },
           body: JSON.stringify(payload),
         });
@@ -931,7 +930,7 @@ export default function AdminSocietiesPage() {
       try {
         const res = await fetch(
           `/api/admin/bulk-import/status?importRunId=${encodeURIComponent(importRunId)}`,
-          { credentials: "include", headers: { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY } },
+          { credentials: "include" },
         );
         if (res.ok) {
           const data = await res.json();
@@ -968,7 +967,6 @@ export default function AdminSocietiesPage() {
       const res = await fetch("/api/admin/bulk-import", {
         method: "POST",
         credentials: "include",
-        headers: { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
         body: fd,
       });
       const data = await res.json();
@@ -1370,7 +1368,6 @@ export default function AdminSocietiesPage() {
                           setViewCredsLoading(true);
                           try {
                             const res = await fetch(`/api/superadmin/member-credentials?societyId=${society._id}`, {
-                              headers: { "x-admin-api-key": process.env.NEXT_PUBLIC_ADMIN_API_KEY },
                               credentials: "include",
                             });
                             const data = await res.json();

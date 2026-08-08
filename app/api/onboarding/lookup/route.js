@@ -32,6 +32,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import Member from "@/models/Member";
 import Society from "@/models/Society";
+import Shop from "@/models/Shop";
 import { verifyToken } from "@/lib/jwt";
 
 export const runtime = "nodejs";
@@ -208,10 +209,34 @@ export async function POST(request) {
   ).lean();
   const societyById = new Map(societies.map((s) => [String(s._id), s]));
 
+  const shopIds = [...new Set(allProfiles.filter((p) => p.kind === "Commercial").map((p) => String(p.shopId)))];
+  const shops = shopIds.length
+    ? await Shop.find({ _id: { $in: shopIds } }).select("shopNo wing unitKind tradeName").lean()
+    : [];
+  const shopById = new Map(shops.map((s) => [String(s._id), s]));
+
   const flats = allProfiles.map((p) => {
     const soc = societyById.get(String(p.societyId));
+    if (p.kind === "Commercial") {
+      const shop = shopById.get(String(p.shopId));
+      const unit = [shop?.wing, shop?.shopNo].filter(Boolean).join("-") || "Shop";
+      return {
+        profileId: String(p.profileId),
+        kind: "Commercial",
+        shopNo: shop?.shopNo ?? null,
+        wing: shop?.wing ?? null,
+        unitKind: shop?.unitKind ?? null,
+        tradeName: shop?.tradeName ?? null,
+        label: [unit, p.societyName].filter(Boolean).join(" · "),
+        societyName: p.societyName || soc?.societyName || "Society",
+        status: p.status || "Active",
+        isPrimary: !!p.isPrimary,
+        split: String(p._ownerUserId) !== String(user._id),
+      };
+    }
     return {
       profileId: String(p.profileId),
+      kind: "Residential",
       flatNo: p.flatNo,
       wing: p.wing || null,
       label: p.wing ? `${p.wing}-${p.flatNo}` : String(p.flatNo),

@@ -20,7 +20,7 @@ export async function POST(request) {
     if (!decoded)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     const body = await request.json();
-    const { memberIds, billYear, billMonth } = body;
+    const { memberIds, billYear, billMonth, billSeries } = body;
     if (!billYear || !billMonth) {
       return NextResponse.json(
         { error: "billYear and billMonth are required" },
@@ -54,6 +54,7 @@ export async function POST(request) {
         year: Number(billYear),
         month: Number(billMonth),
         member,
+        billClass: billSeries || "RESIDENTIAL",
       });
 
       // Display-only — for the "pending since ..." UI message. NOT used for
@@ -66,6 +67,7 @@ export async function POST(request) {
         status: { $in: ["Unpaid", "Overdue", "Partial"] },
         billPeriodId: { $ne: currentPeriodId },
         isDeleted: { $ne: true },
+        ...(billSeries ? { billSeries } : {}),
       })
         .sort({ billYear: 1, billMonth: 1 })
         .select("billPeriodId totalAmount balanceAmount dueDate status")

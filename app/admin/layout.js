@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import DashboardLayout from "components/DashboardLayout";
+import ThemeToggle from "./commercial/_ui/ThemeToggle";
+import { THEMED_PATHS } from "./commercial/_ui/theme";
 import {
   LayoutDashboard,
   Settings,
@@ -29,6 +32,8 @@ export default function AdminLayout({ children }) {
   // Commercial module visibility. One cheap read of the society's flags; a
   // failure leaves the group hidden and never blocks the admin shell.
   const [commercialEnabled, setCommercialEnabled] = useState(false);
+  const pathname = usePathname();
+  const showThemeToggle = THEMED_PATHS.has(pathname);
   useEffect(() => {
     let alive = true;
     fetch("/api/commercial/flags", { credentials: "include" })
@@ -232,11 +237,13 @@ export default function AdminLayout({ children }) {
           {
             title: "Commercial",
             items: [
-              { name: "Overview", path: "/admin/commercial", icon: "📊" },
-                    { name: "Units", path: "/admin/commercial/units", icon: "🏢" },
-                    { name: "Businesses", path: "/admin/commercial/businesses", icon: "🏪" },
+              // Shops is first and is the landing screen: it is where a shop
+              // is created, edited and checked. "Units" and "Businesses" were
+              // two more lists of the same thing and are gone.
+              { name: "Shops & offices", path: "/admin/commercial/shops", icon: "🏪" },
+              { name: "Rate card", path: "/admin/commercial/rate-card", icon: "💰" },
               { name: "Categories", path: "/admin/commercial/categories", icon: "🏷️" },
-                    { name: "Rate card", path: "/admin/commercial/rate-card", icon: "💰" },
+              { name: "Overview", path: "/admin/commercial", icon: "📊" },
             ],
           },
         ]
@@ -262,6 +269,7 @@ export default function AdminLayout({ children }) {
       navigation={navigation}
       title="NexGen ERP"
       subtitle="Admin Panel"
+      sidebarExtra={showThemeToggle ? <ThemeToggle /> : null}
     >
       {children}
     </DashboardLayout>

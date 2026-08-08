@@ -27,7 +27,7 @@ function newCommitToken() {
   return `cmt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export default function CollectionsPanel({ periodId }) {
+export default function CollectionsPanel({ periodId, billSeries = "RESIDENTIAL" }) {
   const qc = useQueryClient();
   const { openFrom } = useGenieMorph();
 
@@ -104,8 +104,8 @@ export default function CollectionsPanel({ periodId }) {
       tone: "warn",
       text: "Billing configuration changed while this sheet was open. The ledger has been refetched — please verify again.",
     });
-    qc.invalidateQueries({ queryKey: ["collection-sheet", periodId] });
-  }, [qc, periodId]);
+    qc.invalidateQueries({ queryKey: ["collection-sheet", billSeries, periodId] });
+  }, [qc, billSeries, periodId]);
 
   const handleAllPassed = useCallback((collected) => {
     setResults(collected);
@@ -132,12 +132,14 @@ export default function CollectionsPanel({ periodId }) {
 
         const res = await apiClient.post("/api/bills/collection-sheet/commit", {
           ...opts,
+          billSeries,
           rows,
           commitToken: commitTokenRef.current,
         });
 
         setCommitted({ ...res, scheduled: res.scheduled });
-        qc.invalidateQueries({ queryKey: ["collection-sheet", periodId] });
+        qc.invalidateQueries({ queryKey: ["collection-sheet", billSeries, periodId] });
+        qc.invalidateQueries({ queryKey: ["latest-period", billSeries] });
         qc.invalidateQueries({ queryKey: ["latest-period"] });
       } catch (err) {
         if (err?.data?.code === "STALE_FINGERPRINT") {
@@ -157,7 +159,7 @@ export default function CollectionsPanel({ periodId }) {
         setCommitting(false);
       }
     },
-    [results, sheet, qc, periodId, handleStale],
+    [results, sheet, qc, billSeries, periodId, handleStale],
   );
 
   // ---- Idle: the button that replaced Download Template -----------------
@@ -229,6 +231,7 @@ export default function CollectionsPanel({ periodId }) {
 
         <CollectionsGrid
           periodId={periodId}
+          billSeries={billSeries}
           rowState={rowState}
           setRowState={setRowStateTracked}
           results={results}
@@ -243,6 +246,7 @@ export default function CollectionsPanel({ periodId }) {
         open={overlayOpen}
         originRef={verifyBtnRef}
         periodId={periodId}
+        billSeries={billSeries}
         fingerprint={sheet?.fingerprint}
         rows={sheet?.rows || []}
         rowState={rowState}
